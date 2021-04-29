@@ -124,7 +124,7 @@ class Tester:
             self.df_kfdat = pd.DataFrame(index= list(range(1,self.n1+self.n2)))
         self.has_data = True
     
-    def compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',test_size=.8,verbose=0): # max_iter=1000, (pour kmeans de François)
+    def compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,verbose=0): # max_iter=1000, (pour kmeans de François)
         """
         Determines the nystrom anchors using ``nystrom_method`` which can be 'kmeans' or 'random'
         Parameters
@@ -143,47 +143,75 @@ class Tester:
         self.nxanchors=np.int(np.floor(xratio * nanchors)) 
         self.nyanchors=np.int(np.floor(yratio * nanchors))
 
-        #split data
-        # Say a = 1 - test_size
-        # We determine the nanchors = nxanchors + nyanchors on n1_ny = |_a*n1_| and n2_ny = |_a*n2_| data. 
-        # To keep proportion we have nxanchors = |_ nanchors * n1/(n1+n2) _|and nyanchors = |_ nanchors * n2/(n1+n2) _| (strictly positive numbers)
-        # Thus, we need to have n1_ny >= nxanchors and n2_ny >= nyanchors 
-        # We use a*n1 >= |_ a*n1 _| and find the condition a >= 1/n1 |_ nanchors* n1/(n1+n2) _| and  a >= 1/n2 |_ nanchors* n2/(n1+n2) _| 
-        # in order to implement a simple rule, we raise an error if these conditions are not fulfilled:
-        assert (1-test_size) >= 1/self.n1 * np.int(np.floor(nanchors * xratio)) and \
-               (1-test_size) >= 1/self.n2 * np.int(np.floor(nanchors * yratio)) 
-        assert self.nxanchors >0 and self.nyanchors >0
-              
-        # print(self.xmask.sum(),len(self.x_index))
-        xindex_nystrom,xindex_test = train_test_split(self.x_index[self.xmask],test_size=.8)
-        yindex_nystrom,yindex_test = train_test_split(self.y_index[self.ymask],test_size=.8)
+        if split_data:
+
+            #split data
+            # Say a = 1 - test_size
+            # We determine the nanchors = nxanchors + nyanchors on n1_ny = |_a*n1_| and n2_ny = |_a*n2_| data. 
+            # To keep proportion we have nxanchors = |_ nanchors * n1/(n1+n2) _|and nyanchors = |_ nanchors * n2/(n1+n2) _| (strictly positive numbers)
+            # Thus, we need to have n1_ny >= nxanchors and n2_ny >= nyanchors 
+            # We use a*n1 >= |_ a*n1 _| and find the condition a >= 1/n1 |_ nanchors* n1/(n1+n2) _| and  a >= 1/n2 |_ nanchors* n2/(n1+n2) _| 
+            # in order to implement a simple rule, we raise an error if these conditions are not fulfilled:
+            assert (1-test_size) >= 1/self.n1 * np.int(np.floor(nanchors * xratio)) and \
+                (1-test_size) >= 1/self.n2 * np.int(np.floor(nanchors * yratio)) 
+            assert self.nxanchors >0 and self.nyanchors >0
+                
+            # print(self.xmask.sum(),len(self.x_index))
+            xindex_nystrom,xindex_test = train_test_split(self.x_index[self.xmask],test_size=.8)
+            yindex_nystrom,yindex_test = train_test_split(self.y_index[self.ymask],test_size=.8)
+            
+            xmask_ny = self.x_index.isin(xindex_nystrom)
+            ymask_ny = self.y_index.isin(yindex_nystrom)
+
+            self.xmask_test = self.x_index.isin(xindex_test)
+            self.ymask_test = self.y_index.isin(yindex_test)
+            self.n1_test = len(xindex_test)
+            self.n2_test = len(yindex_test)
+
+
+        else:
+            xmask_ny = self.xmask
+            ymask_ny = self.ymask            
+    
 
         if nystrom_method == 'kmeans':
             # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
             # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
-            self.xassignations,self.xanchors = kmeans(X=self.x[self.x_index.isin(xindex_nystrom),:], num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-            self.yassignations,self.yanchors = kmeans(X=self.y[self.y_index.isin(yindex_nystrom),:], num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.xassignations,self.xanchors = kmeans(X=self.x[xmask_ny,:], num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.yassignations,self.yanchors = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
             self.xanchors = self.xanchors.double()
             self.yanchors = self.yanchors.double()
             
         elif nystrom_method == 'random':
-            self.xanchors = self.x[self.xmask,:][np.random.choice(self.x[self.x_index.isin(xindex_nystrom),:].shape[0], size=self.nxanchors, replace=False)]
-            self.yanchors = self.y[self.ymask,:][np.random.choice(self.y[self.y_index.isin(yindex_nystrom),:].shape[0], size=self.nyanchors, replace=False)]
-        
-        self.xmask_test = self.x_index.isin(xindex_test)
-        self.ymask_test = self.y_index.isin(yindex_test)
-        self.n1_test = len(xindex_test)
-        self.n2_test = len(yindex_test)
+            self.xanchors = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxanchors, replace=False)]
+            self.yanchors = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nyanchors, replace=False)]
 
         if verbose > 0:
             print(time() - start)
         
-    def compute_nystrom_kmn(self,test_data=True):
+    def compute_nystrom_kmn(self,test_data=False):
         """
         Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
         """
         x,y = (self.x[self.xmask_test,:],self.y[self.ymask_test,:]) if test_data else (self.x[self.xmask,:],self.y[self.ymask,:])
         z1,z2 = self.xanchors,self.yanchors
+        kernel = self.kernel
+        
+
+        kz1x = kernel(z1,x)
+        kz2x = kernel(z2,x)
+        kz1y = kernel(z1,y)
+        kz2y = kernel(z2,y)
+        
+        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
+                            torch.cat((kz2x, kz2y), dim=1)), dim=0))
+    
+    def compute_nystrom_kntestn(self):
+        """
+        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        """
+        x,y = (self.x[self.xmask,:],self.y[self.ymask,:])
+        z1,z2 = self.x[self.xmask_test,:],self.y[self.ymask_test,:]
         kernel = self.kernel
         
         kz1x = kernel(z1,x)
@@ -193,7 +221,8 @@ class Tester:
         
         return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
                             torch.cat((kz2x, kz2y), dim=1)), dim=0))
-        
+    
+
     def compute_gram_matrix(self,nystrom=False,test_data=False):
         """
         Computes Gram matrix, on anchors if nystrom is True, else on data. 
@@ -260,14 +289,19 @@ class Tester:
             print(f'Diagonalizing the{ny} Gram matrix ...',end=' ')
 
         
-        n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else  (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
-        pn = self.compute_bicentering_matrix(nystrom,test_data=test_data)
-        sp,ev = eigsy(1/(n1+n2) * torch.chain_matmul(pn, self.compute_gram_matrix(nystrom,test_data=test_data), pn).cpu().numpy())  # eigsy uses numpy
+        n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else \
+                (self.n1_test,self.n2_test) if test_data else \
+                (self.n1,self.n2) 
+        pn = self.compute_bicentering_matrix(nystrom=nystrom,test_data=test_data)
+        sp,ev = eigsy(1/(n1+n2) * torch.chain_matmul(pn, self.compute_gram_matrix(nystrom=nystrom,test_data=test_data), pn).cpu().numpy())  # eigsy uses numpy
         order = sp.argsort()[::-1]
         
         if nystrom: # la distinction est utile pour calculer les metriques sur nystrom, mais on ne garde en mémoire que la dernière version de la diag nystrom
             self.evny = torch.tensor(ev.T[order],dtype=torch.float64) 
             self.spny = torch.tensor(sp[order], dtype=torch.float64)
+        elif test_data:
+            self.ev_test = torch.tensor(ev.T[order],dtype=torch.float64) 
+            self.sp_test = torch.tensor(sp[order], dtype=torch.float64)
         else:
             self.ev = torch.tensor(ev.T[order],dtype=torch.float64) 
             self.sp = torch.tensor(sp[order], dtype=torch.float64)
@@ -365,8 +399,8 @@ class Tester:
             Pbi   = self.compute_bicentering_matrix(nystrom=False,test_data=test_data)
             sp,ev     = (self.sp.to(device),self.ev.to(device))  
         else:    
-            spny,evny = (self.spny.to(device),self.evny.to(device)) 
             Pbiny = self.compute_bicentering_matrix(nystrom=True,test_data=False)
+            spny,evny = (self.spny.to(device),self.evny.to(device)) 
         
         if nystrom in [2,3]:
             mny1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
@@ -396,26 +430,17 @@ class Tester:
             pk = torch.matmul(kmn,Pbi)
             pkm = torch.mv(pk.T,m_mtot)  
         
-        kfda = 0
-        kfda_dict = []
         if trunc[-1] >maxtrunc:
             trunc=trunc[:maxtrunc]
-        for i,t in enumerate(trunc):
-            if t <= maxtrunc: 
-                evi = ev[i] if nystrom in [0,3] else evny[i]
-                spi = sp[i] if nystrom in [0,3] else spny[i]
 
-
-                # kfda +=  (n1*n2)/(ntot * mtot *sp[i]**2)* torch.dot(evi,pkm)**2 if nystrom <2 else (n1*n2)/(mtot * mtot *sp[i]**2)* torch.dot(evi,pkm)**2
-                kfda += ((n1*n2)/(ntot**2*spi**2)*torch.dot(evi,pkm)**2).item() if nystrom ==0  else \
-                        ((n1*n2)/(ntot*mtot*spi**2)*torch.dot(evi,pkm)**2).item() if nystrom ==1  else \
-                        ((m1*m2)/(mtot*mtot*spi**2)*torch.dot(evi,pkm)**2).item() if nystrom ==2  else \
-                        ((m1*m2)/(mtot*ntot*spi**2)*torch.dot(evi,pkm)**2).item() 
+        t=trunc[-1]
+        kfda = ((n1*n2)/(ntot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==0  else \
+               ((n1*n2)/(ntot*mtot*spny[:t]**2)*torch.dot(evny[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==1  else \
+               ((m1*m2)/(mtot*mtot*spny[:t]**2)*torch.dot(evny[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==2  else \
+               ((m1*m2)/(mtot*ntot*sp[:t]**2)*torch.dot(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
                         
-                kfda_dict += [kfda] # [f'O_{t}']
-    
         name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.df_kfdat[name] = pd.Series(kfda_dict,index=trunc)
+        self.df_kfdat[name] = pd.Series(kfda,index=trunc)
 
         if verbose > 0:
             print(time() - start)
@@ -433,38 +458,87 @@ class Tester:
             m1,m2 = (self.nxanchors,self.nyanchors)
             mtot = m1+m2
         
-        # n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1,self.n2)
-        # ntot = self.n1 + self.n2
-        # mtot = n1 + n2
-        
+        maxtrunc = ntot if nystrom ==0 else mtot
         if trunc is None:
-            trunc = np.arange(1,ntot+1)
+            trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
         
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        sp,ev = (self.spny.to(device),self.evny.to(device)) if nystrom else (self.sp.to(device),self.ev.to(device))
+
+        if nystrom in [0,3]:
+            Pbi   = self.compute_bicentering_matrix(nystrom=False,test_data=test_data)
+            sp,ev     = (self.sp.to(device),self.ev.to(device))  
+        else:    
+            Pbiny = self.compute_bicentering_matrix(nystrom=True,test_data=False)
+            spny,evny = (self.spny.to(device),self.evny.to(device)) 
         
+        if nystrom in [2,3]:
+            mny1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
+            mny2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
+            m_mtot = torch.cat((mny1, mny2), dim=0) # .to(device)        
+        else:
+            mn1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
+            mn2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+            m_ntot = torch.cat((mn1, mn2), dim=0) #.to(device)
         
-        pn = self.compute_bicentering_matrix(nystrom).to(device)
+        if nystrom ==0:
+            K = self.compute_gram_matrix(nystrom=False,test_data=test_data).to(device)
+            pk = torch.matmul(Pbi,K)
+            pkm = torch.mv(pk,m_ntot)
+
+        elif nystrom == 1:
+            kmn = self.compute_nystrom_kmn(test_data=test_data).to(device)
+            pk = torch.matmul(Pbiny,kmn)
+            pkm = torch.mv(pk,m_ntot)  
+        elif nystrom == 2:
+            kny = self.compute_gram_matrix(nystrom=nystrom).to(device)
+            pk = torch.matmul(Pbiny,kny)
+            pkm = torch.mv(pk,m_mtot)
+        else:
+            kmn = self.compute_nystrom_kmn(test_data=test_data).to(device)
+            pk = torch.matmul(kmn,Pbi)
+            pkm = torch.mv(pk.T,m_mtot) 
+             
+        if nystrom in [1,2] and test_data:
+            kmn = self.compute_nystrom_kmn(test_data=False).to(device)
+            pk = torch.matmul(Pbiny,kmn)
+        if nystrom in [0,3] and test_data:
+            kntestn = self.compute_nystrom_kntestn()
+            pk = torch.matmul(Pbi,kntestn)
         
-        # m est construit sur toute les obs, pas sur les ancres même si Nystrom 
-        mn1 = -1/n1 * torch.ones(n1, dtype=torch.float64, device=device)
-        mn2 = 1/n2 * torch.ones(n2, dtype=torch.float64, device=device)
-        mn = torch.cat((mn1, mn2), dim=0).to(device)
-        
-        
-        gram = self.compute_nystrom_kmn(test_data=test_data).to(device) if nystrom else self.compute_gram_matrix(test_data=test_data).to(device)
         t=trunc[-1]
-        lvpkmvpk =(mtot**-1 * sp[:t]**(-3/2) * torch.mv(torch.chain_matmul( ev[:t],pn,gram),mn) * torch.chain_matmul(gram,pn,ev[:t].T))
-        proj = lvpkmvpk.cumsum(dim=1)
+        proj = (ntot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.chain_matmul(ev[:t],pk).T).cumsum(axis=1).numpy() if nystrom ==0  else \
+               (mtot**-1*spny[:t]**(-3/2)*torch.mv(evny[:t],pkm)*torch.chain_matmul(ev[:t],pk).T).cumsum(axis=0).numpy() if nystrom ==1  else \
+               (mtot**-1*spny[:t]**(-3/2)*torch.mv(evny[:t],pkm)*torch.chain_matmul(ev[:t],pk).T).cumsum(axis=0).numpy() if nystrom ==2  else \
+               (ntot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.chain_matmul(ev[:t],pk).T).cumsum(axis=0).numpy() 
+        
         name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.df_proj_kfda[name] = pd.DataFrame(proj.numpy(),index= self.index[self.imask],columns=[str(t) for t in trunc])
+        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
         self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
         
         if verbose > 0:
             print(time() - start)
 
         # résidus du passé
+        # n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1,self.n2)
+        # ntot = self.n1 + self.n2
+        # mtot = n1 + n2
+        
+        # if trunc is None:
+        #     trunc = np.arange(1,ntot+1)
+        
+        # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # sp,ev = (self.spny.to(device),self.evny.to(device)) if nystrom else (self.sp.to(device),self.ev.to(device))
+        
+        
+        # pn = self.compute_bicentering_matrix(nystrom).to(device)
+        
+        # # m est construit sur toute les obs, pas sur les ancres même si Nystrom 
+        # mn1 = -1/n1 * torch.ones(n1, dtype=torch.float64, device=device)
+        # mn2 = 1/n2 * torch.ones(n2, dtype=torch.float64, device=device)
+        # mn = torch.cat((mn1, mn2), dim=0).to(device)
         # pk = torch.matmul(pn,gram)
+
+
         # pkm = torch.mv(pk,mn)
 
         # coefs = []
@@ -482,7 +556,7 @@ class Tester:
         # cevpk= cevpk.cumsum(dim=0)
         # print(cevpk[:2,:2])
 
-    def compute_proj_kpca(self,trunc=None,nystrom=False,name=None,verbose=0):
+    def compute_proj_kpca(self,trunc=None,nystrom=False,test_data=False,name=None,verbose=0):
 
         if verbose >0:
             start = time()
@@ -490,39 +564,40 @@ class Tester:
             print(f'Computing{ny} proj on kernel principal componant axis ...',end=' ')
 
 
-
-        n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1,self.n2)
-        ntot = self.n1 + self.n2
-        mtot = n1 + n2
+        n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
+        ntot = n1+n2
+        if nystrom >=1:
+            m1,m2 = (self.nxanchors,self.nyanchors)
+            mtot = m1+m2
         
+        maxtrunc = ntot if nystrom ==0 else mtot
         if trunc is None:
-            trunc = np.arange(1,ntot+1)
+            trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
         
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        sp,ev = (self.spny.to(device),self.evny.to(device)) if nystrom else (self.sp.to(device),self.ev.to(device))
+
+        if nystrom in [0,3]:
+            Pbi   = self.compute_bicentering_matrix(nystrom=False,test_data=test_data)
+            sp,ev     = (self.sp.to(device),self.ev.to(device))  
+        else:    
+            Pbi = self.compute_bicentering_matrix(nystrom=True,test_data=False)
+            sp,ev = (self.spny.to(device),self.evny.to(device)) 
         
-        
-        pn = self.compute_bicentering_matrix(nystrom).to(device)
-        
-        
-        gram = self.compute_nystrom_kmn().to(device) if nystrom else self.compute_gram_matrix().to(device)
-        pk = torch.matmul(pn,gram) 
-        
-        if trunc is None:
-            trunc = np.arange(1,ntot)
-        U = (mtot**(-1/2)*sp**(-1/2)*ev.T).T
-        Upk = torch.matmul(U[:trunc[-1],:],pk)
-        dfUpk = pd.DataFrame(Upk.T.numpy(),index=self.index[self.imask],columns=[str(t) for t in trunc])
-        dfUpk['sample'] = ['x']*self.n1 + ['y']*self.n2
-        # dfUpk['obs'] = list(range(n1))+list(range(n2))
-        
+        K = self.compute_kmn() if nystrom in [1,2] else \
+            self.compute_nystrom_kntestn() if nystrom ==3 and test_data else \
+            self.compute_gram_matrix()   
+
+
+        t = trunc[-1]
+        proj = (  ntot**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev[:t],Pbi,K).T).numpy()
         
         name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.df_proj_kpca[name] = dfUpk
+        self.df_proj_kpca[name] = pd.DataFrame(proj,index=self.index[self.imask],columns=[str(t) for t in trunc])
+        self.df_proj_kpca[name]['sample'] = ['x']*self.n1 + ['y']*self.n2 
 
         if verbose > 0:
             print(time() - start)
-
+        
     def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
         if verbose >0:
             start = time()
@@ -558,29 +633,29 @@ class Tester:
         return(name)
     
 
-    def kfdat(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+    def kfdat(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'kfdat':path if save else ''}
-        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,test_size=test_size,name=name,main=main,
+        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    def proj_kfda(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+    def proj_kfda(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'proj_kfda':path if save else ''}
-        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,test_size=test_size,name=name,main=main,
+        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    def proj_kpca(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+    def proj_kpca(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'proj_kpca':path if save else ''}
-        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,test_size=test_size,name=name,main=main,
+        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    def correlations(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+    def correlations(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'corr':path if save else ''}
-        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,test_size=test_size,name=name,main=main,
+        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which='proj_kfda',corr_prefix_col='')
 
 
     def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr'],
-             nystrom=False,nanchors=None,nystrom_method='kmeans',test_size=.8,
+             nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,
              name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,save=False,verbose=0):
         
         # for output,path in which.items()
@@ -635,7 +710,7 @@ class Tester:
             if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
                 if nystrom:
                     self.nystrom_method = nystrom_method
-                    self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,test_size=test_size,verbose=verbose) # max_iter=1000,
+                    self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,verbose=verbose) # max_iter=1000,
                     
                 self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
 
