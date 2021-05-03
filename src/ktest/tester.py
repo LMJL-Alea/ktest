@@ -12,7 +12,7 @@ from scipy.stats import chi2
 from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
-from kernels import gauss_kernel_mediane
+from .kernels import gauss_kernel_mediane
 from apt.eigen_wrapper import eigsy
 import apt.kmeans # For kmeans
 from kmeans_pytorch import kmeans
@@ -862,16 +862,19 @@ class Tester:
             self.n1 =  df_proj[df_proj['sample']=='x'].shape[0]
             self.n2 =  df_proj[df_proj['sample']=='y'].shape[0]
 
-    def plot_kfdat(self,ax=None,ylim=None,figsize=(10,10),trunc=None,columns=None,asymp_ls='--',asymp_c = 'crimson',title=None,title_fontsize=40,highlight_main=False,mean=False,mean_label='mean',mean_color = 'xkcd: indigo'):
+    def plot_kfdat(self,ax=None,ylim=None,figsize=(10,10),trunc=None,columns=None,asymp_ls='--',asymp_c = 'crimson',title=None,title_fontsize=40,highlight=False,highlight_main=False,mean=False,mean_label='mean',mean_color = 'xkcd: indigo'):
             
         # try:
             if columns is None:
                 columns = self.df_kfdat.columns
             kfdat = self.df_kfdat[columns].copy()
-            if self.main_name in columns and highlight_main:
+            
+            if self.main_name in columns and highlight_main and len(columns)>1:
                 kfdat[self.main_name].plot(ax=ax,lw=4,c='black')
                 kfdat = kfdat.drop(columns=self.main_name) 
-            print(self.df_kfdat.columns,'\n',kfdat.columns)
+            elif highlight and len(columns)==1:
+                kfdat.plot(ax=ax,lw=4,c='black')
+            # print(self.df_kfdat.columns,'\n',kfdat.columns)
             if ax is None:
                 fig,ax = plt.subplots(figsize=figsize)
             if mean:
