@@ -10,6 +10,9 @@ P,D,N,S = 10,50,10,0.01
 DI,DN = 5,5
 #%% Generation
 def mvn_pf(p=P, d=D, nobs=N, sig=S, seed=1, noise=True,spectrum='isotropic', **kwargs):
+    """ 
+    Creer une gaussienne multivarie 
+    """
     #    torch.manual_seed(seed)
     np.random.seed(seed=seed)
     mu = torch.zeros(p)
