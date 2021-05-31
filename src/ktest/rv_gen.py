@@ -9,14 +9,16 @@ import scipy as sc
 P,D,N,S = 10,50,10,0.01
 DI,DN = 5,5
 #%% Generation
-def mvn_pf(p=P, d=D, nobs=N, sig=S, seed=1, noise=True,dsp = False, **kwargs):
+def mvn_pf(p=P, d=D, nobs=N, sig=S, seed=1, noise=True,spectrum='isotropic', **kwargs):
     #    torch.manual_seed(seed)
     np.random.seed(seed=seed)
     mu = torch.zeros(p)
-    if dsp:
-        cov = torch.diag(torch.tensor(list(range(1,p+1))))
-    else:
+    if spectrum == 'isotropic':
         cov = torch.eye(p)
+    elif spectrum == 'decreasing_linear':
+        cov = torch.diag(torch.tensor(list(range(1,p+1))))
+    elif spectrum == 'decreasing_geometric':
+        cov = torch.diag(torch.tensor([0.9**i for i in range(p)]))
     xp = np.random.multivariate_normal(mu, cov, nobs)
     xd_p = np.zeros((nobs, d-p))
     xd = np.concatenate((xp, xd_p), axis=1)
@@ -121,11 +123,13 @@ def gen_couple(key = {}):
     ref_generators = {'gaussienne.multivariee': mvn_pf,  'mixture.gaussienne': mixn_pf}
     generator = ref_generators[key['data_type']] if 'data_type' in key else mvn_pf
 
-    arg = {'p':     key['data_dimi']      if 'data_dimi'      in key else P,
-           'd':     key['data_dimg']      if 'data_dimg'      in key else D,
-           'sig':   key['data_noise_sig'] if 'data_noise_sig' in key else S,
-           'noise': key['data_noise']     if 'data_noise'     in key else True,
-           'dsp':   key['dsp']            if 'dsp'            in key else False}
+    arg = {'p':         key['data_dimi']      if 'data_dimi'      in key else P,
+           'd':         key['data_dimg']      if 'data_dimg'      in key else D,
+           'sig':       key['data_noise_sig'] if 'data_noise_sig' in key else S,
+           'noise':     key['data_noise']     if 'data_noise'     in key else True,
+           'spectrum':  key['data_spectrum']  if 'data_spectrum'  in key else 'isotropic',
+        #    'dsp':   key['dsp']            if 'dsp'            in key else False
+        }
     seed = key['data_seed'] if 'data_seed' in key else 1994
         
     # les deux échantillons font la même taille
