@@ -12,7 +12,7 @@ from scipy.stats import chi2
 from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
-from .kernels import gauss_kernel_mediane
+from kernels import gauss_kernel_mediane
 from apt.eigen_wrapper import eigsy
 import apt.kmeans # For kmeans
 from kmeans_pytorch import kmeans
@@ -139,6 +139,8 @@ class Tester:
         if verbose >0:
             start = time()
             print(f'Determining Nystrom anchors by {nystrom_method} ...',end=' ')
+        if verbose >1:
+            print(f"nanchors{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size} on_other_data:{on_other_data}")
 
         if on_other_data:
 
@@ -206,7 +208,6 @@ class Tester:
                 self.yassignations,self.yanchors = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
                 self.xanchors = self.xanchors.double()
                 self.yanchors = self.yanchors.double()
-                
             elif nystrom_method == 'random':
                 self.xanchors = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxanchors, replace=False)]
                 self.yanchors = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nyanchors, replace=False)]
@@ -286,6 +287,7 @@ class Tester:
         torch.Tensor of size (nxanchors+nyanchors)**2 if nystrom else (n1+n2)**2 
         """
 
+        
         n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
         
         idn1 = torch.eye(n1, dtype=torch.float64)
@@ -294,8 +296,14 @@ class Tester:
         onen1 = torch.ones(n1, n1, dtype=torch.float64)
         onen2 = torch.ones(n2, n2, dtype=torch.float64)
 
-        pn1 = idn1 - 1/n1 * onen1
-        pn2 = idn2 - 1/n2 * onen2
+        if nystrom in [4,5]:
+            A1 = 1/self.n1*torch.diag(torch.bincount(self.xassignations)).double()
+            A2 = 1/self.n2*torch.diag(torch.bincount(self.yassignations)).double()
+            pn1 = np.sqrt(self.n1/(self.n1+self.n2))*(idn1 - torch.matmul(A1,onen1))
+            pn2 = np.sqrt(self.n2/(self.n1+self.n2))*(idn2 - torch.matmul(A2,onen2))
+        else:
+            pn1 = idn1 - 1/n1 * onen1
+            pn2 = idn2 - 1/n2 * onen2
 
         z12 = torch.zeros(n1, n2, dtype=torch.float64)
         z21 = torch.zeros(n2, n1, dtype=torch.float64)
@@ -310,19 +318,23 @@ class Tester:
 
         if nystrom in [0,3]:
             Pbi   = self.compute_bicentering_matrix(nystrom=False,test_data=test_data)
-        else:    
+        elif nystrom in [1,2]:    
             Pbi = self.compute_bicentering_matrix(nystrom=True,test_data=False)
-        
-        if nystrom in [2,3]:
+        elif nystrom in [4,5]:
+            Pbi = self.compute_bicentering_matrix(nystrom=nystrom,test_data=False)
+
+        if nystrom in [2,3,5]:
             m1,m2 = (self.nxanchors,self.nyanchors)
             m_mu1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
             m_mu2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
-        else:
+        elif nystrom in [0,1,4]:
             m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
             m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
         
         m_mu12 = torch.cat((m_mu1, m_mu2), dim=0) #.to(device)
         
+        if nystrom in [4,5]:
+            A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
         if nystrom ==0:
             K = self.compute_gram_matrix(nystrom=False,test_data=test_data).to(device)
             pk = torch.matmul(Pbi,K)
@@ -332,10 +344,17 @@ class Tester:
         elif nystrom == 2:
             kny = self.compute_gram_matrix(nystrom=nystrom).to(device)
             pk = torch.matmul(Pbi,kny)
-        else:
+        elif nystrom == 3:
             kmn = self.compute_nystrom_kmn(test_data=test_data).to(device)
             pk = torch.matmul(kmn,Pbi).T
-        
+        elif nystrom == 4:
+            kmn = self.compute_nystrom_kmn(test_data=test_data).to(device)
+            pk = torch.chain_matmul(A**(1/2),Pbi.T,kmn)
+        elif nystrom == 5:
+            kny = self.compute_gram_matrix(nystrom=nystrom).to(device)
+            pk = torch.chain_matmul(A**(1/2),Pbi.T,kny)
+            # pk = torch.chain_matmul(Pbi,A,kny,A)
+            
         return(torch.mv(pk,m_mu12))  
         
     def diagonalize_bicentered_gram(self,nystrom=False,test_data=False,verbose=0):
@@ -347,13 +366,26 @@ class Tester:
             start = time()
             ny = ' nystrom' if nystrom else '' 
             print(f'Diagonalizing the{ny} Gram matrix ...',end=' ')
+        if verbose >1:
+            print(f'nystrom:{nystrom} test_data:{test_data}')
 
+        n1,n2 =  (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2)
+        if nystrom:
+            m1,m2 = (self.nxanchors,self.nyanchors)  
+            # if nystrom in [1,2,3] else \
+            #     (self.n1_test,self.n2_test) if test_data else \
+            #     (self.n1,self.n2) # nystrom = False or nystrom in [4,5]
+
+        pn = self.compute_bicentering_matrix(nystrom=nystrom,test_data=test_data).double()
         
-        n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else \
-                (self.n1_test,self.n2_test) if test_data else \
-                (self.n1,self.n2) 
-        pn = self.compute_bicentering_matrix(nystrom=nystrom,test_data=test_data)
-        sp,ev = eigsy(1/(n1+n2) * torch.chain_matmul(pn, self.compute_gram_matrix(nystrom=nystrom,test_data=test_data), pn).cpu().numpy())  # eigsy uses numpy
+        if nystrom in [4,5]:
+            A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
+            sp,ev = eigsy(torch.chain_matmul(A**(1/2),pn, self.compute_gram_matrix(nystrom=nystrom,test_data=test_data),pn,A**(1/2)).cpu().numpy())
+        elif nystrom in [1,2]:
+            sp,ev = eigsy(1/(m1+m2) * torch.chain_matmul(pn, self.compute_gram_matrix(nystrom=nystrom,test_data=test_data), pn).cpu().numpy())  # eigsy uses numpy
+        else:
+            sp,ev = eigsy(1/(n1+n2) * torch.chain_matmul(pn, self.compute_gram_matrix(nystrom=nystrom,test_data=test_data), pn).cpu().numpy())  # eigsy uses numpy
+        
         order = sp.argsort()[::-1]
         
         if nystrom: # la distinction est utile pour calculer les metriques sur nystrom, mais on ne garde en mémoire que la dernière version de la diag nystrom
@@ -456,7 +488,7 @@ class Tester:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         if nystrom in [0,3]:
-            sp,ev     = (self.sp.to(device),self.ev.to(device))  
+            sp,ev = (self.sp.to(device),self.ev.to(device))  
         else:    
             sp,ev = (self.spny.to(device),self.evny.to(device)) 
         
@@ -464,12 +496,14 @@ class Tester:
         
         if trunc[-1] >maxtrunc:
             trunc=trunc[:maxtrunc]
-
+        
         t=trunc[-1]
         kfda = ((n1*n2)/(ntot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==0  else \
                ((n1*n2)/(ntot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==1  else \
                ((m1*m2)/(mtot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==2  else \
-               ((m1*m2)/(mtot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
+               ((m1*m2)/(mtot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==3  else \
+               ((n1*n2)/(ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==4  else \
+               ((m1*m2)/(mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
                         
         name = name if name is not None else self.name_generator(trunc,nystrom)
         self.df_kfdat[name] = pd.Series(kfda,index=trunc)
@@ -745,7 +779,9 @@ class Tester:
                     ny+=f' split{test_size}' 
  
             print(f'{datastr}Compute {inwhich} {ny}') #  of {self.n1} and {self.n2} points{ny} ')
-        
+        if verbose >1:
+            print(f"trunc:{len(trunc)} \n which:{which_dict} nystrom:{nystrom} nanchors:{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size}\n")
+            print(f"main:{main} corr:{corr_which} mmd_unbiaised:{mmd_unbiaised} seva:{save}")
         
         loaded = []    
         if save:
@@ -792,9 +828,12 @@ class Tester:
                 if nystrom:
                     self.nystrom_method = nystrom_method
                     self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,verbose=verbose) # max_iter=1000,
-                
 
-                self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
+                if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
+                    self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
+                else:
+                    self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
+
             if 'kfdat' in which_dict and 'kfdat' not in loaded:
                 self.compute_kfdat(trunc=trunc,nystrom=nystrom,test_data=test_data,name=name_,verbose=verbose)  
                 loaded += ['kfdat']
