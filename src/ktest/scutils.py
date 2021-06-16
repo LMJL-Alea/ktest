@@ -6,6 +6,9 @@ import numpy as np
 from scipy.stats import chi2
 import scanpy as sc
 from tester import Tester
+from importlib import reload 
+
+
 
 def split_H0(A: np.array,return_index=False):
     nA = len(A)
@@ -156,5 +159,8 @@ def generate_which_dict(path_kfda,dataset_id,genes_selection,spec):
             'kfdat':path_kfdat,
             'proj_kpca':path_proj_kpca,
             'corr':path_corr_pv})
+
+
+
 
 

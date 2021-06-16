@@ -9,6 +9,7 @@ from time import time
 
 import matplotlib.pyplot as plt
 from scipy.stats import chi2
+from scipy.linalg import svd
 from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
@@ -60,6 +61,10 @@ from kmeans_pytorch import kmeans
 # plot proj :on a dfx et dfy pour tracer le result en fct d'un axe de la pca 
 # on peut aussi vouloir tracer en fonction de ll'expression d'un gène 
 
+
+# a partir d'un moment, j'ai supposé que test data n'était plus d'actualité et cessé de l'utiliser. A vérifier et supprimer si oui 
+
+# def des fonction type get pour les opérations d'initialisation redondantes
 class Tester:
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
@@ -126,129 +131,181 @@ class Tester:
         self.has_data = True        
 
 
-    def compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
+    def compute_nystrom_landmarks(self,nlandmarks,landmarks_method,verbose=0):
+        # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
+        
         """
-        Determines the nystrom anchors using ``nystrom_method`` which can be 'kmeans' or 'random'
+        We distinguish the nystrom landmarks and nystrom anchors.
+        The nystrom landmarks are the points from the observation space that will be used to compute the nystrom anchors. 
+        The nystrom anchors are the points in the RKHS computed from the nystrom landmarks on which we will apply the nystrom method. 
+
         Parameters
         ----------
-        nxanchors:      number of anchors to determine from first sample
-        nyanchors:      number of anchors to determine from second sample, equals nxanchors if None.
-        nystrom_method: 'kmeans' or 'random'
+        nlandmarks:      number of landmarks in total (proportionnaly sampled according to the data)
+        landmarks_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
+        """
+        if verbose >0:
+            start = time()
+            print(f'compute_nystrom_landmarks(nlandmarks={nlandmarks},landmarks_method={landmarks_method})...',end=' ')
+
+        # Commentted bc thought to be useless, to suppress if confirmed
+
+        # if verbose >1:
+        #     print(f"nanchors{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size} on_other_data:{on_other_data}")
+
+        # if on_other_data:
+
+        #     xmask_ny = self.xmask
+        #     ymask_ny = self.ymask  
+        #     xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
+        #     self.nxanchors=np.int(np.floor(xratio * nanchors)) 
+        #     self.nyanchors=np.int(np.floor(yratio * nanchors))
+
+        #     if nystrom_method == 'kmeans':
+        #         # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
+        #         # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
+        #         self.xassignations,self.xanchors = kmeans(X=x_other, num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
+        #         self.yassignations,self.yanchors = kmeans(X=y_other, num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
+        #         self.xanchors = self.xanchors.double()
+        #         self.yanchors = self.yanchors.double()
+                
+        #     elif nystrom_method == 'random':
+        #         self.xanchors = x_other[np.random.choice(x_other.shape[0], size=self.nxanchors, replace=False)]
+        #         self.yanchors = y_other[np.random.choice(y_other.shape[0], size=self.nyanchors, replace=False)]
+            
+            
+        
+        # else:
+        xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
+        self.nxlandmarks=np.int(np.floor(xratio * nlandmarks)) 
+        self.nylandmarks=np.int(np.floor(yratio * nlandmarks))
+
+            # if split_data:
+
+            #     #split data
+            #     # Say a = 1 - test_size
+            #     # We determine the nanchors = nxanchors + nyanchors on n1_ny = |_a*n1_| and n2_ny = |_a*n2_| data. 
+            #     # To keep proportion we have nxanchors = |_ nanchors * n1/(n1+n2) _|and nyanchors = |_ nanchors * n2/(n1+n2) _| (strictly positive numbers)
+            #     # Thus, we need to have n1_ny >= nxanchors and n2_ny >= nyanchors 
+            #     # We use a*n1 >= |_ a*n1 _| and find the condition a >= 1/n1 |_ nanchors* n1/(n1+n2) _| and  a >= 1/n2 |_ nanchors* n2/(n1+n2) _| 
+            #     # in order to implement a simple rule, we raise an error if these conditions are not fulfilled:
+            #     assert (1-test_size) >= 1/self.n1 * np.int(np.floor(nanchors * xratio)) and \
+            #         (1-test_size) >= 1/self.n2 * np.int(np.floor(nanchors * yratio)) 
+            #     assert self.nxanchors >0 and self.nyanchors >0
+                    
+            #     # print(self.xmask.sum(),len(self.x_index))
+            #     xindex_nystrom,xindex_test = train_test_split(self.x_index[self.xmask],test_size=.8)
+            #     yindex_nystrom,yindex_test = train_test_split(self.y_index[self.ymask],test_size=.8)
+                
+            #     xmask_ny = self.x_index.isin(xindex_nystrom)
+            #     ymask_ny = self.y_index.isin(yindex_nystrom)
+
+            #     self.xmask_test = self.x_index.isin(xindex_test)
+            #     self.ymask_test = self.y_index.isin(yindex_test)
+            #     self.n1_test = len(xindex_test)
+            #     self.n2_test = len(yindex_test)
+
+
+            # else:
+        xmask_ny = self.xmask
+        ymask_ny = self.ymask  
+
+        if landmarks_method == 'kmeans':
+            # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
+            # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
+            self.xassignations,self.xlandmarks = kmeans(X=self.x[xmask_ny,:], num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.yassignations,self.ylandmarks = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.xlandmarks = self.xlandmarks.double()
+            self.ylandmarks = self.ylandmarks.double()
+        elif landmarks_method == 'random':
+            self.xlandmarks = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxlandmarks, replace=False)]
+            self.ylandmarks = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nylandmarks, replace=False)]
+
+        if verbose > 0:
+            print(time() - start)
+
+
+    def compute_nystrom_anchors(self,nanchors,nystrom_method='raw',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
+        """
+        Determines the nystrom anchors using ``nystrom_method`` which can be 'raw' or 'kPCA'
+        
+        Parameters
+        ----------
+        nystrom_method: 'raw' project all the observation on Span(landmarks) 
+                        'kPCA' determines the subspace generated by the first directions of a kPCA applied to the landmarks
+                        note that when nanchors == nlandmarks 'kPCA' and 'raw' are equivalent. 
+        nanchors:      = nlandmarks by default if nystrom_method is 'raw'. Number of anchors to determine in total (proportionnaly according to the data)
         """
         
         if verbose >0:
             start = time()
-            print(f'Determining Nystrom anchors by {nystrom_method} ...',end=' ')
-        if verbose >1:
-            print(f"nanchors{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size} on_other_data:{on_other_data}")
+            print(f'Computing anchors by {nystrom_method} nystrom',end=' ')
+            if nystrom_method == 'kPCA':
+                print(f'for {nanchors} anchors ...', end=' ')
+            else:         
+                print('...',end=' ')
 
-        if on_other_data:
 
-            xmask_ny = self.xmask
-            ymask_ny = self.ymask  
-            xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
+        # bien faire l'arbre des possibles ici 
+        if nystrom_method =='raw':
+            self.nxanchors, self.nyanchors = self.nxlandmarks, self.nylandmarks
+
+        if nystrom_method =='kPCA':
+            xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2) 
             self.nxanchors=np.int(np.floor(xratio * nanchors)) 
             self.nyanchors=np.int(np.floor(yratio * nanchors))
+            assert(self.nxanchors <= self.nxlandmarks)
+            assert(self.nyanchors <= self.nylandmarks)
 
-            if nystrom_method == 'kmeans':
-                # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
-                # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
-                self.xassignations,self.xanchors = kmeans(X=x_other, num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-                self.yassignations,self.yanchors = kmeans(X=y_other, num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-                self.xanchors = self.xanchors.double()
-                self.yanchors = self.yanchors.double()
-                
-            elif nystrom_method == 'random':
-                self.xanchors = x_other[np.random.choice(x_other.shape[0], size=self.nxanchors, replace=False)]
-                self.yanchors = y_other[np.random.choice(y_other.shape[0], size=self.nyanchors, replace=False)]
-            
-            
-        
-        else:
-            xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
-            self.nxanchors=np.int(np.floor(xratio * nanchors)) 
-            self.nyanchors=np.int(np.floor(yratio * nanchors))
-
-            if split_data:
-
-                #split data
-                # Say a = 1 - test_size
-                # We determine the nanchors = nxanchors + nyanchors on n1_ny = |_a*n1_| and n2_ny = |_a*n2_| data. 
-                # To keep proportion we have nxanchors = |_ nanchors * n1/(n1+n2) _|and nyanchors = |_ nanchors * n2/(n1+n2) _| (strictly positive numbers)
-                # Thus, we need to have n1_ny >= nxanchors and n2_ny >= nyanchors 
-                # We use a*n1 >= |_ a*n1 _| and find the condition a >= 1/n1 |_ nanchors* n1/(n1+n2) _| and  a >= 1/n2 |_ nanchors* n2/(n1+n2) _| 
-                # in order to implement a simple rule, we raise an error if these conditions are not fulfilled:
-                assert (1-test_size) >= 1/self.n1 * np.int(np.floor(nanchors * xratio)) and \
-                    (1-test_size) >= 1/self.n2 * np.int(np.floor(nanchors * yratio)) 
-                assert self.nxanchors >0 and self.nyanchors >0
-                    
-                # print(self.xmask.sum(),len(self.x_index))
-                xindex_nystrom,xindex_test = train_test_split(self.x_index[self.xmask],test_size=.8)
-                yindex_nystrom,yindex_test = train_test_split(self.y_index[self.ymask],test_size=.8)
-                
-                xmask_ny = self.x_index.isin(xindex_nystrom)
-                ymask_ny = self.y_index.isin(yindex_nystrom)
-
-                self.xmask_test = self.x_index.isin(xindex_test)
-                self.ymask_test = self.y_index.isin(yindex_test)
-                self.n1_test = len(xindex_test)
-                self.n2_test = len(yindex_test)
+        spx,evx = eigsy(self.kernel(self.xlandmarks,self.xlandmarks))
+        spx = torch.diag(torch.tensor(spx[:self.nxanchors]))
+        evx = torch.tensor(evx).T[:self.nxanchors]
+        self.k_rectx = torch.chain_matmul(spx**(-1/2), evx,self.kernel(self.xlandmarks,self.x))
 
 
-            else:
-                xmask_ny = self.xmask
-                ymask_ny = self.ymask  
-
-        
-
-            if nystrom_method == 'kmeans':
-                # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
-                # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
-                self.xassignations,self.xanchors = kmeans(X=self.x[xmask_ny,:], num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-                self.yassignations,self.yanchors = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-                self.xanchors = self.xanchors.double()
-                self.yanchors = self.yanchors.double()
-            elif nystrom_method == 'random':
-                self.xanchors = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxanchors, replace=False)]
-                self.yanchors = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nyanchors, replace=False)]
+        spy,evy = eigsy(self.kernel(self.ylandmarks,self.ylandmarks))
+        spy = torch.diag(torch.tensor(spy[:self.nyanchors]))
+        evy = torch.tensor(evy).T[:self.nyanchors]
+        self.k_recty = torch.chain_matmul(spy**(-1/2), evy,self.kernel(self.ylandmarks,self.y)) 
 
         if verbose > 0:
             print(time() - start)
         
-    def compute_nystrom_kmn(self,test_data=False):
-        """
-        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
-        """
-        x,y = (self.x[self.xmask_test,:],self.y[self.ymask_test,:]) if test_data else (self.x[self.xmask,:],self.y[self.ymask,:])
-        z1,z2 = self.xanchors,self.yanchors
-        kernel = self.kernel
+        # def compute_nystrom_kmn(self,test_data=False):
+        #     """
+        #     Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        #     """
+        #     x,y = (self.x[self.xmask_test,:],self.y[self.ymask_test,:]) if test_data else (self.x[self.xmask,:],self.y[self.ymask,:])
+        #     z1,z2 = self.xanchors,self.yanchors
+        #     kernel = self.kernel
+            
+
+        #     kz1x = kernel(z1,x)
+        #     kz2x = kernel(z2,x)
+        #     kz1y = kernel(z1,y)
+        #     kz2y = kernel(z2,y)
+            
+        #     return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
+        #                         torch.cat((kz2x, kz2y), dim=1)), dim=0))
+        
+        # def compute_nystrom_kntestn(self):
+        #     """
+        #     Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        #     """
+        #     x,y = (self.x[self.xmask,:],self.y[self.ymask,:])
+        #     z1,z2 = self.x[self.xmask_test,:],self.y[self.ymask_test,:]
+        #     kernel = self.kernel
+            
+        #     kz1x = kernel(z1,x)
+        #     kz2x = kernel(z2,x)
+        #     kz1y = kernel(z1,y)
+        #     kz2y = kernel(z2,y)
+            
+        #     return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
+        #                         torch.cat((kz2x, kz2y), dim=1)), dim=0))
         
 
-        kz1x = kernel(z1,x)
-        kz2x = kernel(z2,x)
-        kz1y = kernel(z1,y)
-        kz2y = kernel(z2,y)
-        
-        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
-                            torch.cat((kz2x, kz2y), dim=1)), dim=0))
     
-    def compute_nystrom_kntestn(self):
-        """
-        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
-        """
-        x,y = (self.x[self.xmask,:],self.y[self.ymask,:])
-        z1,z2 = self.x[self.xmask_test,:],self.y[self.ymask_test,:]
-        kernel = self.kernel
-        
-        kz1x = kernel(z1,x)
-        kz2x = kernel(z2,x)
-        kz1y = kernel(z1,y)
-        kz2y = kernel(z2,y)
-        
-        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
-                            torch.cat((kz2x, kz2y), dim=1)), dim=0))
-    
-
     def compute_gram_matrix(self,nystrom=False,test_data=False):
         """
         Computes Gram matrix, on anchors if nystrom is True, else on data. 
