@@ -60,6 +60,8 @@ from kmeans_pytorch import kmeans
 # plot proj :on a dfx et dfy pour tracer le result en fct d'un axe de la pca 
 # on peut aussi vouloir tracer en fonction de ll'expression d'un gène 
 
+# ajouter un get_xy pour gérer les masks 
+
 class Tester:
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
@@ -989,6 +991,10 @@ class Tester:
 
                 ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
             else:
+                if xy in color: # a complexifier si besoin (nystrom ou mask) 
+                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
+                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                    ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
