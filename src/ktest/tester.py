@@ -1073,7 +1073,10 @@ class Tester:
     def find_correlated_variables(self,name=None,nvar=1,t=1,prefix_col=''):
         if name is None:
             name = self.main_name
-        return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:nvar])
+        if nvar==0:
+            return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:])
+        else: 
+            return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:nvar])
         
     def plot_correlation_proj_var(self,ax=None,name=None,figsize=(10,10),nvar=30,projections=range(1,10),title=None,prefix_col=''):
         if name is None:
