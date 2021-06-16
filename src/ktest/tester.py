@@ -61,9 +61,8 @@ from kmeans_pytorch import kmeans
 # plot proj :on a dfx et dfy pour tracer le result en fct d'un axe de la pca 
 # on peut aussi vouloir tracer en fonction de ll'expression d'un gène 
 
-
+# ajouter un get_xy pour gérer les masks 
 # a partir d'un moment, j'ai supposé que test data n'était plus d'actualité et cessé de l'utiliser. A vérifier et supprimer si oui 
-
 # def des fonction type get pour les opérations d'initialisation redondantes
 class Tester:
     """
@@ -1046,6 +1045,10 @@ class Tester:
 
                 ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
             else:
+                if xy in color: # a complexifier si besoin (nystrom ou mask) 
+                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
+                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                    ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
@@ -1130,7 +1133,10 @@ class Tester:
     def find_correlated_variables(self,name=None,nvar=1,t=1,prefix_col=''):
         if name is None:
             name = self.main_name
-        return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:nvar])
+        if nvar==0:
+            return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:])
+        else: 
+            return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:nvar])
         
     def plot_correlation_proj_var(self,ax=None,name=None,figsize=(10,10),nvar=30,projections=range(1,10),title=None,prefix_col=''):
         if name is None:
