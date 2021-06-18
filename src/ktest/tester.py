@@ -64,6 +64,9 @@ from kmeans_pytorch import kmeans
 # ajouter un get_xy pour gérer les masks 
 # a partir d'un moment, j'ai supposé que test data n'était plus d'actualité et cessé de l'utiliser. A vérifier et supprimer si oui 
 # def des fonction type get pour les opérations d'initialisation redondantes
+
+# faire en sorte de pouvoir calculer corr kfda et kpca 
+
 class Tester:
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
@@ -709,7 +712,7 @@ class Tester:
         if verbose > 0:
             print(time() - start)
         
-    def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
+    def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name_corr=None,name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
         if verbose >0:
             start = time()
             ny = ' nystrom' if nystrom else '' 
@@ -717,15 +720,17 @@ class Tester:
 
 
         self.prefix_col=prefix_col
-        df_proj= self.init_df_proj(which,name)
+        if name_proj == None:
+            name_proj = name_corr
+        df_proj= self.init_df_proj(which,name_proj)
         if trunc is None:
             trunc = range(1,df_proj.shape[1] - 1) # -1 pour la colonne sample
         df_array = pd.DataFrame(torch.cat((self.x[self.xmask,:],self.y[self.ymask,:]),dim=0).numpy(),index=self.index[self.imask],columns=self.variables)
         for t in trunc:
             df_array[f'{prefix_col}{t}'] = pd.Series(df_proj[f'{t}'])
         
-        name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.corr[name] = df_array.corr().loc[self.variables,[f'{prefix_col}{t}' for t in trunc]]
+        name_corr = name_corr if name_corr is not None else self.name_generator(trunc,nystrom)
+        self.corr[name_corr] = df_array.corr().loc[self.variables,[f'{prefix_col}{t}' for t in trunc]]
         
         if verbose > 0:
             print(time() - start)
@@ -798,10 +803,10 @@ class Tester:
         self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    def correlations(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+    def correlations(self,trunc=None,corr_which='proj_kfda',nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'corr':path if save else ''}
         self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,split_data=split_data,test_size=test_size,name=name,main=main,
-        obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which='proj_kfda',corr_prefix_col='')
+        obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which=corr_which,corr_prefix_col='')
 
     def mmd(self,unbiaised=True,nystrom=False,nanchors=None,nystrom_method='kmeans',split_data=False,test_size=.8,name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'mmd':path if save else ''}
@@ -1046,8 +1051,8 @@ class Tester:
                 ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
             else:
                 if xy in color: # a complexifier si besoin (nystrom ou mask) 
-                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                    x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
+                    y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
                     ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
@@ -1076,6 +1081,7 @@ class Tester:
             ax.set_title(color,fontsize=20)
         ax.set_xlabel(xproj.split(sep='_')[1]+f': t={p1}',fontsize=20)                    
         ax.set_ylabel(yproj.split(sep='_')[1]+f': t={p2}',fontsize=20)
+        
         ax.legend()
 
     def init_df_proj(self,which,name):
