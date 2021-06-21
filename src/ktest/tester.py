@@ -2,6 +2,7 @@ from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
 
 import numpy as np
+from numpy.lib.function_base import kaiser
 import pandas as pd
 import torch
 import os
@@ -92,6 +93,10 @@ class Tester:
         :obj:`Tester`
         """
         self.has_data = False   
+        self.has_landmarks = False
+        self.quantization_with_landmarks_possible
+        self.has_anchors = False
+        
         # attributs initialisés 
         self.df_kfdat = pd.DataFrame()
         self.df_proj_kfda = {}
@@ -101,6 +106,7 @@ class Tester:
 
         # for verbosity 
         self.start_times = {}
+
         if x is not None and y is not None:
             self.init_data(x=x,y=y,kernel=kernel,x_index=x_index,y_index=y_index,variables=variables)
             
@@ -137,15 +143,52 @@ class Tester:
     def __str__(self):
         if self.has_data:
             s = f"View of Tester object with n1 = {self.n1}, n2 = {self.n2}\n"
-            s += f""
+            
         else: 
-            s = "View of Tester object with no data"
+            s = "View of Tester object with no data"  
+
+        s += "kfdat : "
+        if not self.df_kfdat.empty:
+            for c in self.df_kfdat.columns:
+                s += f"'{c}' "
+        s += '\n'
+
+        s += 'proj kfdat : '
+        if  len(self.df_proj_kfda)>0:
+            for c in self.df_proj_kfda.keys():
+                s += f"'{c}'"
+        s += '\n'    
+
+        s += 'proj kpcaw : '
+        if  len(self.df_proj_kpca)>0:
+            for c in self.df_proj_kpca.keys():
+                s += f"'{c}'"
+        s += '\n'    
+
+        s += 'correlations : '
+        if  len(self.corr)>0:
+            for c in self.corr.keys():
+                s += f"'{c}'"
+        s += '\n'   
+
+
+        s += 'mmd : '
+        if  len(self.corr)>0:
+            for c in self.corr.keys():
+                s += f"'{c}'"
+        s += '\n'    
+
+
         return(s) 
 
+    def __repr__(self):
+        return(self.__str__())
+ 
     def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):
         if verbose >0:
+            end = ' ' if verbose == 1 else '\n'
             if start:            
-                print(f"Starting {function_name} ...")
+                print(f"Starting {function_name} ...",end= end)
                 if verbose >1 and dict_of_variables is not None:
                     for k,v in dict_of_variables.items():
                         if verbose ==2:
@@ -155,9 +198,7 @@ class Tester:
                 self.start_times[function_name] = time()
             else: 
                 start_time = self.start_times[function_name]
-                print(f"Done {function_name} in  {time() - start_time}")
-
-
+                print(f"Done {function_name} in  {time() - start_time:.2f}")
 
     def compute_nystrom_landmarks(self,nlandmarks,landmarks_method,verbose=0):
         # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
@@ -177,69 +218,14 @@ class Tester:
                        dict_of_variables={'nlandmarks':nlandmarks,'landmarks_method':landmarks_method},
                        start=True,
                        verbose = verbose)
-        # if verbose >0:
-        #     start = time()
-        #     print(f'compute_nystrom_landmarks(nlandmarks={nlandmarks},landmarks_method={landmarks_method})...',end=' ')
-
-        # Commentted bc thought to be useless, to suppress if confirmed
-
-        # if verbose >1:
-        #     print(f"nanchors{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size} on_other_data:{on_other_data}")
-
-        # if on_other_data:
-
-        #     xmask_ny = self.xmask
-        #     ymask_ny = self.ymask  
-        #     xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
-        #     self.nxanchors=np.int(np.floor(xratio * nanchors)) 
-        #     self.nyanchors=np.int(np.floor(yratio * nanchors))
-
-        #     if nystrom_method == 'kmeans':
-        #         # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
-        #         # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
-        #         self.xassignations,self.xanchors = kmeans(X=x_other, num_clusters=self.nxanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-        #         self.yassignations,self.yanchors = kmeans(X=y_other, num_clusters=self.nyanchors, distance='euclidean', tqdm_flag=False) #cuda:0')
-        #         self.xanchors = self.xanchors.double()
-        #         self.yanchors = self.yanchors.double()
-                
-        #     elif nystrom_method == 'random':
-        #         self.xanchors = x_other[np.random.choice(x_other.shape[0], size=self.nxanchors, replace=False)]
-        #         self.yanchors = y_other[np.random.choice(y_other.shape[0], size=self.nyanchors, replace=False)]
             
             
         
-        # else:
         xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
+        self.nlandmarks = nlandmarks
         self.nxlandmarks=np.int(np.floor(xratio * nlandmarks)) 
         self.nylandmarks=np.int(np.floor(yratio * nlandmarks))
 
-            # if split_data:
-
-            #     #split data
-            #     # Say a = 1 - test_size
-            #     # We determine the nanchors = nxanchors + nyanchors on n1_ny = |_a*n1_| and n2_ny = |_a*n2_| data. 
-            #     # To keep proportion we have nxanchors = |_ nanchors * n1/(n1+n2) _|and nyanchors = |_ nanchors * n2/(n1+n2) _| (strictly positive numbers)
-            #     # Thus, we need to have n1_ny >= nxanchors and n2_ny >= nyanchors 
-            #     # We use a*n1 >= |_ a*n1 _| and find the condition a >= 1/n1 |_ nanchors* n1/(n1+n2) _| and  a >= 1/n2 |_ nanchors* n2/(n1+n2) _| 
-            #     # in order to implement a simple rule, we raise an error if these conditions are not fulfilled:
-            #     assert (1-test_size) >= 1/self.n1 * np.int(np.floor(nanchors * xratio)) and \
-            #         (1-test_size) >= 1/self.n2 * np.int(np.floor(nanchors * yratio)) 
-            #     assert self.nxanchors >0 and self.nyanchors >0
-                    
-            #     # print(self.xmask.sum(),len(self.x_index))
-            #     xindex_nystrom,xindex_test = train_test_split(self.x_index[self.xmask],test_size=.8)
-            #     yindex_nystrom,yindex_test = train_test_split(self.y_index[self.ymask],test_size=.8)
-                
-            #     xmask_ny = self.x_index.isin(xindex_nystrom)
-            #     ymask_ny = self.y_index.isin(yindex_nystrom)
-
-            #     self.xmask_test = self.x_index.isin(xindex_test)
-            #     self.ymask_test = self.y_index.isin(yindex_test)
-            #     self.n1_test = len(xindex_test)
-            #     self.n2_test = len(yindex_test)
-
-
-            # else:
         xmask_ny = self.xmask
         ymask_ny = self.ymask  
 
@@ -250,63 +236,64 @@ class Tester:
             self.yassignations,self.ylandmarks = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
             self.xlandmarks = self.xlandmarks.double()
             self.ylandmarks = self.ylandmarks.double()
+            self.quantization_with_landmarks_possible = True
         elif landmarks_method == 'random':
             self.xlandmarks = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxlandmarks, replace=False)]
             self.ylandmarks = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nylandmarks, replace=False)]
+            
+            # Necessaire pour remettre a false au cas ou on a déjà utilisé 'kmeans' avant 
+            self.quantization_with_landmarks_possible = False
+
+        self.has_landmarks= True
 
         self.verbosity(function_name='compute_nystrom_landmarks',
                        dict_of_variables={'nlandmarks':nlandmarks,'landmarks_method':landmarks_method},
                        start=False,
                        verbose = verbose)
 
-    def compute_nystrom_anchors(self,nanchors,nystrom_method='raw',verbose=0):
+    def compute_nystrom_anchors(self,nanchors=None,verbose=0):
         """
-        Determines the nystrom anchors using ``nystrom_method`` which can be 'raw' or 'kPCA'
+        Determines the nystrom anchors using 
+        Stores the results as a list of eigenvalues and the 
         
         Parameters
         ----------
-        nystrom_method: 'raw' project all the observation on Span(landmarks) 
-                        'kPCA' determines the subspace generated by the first directions of a kPCA applied to the landmarks
-                        note that when nanchors == nlandmarks 'kPCA' and 'raw' are equivalent. 
-        nanchors:      = nlandmarks by default if nystrom_method is 'raw'. Number of anchors to determine in total (proportionnaly according to the data)
+        nanchors:      <= nlandmarks (= by default). Number of anchors to determine in total (proportionnaly according to the data)
         """
         
         
         self.verbosity(function_name='compute_nystrom_anchors',
-                        dict_of_variables={'nanchors':nanchors,'nystrom_method':nystrom_method},
+                        dict_of_variables={'nanchors':nanchors},
                         start=True,
                         verbose = verbose)
 
 
 
         # bien faire l'arbre des possibles ici 
-        if nystrom_method =='raw':
-            self.nxanchors, self.nyanchors = self.nxlandmarks, self.nylandmarks
+        if nanchors is None:
+            self.nanchors = self.nlandmarks
+            # self.nxanchors, self.nyanchors = self.nxlandmarks, self.nylandmarks
 
-        if nystrom_method =='kPCA':
-            xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2) 
-            self.nxanchors=np.int(np.floor(xratio * nanchors)) 
-            self.nyanchors=np.int(np.floor(yratio * nanchors))
-            assert(self.nxanchors <= self.nxlandmarks)
-            assert(self.nyanchors <= self.nylandmarks)
+        else:
+            self.nanchors = nanchors
+            assert(self.nanchors <= self.nlandmarks)
 
-        spx,evx = eigsy(self.kernel(self.xlandmarks,self.xlandmarks))
-        spx = torch.diag(torch.tensor(spx[:self.nxanchors]))
-        evx = torch.tensor(evx).T[:self.nxanchors]
-        self.k_rectx = torch.chain_matmul(spx**(-1/2), evx,self.kernel(self.xlandmarks,self.x))
+        Km = self.compute_gram_matrix(landmarks=True)
 
-
-        spy,evy = eigsy(self.kernel(self.ylandmarks,self.ylandmarks))
-        spy = torch.diag(torch.tensor(spy[:self.nyanchors]))
-        evy = torch.tensor(evy).T[:self.nyanchors]
-        self.k_recty = torch.chain_matmul(spy**(-1/2), evy,self.kernel(self.ylandmarks,self.y)) 
+        sp_anchors,ev_anchors = eigsy(Km)
+                
+        order = sp_anchors.argsort()[::-1]
+        self.sp_anchors = torch.tensor(sp_anchors[order][:self.nanchors], dtype=torch.float64)
+        self.ev_anchors = torch.tensor(ev_anchors.T[order][:self.nanchors],dtype=torch.float64) 
+      
+        self.has_anchors = True
 
         self.verbosity(function_name='compute_nystrom_anchors',
-                        dict_of_variables={'nanchors':nanchors,'nystrom_method':nystrom_method},
+                        dict_of_variables={'nanchors':nanchors},
                         start=False,
                         verbose = verbose)
     
-    def compute_gram_matrix(self,nystrom=False): 
+    def compute_gram_matrix(self,landmarks=False): 
         """
         Computes Gram matrix, on anchors if nystrom is True, else on data. 
         This function is called everytime the Gram matrix is needed but I could had an option to keep it in memory in case of a kernel function 
@@ -316,7 +303,9 @@ class Tester:
         -------
         torch.Tensor of size (nxanchors+nyanchors)**2 if nystrom else (n1+n2)**2
         """
-        x,y = (self.xanchors,self.yanchors) if nystrom else \
+
+
+        x,y = (self.xlandmarks,self.ylandmarks) if landmarks else \
               (self.x[self.xmask,:],self.y[self.ymask,:])
 
         kernel = self.kernel
@@ -392,13 +381,13 @@ class Tester:
         if nystrom in [4,5]:
             A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
         if nystrom ==0:
-            K = self.compute_gram_matrix(nystrom=False).to(device)
+            K = self.compute_gram_matrix(landmarks=False).to(device)
             pk = torch.matmul(Pbi,K)
         elif nystrom == 1:
             kmn = self.compute_nystrom_kmn().to(device)
             pk = torch.matmul(Pbi,kmn)
         elif nystrom == 2:
-            kny = self.compute_gram_matrix(nystrom=nystrom).to(device)
+            kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
             pk = torch.matmul(Pbi,kny)
         elif nystrom == 3:
             kmn = self.compute_nystrom_kmn().to(device)
@@ -407,12 +396,59 @@ class Tester:
             kmn = self.compute_nystrom_kmn().to(device)
             pk = torch.chain_matmul(A**(1/2),Pbi.T,kmn)
         elif nystrom == 5:
-            kny = self.compute_gram_matrix(nystrom=nystrom).to(device)
+            kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
             pk = torch.chain_matmul(A**(1/2),Pbi.T,kny)
             # pk = torch.chain_matmul(Pbi,A,kny,A)
             
         return(torch.mv(pk,m_mu12))  
         
+
+    def compute_bicentered_gram(self,which='standard',verbose=0):
+        """ 
+        Computes the bicentered Gram matrix which shares its spectrom with the 
+        within covariance operator. 
+        Returns the matrix because it is only used in diagonalize_bicentered_gram
+        I separated this function because I want to assess the computing time and 
+        simplify the code 
+
+        which in 'standard','nystrom','quantization'
+        # contre productif de choisir 'nystrom' car cela est aussi cher que standard pour une qualité d'approx de la matrice moins grande. 
+        # pour utiliser nystrom, mieux vaux calculer la SVD de BB^T 
+        """
+
+
+
+        self.verbosity(function_name='compute_bicentered_gram',
+                dict_of_variables={'which':which},
+                start=True,
+                verbose = verbose)    
+
+        n1,n2 =  (self.n1,self.n2)
+
+        # modifier la fonction "compute_bicentering_matrix" elle doit renvoyer
+        # quantization : correspond à nystrom 4 5 
+        # nystrom et standard : c'est la même (pbi par blocs n1 n2) 
+
+        
+        quantization = which == 'quantization'
+        Pbi = self.compute_bicentering_matrix(quantization=quantization).double()
+        
+        if which == 'quantization':
+            if self.quantization_with_landmarks_possible:
+                K = self.compute_gram_matrix(landmarks=True) # on utilise les landmarks uniquement dans le cas quantization
+                A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
+                Kbi = torch.chain_matmul(A**(1/2),Pbi, K,Pbi,A**(1/2))
+            else:
+                print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmarks_method='kmeans'")
+
+        elif which == 'nystrom':
+            Kmn = 
+            1/(n1+n2) * torch.chain_matmul(Pbi, self.compute_gram_matrix(nystrom=nystrom), Pbi)
+        elif which == 'standard':
+
+        return Kbi
+
+
     def diagonalize_bicentered_gram(self,nystrom=False,verbose=0):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
@@ -428,9 +464,6 @@ class Tester:
         n1,n2 =  (self.n1,self.n2)
         if nystrom:
             m1,m2 = (self.nxanchors,self.nyanchors)  
-            # if nystrom in [1,2,3] else \
-            #     (self.n1_test,self.n2_test) if test_data else \
-            #     (self.n1,self.n2) # nystrom = False or nystrom in [4,5]
 
         pn = self.compute_bicentering_matrix(nystrom=nystrom).double()
         
@@ -574,7 +607,6 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
-
     def compute_proj_kpca(self,trunc=None,nystrom=False,name=None,verbose=0):
 
         self.verbosity(function_name='compute_proj_kpca',
@@ -617,7 +649,6 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
-
     def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name_corr=None,name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
         
         self.verbosity(function_name='compute_corr_proj_var',
@@ -642,7 +673,6 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
-
     def compute_mmd(self,unbiaised=False,nystrom=False,name='',verbose=0):
         
         self.verbosity(function_name='compute_mmd',
@@ -650,7 +680,7 @@ class Tester:
                 start=True,
                 verbose = verbose)
 
-        n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
+        n1,n2 = (self.n1,self.n2) 
         ntot = n1+n2
         if nystrom >=1:
             m1,m2 = (self.nxanchors,self.nyanchors)
@@ -666,7 +696,7 @@ class Tester:
             m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
         m_mu12 = torch.cat((m_mu1, m_mu2), dim=0) #.to(device)
         
-        K = self.compute_gram_matrix(nystrom=nystrom,test_data=test_data)
+        K = self.compute_gram_matrix(nystrom=nystrom)
         
         if name is None:
             name=''
@@ -681,7 +711,6 @@ class Tester:
                 dict_of_variables={'unbiaised':unbiaised,'nystrom':nystrom,'name':name},
                 start=False,
                 verbose = verbose)
-
 
     def name_generator(self,trunc=None,nystrom=0,nystrom_method='kmeans',nanchors=None,obs_to_ignore=None):
         
@@ -822,7 +851,7 @@ class Tester:
                     self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
             
             if 'corr' in which_dict and 'corr' not in loaded:
-                self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name=name_,prefix_col=corr_prefix_col,verbose=verbose)
+                self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
                 loaded += ['corr']
                 if save and obs_to_ignore is None:
                     self.corr[name_].to_csv(which_dict['corr'],index=True)
@@ -992,15 +1021,32 @@ class Tester:
         
         ax.legend()
 
-    def init_df_proj(self,which,name):
-        if name is None:
-            name = self.main_name
-        if which == 'proj_kfda':
-            df_proj = self.df_proj_kfda[name]
-        elif which =='proj_kpca':
-            df_proj = self.df_proj_kpca[name]
-        else:
-            print('pb df_proj',which)
+    def init_df_proj(self,which,name=None):
+        # if name is None:
+        #     name = self.main_name
+        
+        dict_df_proj = self.df_proj_kfda if which=='proj_kfda' else self.df_proj_kpca
+
+        nproj = len(dict_df_proj)
+        names = list(dict_df_proj.keys())
+
+        if nproj == 0:
+            print('Proj_kfda has not been computed yet')
+        if nproj == 1:
+            if name is not None and name != names[0]:
+                print(f'{name} not corresponding to {names[0]}')
+            else:
+                df_proj = dict_df_proj[names[0]]
+        if nproj >1:
+            if name is not None and name not in names:
+                print(f'{name} not found in {names}')
+            if name is None and self.main_name not in names:
+                print("the default name {self.main_name} is not in {names} so you need to specify 'name' argument")
+            if name is None and self.main_name in names:
+                df_proj = dict_df_proj[self.main_name]
+            else: 
+                df_proj = dict_df_proj[name]
+
         return(df_proj)
 
     def init_axes_projs(self,fig,axes,projections,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
