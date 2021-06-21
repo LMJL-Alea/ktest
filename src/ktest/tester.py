@@ -23,9 +23,9 @@ from kmeans_pytorch import kmeans
 
 # Choix à faire ( trouver les bonnes pratiques )
 
-# est ce que je range la gram ou la calcule à chaque besoin ? Je calcule la gram a chaque fois mais la diagonalise une fois par setting 
+# est ce que je range la gram ou la calcule à chaque besoin ? 
+# Je calcule la gram a chaque fois mais la diagonalise une fois par setting 
 # nouvelle question : est ce que je garde en mémoire toute les matrices diag ou pas ( si je fais des tests avec Nystrom)
-
 # est ce que je crée deux variables, une pour la gram et une pour la gram nystrom ?
 # reponse : au moment de la calculer, ce uqi est calculé est selectionné automatiquement 
 
@@ -64,7 +64,7 @@ from kmeans_pytorch import kmeans
 # ajouter un get_xy pour gérer les masks 
 # a partir d'un moment, j'ai supposé que test data n'était plus d'actualité et cessé de l'utiliser. A vérifier et supprimer si oui 
 # def des fonction type get pour les opérations d'initialisation redondantes
-
+# acces facile aux noms des dict de dataframes. 
 # faire en sorte de pouvoir calculer corr kfda et kpca 
 
 class Tester:
@@ -99,6 +99,8 @@ class Tester:
         self.corr = {}     
         self.dict_mmd = {}
 
+        # for verbosity 
+        self.start_times = {}
         if x is not None and y is not None:
             self.init_data(x=x,y=y,kernel=kernel,x_index=x_index,y_index=y_index,variables=variables)
             
@@ -132,6 +134,30 @@ class Tester:
             self.df_kfdat = pd.DataFrame(index= list(range(1,self.n1+self.n2)))
         self.has_data = True        
 
+    def __str__(self):
+        if self.has_data:
+            s = f"View of Tester object with n1 = {self.n1}, n2 = {self.n2}\n"
+            s += f""
+        else: 
+            s = "View of Tester object with no data"
+        return(s) 
+
+    def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):
+        if verbose >0:
+            if start:            
+                print(f"Starting {function_name} ...")
+                if verbose >1 and dict_of_variables is not None:
+                    for k,v in dict_of_variables:
+                        if verbose ==2:
+                            print(f'\t {k}:{v}', end = '') 
+                        else:
+                            print(f'\t {k}:{v}')
+                self.start_times[function_name] = time()
+            else: 
+                start_time = self.start_times[function_name]
+                print(f"Done {function_name} in  {time() - start_time}")
+
+
 
     def compute_nystrom_landmarks(self,nlandmarks,landmarks_method,verbose=0):
         # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
@@ -146,9 +172,14 @@ class Tester:
         nlandmarks:      number of landmarks in total (proportionnaly sampled according to the data)
         landmarks_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
         """
-        if verbose >0:
-            start = time()
-            print(f'compute_nystrom_landmarks(nlandmarks={nlandmarks},landmarks_method={landmarks_method})...',end=' ')
+
+        self.verbosity(function_name='compute_nystrom_landmarks',
+                       dict_of_variables={'nlandmarks':nlandmarks,'landmarks_method':landmarks_method},
+                       start=True,
+                       verbose = verbose)
+        # if verbose >0:
+        #     start = time()
+        #     print(f'compute_nystrom_landmarks(nlandmarks={nlandmarks},landmarks_method={landmarks_method})...',end=' ')
 
         # Commentted bc thought to be useless, to suppress if confirmed
 
@@ -223,9 +254,10 @@ class Tester:
             self.xlandmarks = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxlandmarks, replace=False)]
             self.ylandmarks = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nylandmarks, replace=False)]
 
-        if verbose > 0:
-            print(time() - start)
-
+        self.verbosity(function_name='compute_nystrom_landmarks',
+                       dict_of_variables={'nlandmarks':nlandmarks,'landmarks_method':landmarks_method},
+                       start=False,
+                       verbose = verbose)
 
     def compute_nystrom_anchors(self,nanchors,nystrom_method='raw',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
         """
@@ -239,13 +271,18 @@ class Tester:
         nanchors:      = nlandmarks by default if nystrom_method is 'raw'. Number of anchors to determine in total (proportionnaly according to the data)
         """
         
-        if verbose >0:
-            start = time()
-            print(f'Computing anchors by {nystrom_method} nystrom',end=' ')
-            if nystrom_method == 'kPCA':
-                print(f'for {nanchors} anchors ...', end=' ')
-            else:         
-                print('...',end=' ')
+        
+        self.verbosity(function_name='compute_nystrom_anchors',
+                        dict_of_variables={'nanchors':nanchors,'nystrom_method':nystrom_method},
+                        start=True,
+                        verbose = verbose)
+        # if verbose >0:
+        #     start = time()
+        #     print(f'Computing anchors by {nystrom_method} nystrom',end=' ')
+        #     if nystrom_method == 'kPCA':
+        #         print(f'for {nanchors} anchors ...', end=' ')
+        #     else:         
+        #         print('...',end=' ')
 
 
         # bien faire l'arbre des possibles ici 
@@ -270,9 +307,10 @@ class Tester:
         evy = torch.tensor(evy).T[:self.nyanchors]
         self.k_recty = torch.chain_matmul(spy**(-1/2), evy,self.kernel(self.ylandmarks,self.y)) 
 
-        if verbose > 0:
-            print(time() - start)
-        
+        self.verbosity(function_name='compute_nystrom_anchors',
+                        dict_of_variables={'nanchors':nanchors,'nystrom_method':nystrom_method},
+                        start=False,
+                        verbose = verbose)
         # def compute_nystrom_kmn(self,test_data=False):
         #     """
         #     Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
@@ -421,6 +459,12 @@ class Tester:
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
         """
+        self.verbosity(function_name='diagonalize_bicentered_gram',
+                dict_of_variables={'nystrom':nystrom},
+                start=True,
+                verbose = verbose)
+        
+        
         if verbose >0:
             start = time()
             ny = ' nystrom' if nystrom else '' 
@@ -457,65 +501,11 @@ class Tester:
             self.ev = torch.tensor(ev.T[order],dtype=torch.float64) 
             self.sp = torch.tensor(sp[order], dtype=torch.float64)
         
-        if verbose > 0:
-            print(time() - start)
-            
-        # def compute_kfdat(self,trunc=None,nystrom=False,name=None,verbose=0):
-        #     """ 
-        #     Computes the kfda truncated statistic of [Harchaoui 2009].
-        #     Two ways of using Nystrom: 
-        #     nystrom = False or 0 -> Statistic computed without nystrom
-        #     nystrom = True or 1  -> Statistic computed using nystrom for the diagonalized bicentered gram matrix (~Sigma_W) and not for mn (\mu_2 - \mu_1)
-        #     nystrom = 2          -> Statistic computed using nystrom for the diagonalized bicentered gram matrix (~Sigma_W) and for mn (\mu_2 - \mu_1)
-        #     Depending on the situation, the coeficient of the statistic changes. 
+        self.verbosity(function_name='diagonalize_bicentered_gram',
+                dict_of_variables={'nystrom':nystrom},
+                start=False,
+                verbose = verbose)
 
-
-        #     Stores the result as a column in the dataframe df_kfdat
-        #     """
-        #     if verbose >0:
-        #         start = time()
-        #         ny = ' nystrom' if nystrom else '' 
-        #         print(f'Computing the{ny} kfdat statistic ...',end=' ')
-
-
-
-        #     n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1,self.n2)
-        #     ntot = self.n1 + self.n2  # tot nobs in data
-        #     mtot = n1 + n2 # either tot nobs in data or tot nanchors 
-            
-        #     if trunc is None:
-        #         trunc = np.arange(1,mtot+1)
-            
-        #     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        #     sp,ev = (self.spny.to(device),self.evny.to(device)) if nystrom else (self.sp.to(device),self.ev.to(device))  
-        #     pn = self.compute_bicentering_matrix(nystrom).to(device)
-            
-
-        #     mn1 = -1/self.n1 * torch.ones(self.n1, dtype=torch.float64, device=device) if nystrom < 2 else -1/n1 * torch.ones(n1, dtype=torch.float64, device=device)
-        #     mn2 = 1/self.n2 * torch.ones(self.n2, dtype=torch.float64, device=device)  if nystrom <2 else 1/n2 * torch.ones(n2, dtype=torch.float64, device=device)
-        #     mn = torch.cat((mn1, mn2), dim=0).to(device)
-            
-            
-        #     gram = self.compute_nystrom_kmn().to(device) if nystrom==1 else self.compute_gram_matrix(nystrom=nystrom).to(device) 
-        #     pk = torch.matmul(pn,gram)
-        #     pkm = torch.mv(pk,mn)
-
-        #     kfda = 0
-        #     kfda_dict = []
-        #     if trunc[-1] >mtot:
-        #         trunc=trunc[:mtot]
-        #     for i,t in enumerate(trunc):
-        #         if t <= mtot: 
-        #             evi = ev[i]
-        #             # kfda +=  (n1*n2)/(ntot * mtot *sp[i]**2)* torch.dot(evi,pkm)**2 if nystrom <2 else (n1*n2)/(mtot * mtot *sp[i]**2)* torch.dot(evi,pkm)**2
-        #             kfda += (self.n1*self.n2)/(mtot * ntot *sp[i]**2)* torch.dot(evi,pkm)**2 if nystrom <2  else \
-        #                     (n1*n2)/(mtot * mtot *sp[i]**2)* torch.dot(evi,pkm)**2
-        #             kfda_dict += [kfda.item()] # [f'O_{t}']
-        #     name = name if name is not None else self.name_generator(trunc,nystrom)
-        #     self.df_kfdat[name] = pd.Series(kfda_dict,index=trunc)
-
-        #     if verbose > 0:
-        #         print(time() - start)
      
     def compute_kfdat(self,trunc=None,nystrom=False,test_data=False,name=None,verbose=0):
         """ 
@@ -529,10 +519,12 @@ class Tester:
 
         Stores the result as a column in the dataframe df_kfdat
         """
-        if verbose >0:
-            start = time()
-            ny = ' nystrom' if nystrom else '' 
-            print(f'Computing the{ny} kfdat statistic ...',end=' ')
+        
+        self.verbosity(function_name='compute_kfdat',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom},
+                start=True,
+                verbose = verbose)
+
 
         n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
         ntot = n1+n2
@@ -567,15 +559,19 @@ class Tester:
         name = name if name is not None else self.name_generator(trunc,nystrom)
         self.df_kfdat[name] = pd.Series(kfda,index=trunc)
 
-        if verbose > 0:
-            print(time() - start)
+        self.verbosity(function_name='compute_kfdat',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom},
+                start=False,
+                verbose = verbose)
 
     def compute_proj_kfda(self,trunc = None,nystrom=False,test_data=False,name=None,verbose=0):
         # ajouter nystrom dans m et dans la colonne sample
-        if verbose >0:
-            start = time()
-            ny = ' nystrom' if nystrom else '' 
-            print(f'Computing{ny} proj on kernel Fisher discriminant axis ...',end=' ')
+        
+        self.verbosity(function_name='compute_proj_kfda',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
+                start=True,
+                verbose = verbose)
+
 
         n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
         ntot = n1+n2
@@ -629,54 +625,18 @@ class Tester:
         self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
         self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
         
-        if verbose > 0:
-            print(time() - start)
+        self.verbosity(function_name='compute_proj_kfda',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
+                start=False,
+                verbose = verbose)
 
-        # résidus du passé
-        # n1,n2 = (self.nxanchors,self.nyanchors)  if nystrom else (self.n1,self.n2)
-        # ntot = self.n1 + self.n2
-        # mtot = n1 + n2
-        
-        # if trunc is None:
-        #     trunc = np.arange(1,ntot+1)
-        
-        # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        # sp,ev = (self.spny.to(device),self.evny.to(device)) if nystrom else (self.sp.to(device),self.ev.to(device))
-        
-        
-        # pn = self.compute_bicentering_matrix(nystrom).to(device)
-        
-        # # m est construit sur toute les obs, pas sur les ancres même si Nystrom 
-        # mn1 = -1/n1 * torch.ones(n1, dtype=torch.float64, device=device)
-        # mn2 = 1/n2 * torch.ones(n2, dtype=torch.float64, device=device)
-        # mn = torch.cat((mn1, mn2), dim=0).to(device)
-        # pk = torch.matmul(pn,gram)
-
-
-        # pkm = torch.mv(pk,mn)
-
-        # coefs = []
-        
-       #         print(mtot)
-        # for i,t in enumerate(trunc):
-        #     if t<=mtot:
-        #         evi = ev[i]
-        #         coefs += [1/(mtot *sp[i]**(3/2))* torch.dot(evi,pkm).item()]
-        # lvpkm =   
-        # print(mn.shape)
-        # coefs = torch.tensor(coefs)
-        # cev=(ev[:trunc[-1]].t()*coefs).t()
-        # cevpk = torch.matmul(cev,pk)
-        # cevpk= cevpk.cumsum(dim=0)
-        # print(cevpk[:2,:2])
 
     def compute_proj_kpca(self,trunc=None,nystrom=False,test_data=False,name=None,verbose=0):
 
-        if verbose >0:
-            start = time()
-            ny = ' nystrom' if nystrom else '' 
-            print(f'Computing{ny} proj on kernel principal componant axis ...',end=' ')
-
+        self.verbosity(function_name='compute_proj_kpca',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
+                start=True,
+                verbose = verbose)
 
         n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
         ntot = n1+n2
@@ -709,19 +669,21 @@ class Tester:
         self.df_proj_kpca[name] = pd.DataFrame(proj,index=self.index[self.imask],columns=[str(t) for t in trunc])
         self.df_proj_kpca[name]['sample'] = ['x']*self.n1 + ['y']*self.n2 
 
-        if verbose > 0:
-            print(time() - start)
-        
-    def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name_corr=None,name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
-        if verbose >0:
-            start = time()
-            ny = ' nystrom' if nystrom else '' 
-            print(f'Computing the{ny} corr matrix between projections and variables ...',end=' ')
+        self.verbosity(function_name='compute_proj_kpca',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
+                start=False,
+                verbose = verbose)
 
+
+    def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name_corr=None,name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
+        
+        self.verbosity(function_name='compute_corr_proj_var',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+                start=True,
+                verbose = verbose)
 
         self.prefix_col=prefix_col
-        if name_proj == None:
-            name_proj = name_corr
+
         df_proj= self.init_df_proj(which,name_proj)
         if trunc is None:
             trunc = range(1,df_proj.shape[1] - 1) # -1 pour la colonne sample
@@ -732,15 +694,18 @@ class Tester:
         name_corr = name_corr if name_corr is not None else self.name_generator(trunc,nystrom)
         self.corr[name_corr] = df_array.corr().loc[self.variables,[f'{prefix_col}{t}' for t in trunc]]
         
-        if verbose > 0:
-            print(time() - start)
+        self.verbosity(function_name='compute_corr_proj_var',
+                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+                start=False,
+                verbose = verbose)
+
 
     def compute_mmd(self,unbiaised=False,nystrom=False,test_data=False,name='',verbose=0):
         
-        if verbose >0:
-            start = time()
-            ny = ' nystrom' if nystrom else '' 
-            print(f'Computing the{ny} kfdat statistic ...',end=' ')
+        self.verbosity(function_name='compute_mmd',
+                dict_of_variables={'unbiaised':unbiaised,'nystrom':nystrom,'name':name},
+                start=True,
+                verbose = verbose)
 
         n1,n2 = (self.n1_test,self.n2_test) if test_data else (self.n1,self.n2) 
         ntot = n1+n2
@@ -769,8 +734,11 @@ class Tester:
             K.masked_fill_(mask, 0)
             self.dict_mmd['U'+name] = torch.dot(torch.mv(K,m_mu12),m_mu12)
         
-        if verbose > 0:
-            print(time() - start)
+        self.verbosity(function_name='compute_mmd',
+                dict_of_variables={'unbiaised':unbiaised,'nystrom':nystrom,'name':name},
+                start=False,
+                verbose = verbose)
+
 
     def name_generator(self,trunc=None,nystrom=0,nystrom_method='kmeans',nanchors=None,
                         split_data=False,test_size=.8,obs_to_ignore=None):
