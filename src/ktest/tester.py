@@ -103,7 +103,7 @@ class Tester:
         self.df_proj_kpca = {}
         self.corr = {}     
         self.dict_mmd = {}
-
+        self.spev = {} # dict containing every result of diagonalization
         # for verbosity 
         self.start_times = {}
 
@@ -239,6 +239,8 @@ class Tester:
             self.xlandmarks = self.xlandmarks.double()
             self.ylandmarks = self.ylandmarks.double()
             self.quantization_with_landmarks_possible = True
+            
+
         elif landmarks_method == 'random':
             self.xlandmarks = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxlandmarks, replace=False)]
             self.ylandmarks = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nylandmarks, replace=False)]
@@ -285,9 +287,9 @@ class Tester:
         sp_anchors,ev_anchors = eigsy(Km)
                 
         order = sp_anchors.argsort()[::-1]
-        self.sp_anchors = torch.tensor(sp_anchors[order][:self.nanchors], dtype=torch.float64)
-        self.ev_anchors = torch.tensor(ev_anchors.T[order][:self.nanchors],dtype=torch.float64) 
-      
+        sp_anchors = torch.tensor(sp_anchors[order][:self.nanchors], dtype=torch.float64)
+        ev_anchors = torch.tensor(ev_anchors.T[order][:self.nanchors],dtype=torch.float64) 
+        self.spev['anchors'] = {'sp':sp_anchors,'ev':ev_anchors}
         self.has_anchors = True
 
         self.verbosity(function_name='compute_nystrom_anchors',
@@ -319,6 +321,79 @@ class Tester:
         return(torch.cat((torch.cat((kxx, kxy), dim=1),
                             torch.cat((kxy.t(), kyy), dim=1)), dim=0))
 
+    def compute_m(self,quantization=False):
+        n1,n2 = (self.n1,self.n2)
+        if quantization:
+            return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)).double()))
+        else:
+            m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
+            m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+            return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
+        
+    # def compute_pkm(self,nystrom=False):
+    #     # non maj par rapport a nystrom
+    #     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #     n1,n2 = (self.n1,self.n2) 
+
+    #     if nystrom in [0,3]:
+    #         Pbi   = self.compute_bicentering_matrix(quantization=False)
+    #     elif nystrom in [1,2]:    
+    #         Pbi = self.compute_bicentering_matrix(quantization=True)
+    #     elif nystrom in [4,5]:
+    #         Pbi = self.compute_bicentering_matrix(quantization=nystrom)
+
+    #     if nystrom in [2,3,5]:
+    #         m1,m2 = (self.nxanchors,self.nyanchors)
+    #         m_mu1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
+    #         m_mu2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
+    #     elif nystrom in [0,1,4]:
+    #         m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
+    #         m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+        
+    #     m_mu12 = torch.cat((m_mu1, m_mu2), dim=0) #.to(device)
+        
+    #     if nystrom in [4,5]:
+    #         A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
+    #     if nystrom ==0:
+    #         K = self.compute_gram_matrix(landmarks=False).to(device)
+    #         pk = torch.matmul(Pbi,K)
+    #     elif nystrom == 1:
+    #         kmn = self.compute_nystrom_kmn().to(device)
+    #         pk = torch.matmul(Pbi,kmn)
+    #     elif nystrom == 2:
+    #         kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
+    #         pk = torch.matmul(Pbi,kny)
+    #     elif nystrom == 3:
+    #         kmn = self.compute_nystrom_kmn().to(device)
+    #         pk = torch.matmul(kmn,Pbi).T
+    #     elif nystrom == 4:
+    #         kmn = self.compute_nystrom_kmn().to(device)
+    #         pk = torch.chain_matmul(A**(1/2),Pbi.T,kmn)
+    #     elif nystrom == 5:
+    #         kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
+    #         pk = torch.chain_matmul(A**(1/2),Pbi.T,kny)
+    #         # pk = torch.chain_matmul(Pbi,A,kny,A)
+            
+    #     return(torch.mv(pk,m_mu12))  
+        
+    def compute_kmn(self):
+        """
+        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        """
+        assert(self.has_landmarks)
+        x,y = (self.x[self.xmask,:],self.y[self.ymask,:])
+        z1,z2 = self.xlandmarks,self.ylandmarks
+        kernel = self.kernel
+        
+
+        kz1x = kernel(z1,x)
+        kz2x = kernel(z2,x)
+        kz1y = kernel(z1,y)
+        kz2y = kernel(z2,y)
+        
+        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
+                            torch.cat((kz2x, kz2y), dim=1)), dim=0))
+    
     def compute_bicentering_matrix(self,quantization=False):
         """
         Computes the bicentering Gram matrix Pn. 
@@ -358,70 +433,6 @@ class Tester:
         return(torch.cat((torch.cat((pn1, z12), dim=1), torch.cat(
             (z21, pn2), dim=1)), dim=0))  # bloc diagonal
 
-    def compute_pkm(self,nystrom=False):
-        # non maj par rapport a nystrom
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        n1,n2 = (self.n1,self.n2) 
-
-        if nystrom in [0,3]:
-            Pbi   = self.compute_bicentering_matrix(quantization=False)
-        elif nystrom in [1,2]:    
-            Pbi = self.compute_bicentering_matrix(quantization=True)
-        elif nystrom in [4,5]:
-            Pbi = self.compute_bicentering_matrix(quantization=nystrom)
-
-        if nystrom in [2,3,5]:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            m_mu1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
-            m_mu2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
-        elif nystrom in [0,1,4]:
-            m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
-            m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
-        
-        m_mu12 = torch.cat((m_mu1, m_mu2), dim=0) #.to(device)
-        
-        if nystrom in [4,5]:
-            A = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))).double()
-        if nystrom ==0:
-            K = self.compute_gram_matrix(landmarks=False).to(device)
-            pk = torch.matmul(Pbi,K)
-        elif nystrom == 1:
-            kmn = self.compute_nystrom_kmn().to(device)
-            pk = torch.matmul(Pbi,kmn)
-        elif nystrom == 2:
-            kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
-            pk = torch.matmul(Pbi,kny)
-        elif nystrom == 3:
-            kmn = self.compute_nystrom_kmn().to(device)
-            pk = torch.matmul(kmn,Pbi).T
-        elif nystrom == 4:
-            kmn = self.compute_nystrom_kmn().to(device)
-            pk = torch.chain_matmul(A**(1/2),Pbi.T,kmn)
-        elif nystrom == 5:
-            kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
-            pk = torch.chain_matmul(A**(1/2),Pbi.T,kny)
-            # pk = torch.chain_matmul(Pbi,A,kny,A)
-            
-        return(torch.mv(pk,m_mu12))  
-        
-    def compute_nystrom_kmn(self):
-        """
-        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
-        """
-        
-        x,y = (self.x[self.xmask,:],self.y[self.ymask,:])
-        z1,z2 = self.xlandmarks,self.ylandmarks
-        kernel = self.kernel
-        
-
-        kz1x = kernel(z1,x)
-        kz2x = kernel(z2,x)
-        kz1y = kernel(z1,y)
-        kz2y = kernel(z2,y)
-        
-        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
-                            torch.cat((kz2x, kz2y), dim=1)), dim=0))
-        
     def compute_bicentered_gram(self,approximation='full',verbose=0):
         """ 
         Computes the bicentered Gram matrix which shares its spectrom with the 
@@ -460,10 +471,11 @@ class Tester:
         elif approximation == 'nystrom':
             # version brute mais a terme utiliser la svd ?? 
             if self.has_landmarks and self.has_anchors:
-                Kmn = self.compute_nystrom_kmn()
-                Lambda_p_inv = torch.diag(self.sp_anchors)**(-1)
-                U_p = self.ev_anchors
-                Kw = 1/(n1+n2) * torch.chain_matmul(Pbi,Kmn.T,U_p,Lambda_p_inv,U_p.T,Kmn,Pbi)
+                Kmn = self.compute_kmn()
+                Lp_inv = torch.diag(self.spev['anchors']['sp'])**(-1)
+                U_p = self.spev['anchors']['ev']
+                print(f'Pbi {Pbi.shape} \n Kmn {Kmn.shape} \n U_p {U_p.shape} \n Lambda {Lp_inv.shape}' )
+                Kw = 1/(n1+n2) * torch.chain_matmul(Pbi,Kmn.T,U_p.T,Lp_inv,U_p,Kmn,Pbi)
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
         
@@ -494,16 +506,18 @@ class Tester:
         sp,ev = eigsy(Kw)
         order = sp.argsort()[::-1]
         
-        self.ev = torch.tensor(ev.T[order],dtype=torch.float64) 
-        self.sp = torch.tensor(sp[order], dtype=torch.float64)
+        ev = torch.tensor(ev.T[order],dtype=torch.float64) 
+        sp = torch.tensor(sp[order], dtype=torch.float64)
+
+        self.spev[approximation] = {'sp':sp,'ev':ev}
 
         self.verbosity(function_name='diagonalize_bicentered_gram',
                 dict_of_variables={'approximation':approximation},
                 start=False,
                 verbose = verbose)
-
      
-    def compute_kfdat(self,trunc=None,approximation='full',name=None,verbose=0):
+    def compute_kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
+        # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
         Two ways of using Nystrom: 
@@ -516,49 +530,123 @@ class Tester:
         Stores the result as a column in the dataframe df_kfdat
         """
         
+        sp,ev = self.spev[approximation_cov]['sp'],self.spev[approximation_cov]['ev']
+        tmax = len(sp)
+        t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
+                
         self.verbosity(function_name='compute_kfdat',
-                dict_of_variables={'trunc':trunc,'approximation':approximation,'name':name},
+                dict_of_variables={
+                't':t,
+                'approximation_cov':approximation_cov,
+                'approximation_mmd':approximation_mmd,
+                'name':name},
                 start=True,
                 verbose = verbose)
 
-
-        n1,n2 = (self.n1,self.n2) 
-        ntot = n1+n2
-        if nystrom >=1:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            mtot = m1+m2
-
-        maxtrunc = ntot if nystrom ==0 else mtot
-        if trunc is None:
-            trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
-        
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        n1,n2 = (self.n1,self.n2) 
+        n = n1+n2
 
-        if nystrom in [0,3]:
-            sp,ev = (self.sp.to(device),self.ev.to(device))  
-        else:    
-            sp,ev = (self.spny.to(device),self.evny.to(device)) 
+        m = self.compute_m(quantization=(approximation_mmd=='quantization'))
+        Pbi = self.compute_bicentering_matrix(quantization=(approximation_cov=='quantization'))
+
+        if 'nystrom' in [approximation_mmd,approximation_cov]:
+            Up = self.spev['anchors']['ev']
+            Lp_inv = torch.diag(self.spev['anchors']['sp']**-1)
+
+        if not (approximation_mmd == approximation_cov) or approximation_mmd == 'nystrom':
+            Kmn = self.compute_kmn()
         
-        pkm = self.compute_pkm(nystrom=nystrom)
+        if approximation_cov == 'full':
+            if approximation_mmd == 'full':
+                K = self.compute_gram_matrix()
+                pkm = torch.mv(Pbi,torch.mv(K,m))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'nystrom':
+                start = time()
+                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                print('multiple mv',time()-start)
+                start = time()
+                pkuLukm = torch.mv(torch.chain_matmul(Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn),m)
+                print('chain matmul + mv',time() - start)
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'quantization':
+                pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
+       
+        if approximation_cov == 'nystrom':
+            if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
+                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv.torch.mv(Up.T,torch.mv(Kmn,m))))))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'quantization':
+                Kmm = self.compute_gram_matrix(landmarks=True)
+                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv.torch.mv(Up.T,torch.mv(Kmm,m))))))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
         
-        if trunc[-1] >maxtrunc:
-            trunc=trunc[:maxtrunc]
-        
-        t=trunc[-1]
-        kfda = ((n1*n2)/(ntot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==0  else \
-               ((n1*n2)/(ntot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==1  else \
-               ((m1*m2)/(mtot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==2  else \
-               ((m1*m2)/(mtot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==3  else \
-               ((n1*n2)/(ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==4  else \
-               ((m1*m2)/(mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
-                        
-        name = name if name is not None else self.name_generator(trunc,nystrom)
+        if approximation_cov == 'quantization':
+            A_12 = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))**(1/2)).double()
+            if approximation_mmd == 'full':
+                apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmn,m)))
+                # le n n'est pas au carré ici
+                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev[:t],apkm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'nystrom':
+                Kmm = self.compute_gram_matrix(landmarks=True)
+                apkuLukm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m)))))))
+                # le n n'est pas au carré ici
+                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev[:t],apkuLukm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'quantization':
+                apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,m)))
+                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev[:t],apkm)**2).cumsum(axis=0).numpy() 
+
+        name = name if name is not None else f'{approximation_cov}{approximation_mmd}{t}' 
+        if name in self.df_kfdat:
+            print(f"écrasement de {name} dans df_kfdat")
         self.df_kfdat[name] = pd.Series(kfda,index=trunc)
 
         self.verbosity(function_name='compute_kfdat',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom},
+                                dict_of_variables={
+                'trunc':trunc,
+                'approximation_cov':approximation_cov,
+                'approximation_mmd':approximation_mmd,
+                'name':name},
                 start=False,
                 verbose = verbose)
+
+
+
+        # if nystrom >=1:
+        #     m1,m2 = (self.nxanchors,self.nyanchors)
+        #     mtot = m1+m2
+
+        # maxtrunc = ntot if nystrom ==0 else mtot
+        # if trunc is None:
+        #     trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
+        
+        # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        # if nystrom in [0,3]:
+        #     sp,ev = (self.sp.to(device),self.ev.to(device))  
+        # else:    
+        #     sp,ev = (self.spny.to(device),self.evny.to(device)) 
+        
+        # pkm = self.compute_pkm(nystrom=nystrom)
+        
+        # if trunc[-1] >maxtrunc:
+        #     trunc=trunc[:maxtrunc]
+        
+        # t=trunc[-1]
+        # kfda = ((n1*n2)/(ntot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==0  else \
+        #        ((n1*n2)/(ntot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==1  else \
+        #        ((m1*m2)/(mtot*mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==2  else \
+        #        ((m1*m2)/(mtot*ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==3  else \
+        #        ((n1*n2)/(ntot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() if nystrom ==4  else \
+        #        ((m1*m2)/(mtot*sp[:t]**2)*torch.mv(ev[:t],pkm)**2).cumsum(axis=0).numpy() 
+                        
 
     def compute_proj_kfda(self,trunc = None,nystrom=False,name=None,verbose=0):
         # ajouter nystrom dans m et dans la colonne sample
@@ -593,13 +681,13 @@ class Tester:
             K = self.compute_gram_matrix(landmarks=False).to(device)
             pk2 = torch.matmul(Pbi,K)
         elif nystrom == 1:
-            kmn = self.compute_nystrom_kmn().to(device)
+            kmn = self.compute_kmn().to(device)
             pk2 = torch.matmul(Pbi,kmn)
         elif nystrom == 2:
             kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
             pk2 = torch.matmul(Pbi,kny)
         else:
-            kmn = self.compute_nystrom_kmn().to(device)
+            kmn = self.compute_kmn().to(device)
             pk2 = torch.matmul(kmn,Pbi).T
         
         pkm = self.compute_pkm(nystrom=nystrom)
@@ -1154,8 +1242,8 @@ class Tester:
         t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
         m = mtot if m is None else m
         
-        kmn   = self.compute_nystrom_kmn(test_data=False)
-        kmn_test   = self.compute_nystrom_kmn(test_data=True)
+        kmn   = self.compute_kmn(test_data=False)
+        kmn_test   = self.compute_kmn(test_data=True)
         kny   = self.compute_gram_matrix(landmarks=True)
         k     = self.compute_gram_matrix(landmarks=False,test_data=False)
         Pbiny = self.compute_bicentering_matrix(quantization=True)
@@ -1212,7 +1300,7 @@ class Tester:
         t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
         m = mtot if m is None else m
         
-        kmn   = self.compute_nystrom_kmn()
+        kmn   = self.compute_kmn()
         Pbiny = self.compute_bicentering_matrix(quantization=True)
         Pbi   = self.compute_bicentering_matrix(quantization=False)
         
