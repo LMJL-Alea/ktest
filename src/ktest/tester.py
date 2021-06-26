@@ -68,6 +68,9 @@ from kmeans_pytorch import kmeans
 # acces facile aux noms des dict de dataframes. 
 # faire en sorte de pouvoir calculer corr kfda et kpca 
 
+# mettre une limite globale a 100 pour les tmax des projections (éviter d'enregistrer des structures de données énormes)
+# mieux gérer la projection de gènes 
+
 class Tester:
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
@@ -103,7 +106,7 @@ class Tester:
         self.df_proj_kpca = {}
         self.corr = {}     
         self.dict_mmd = {}
-        self.spev = {} # dict containing every result of diagonalization
+        self.spev = {'x':{},'y':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
@@ -204,7 +207,7 @@ class Tester:
                 start_time = self.start_times[function_name]
                 print(f"Done {function_name} in  {time() - start_time:.2f}")
 
-    def compute_nystrom_landmarks(self,nlandmarks,landmarks_method,verbose=0):
+    def compute_nystrom_landmarks(self,nlandmarks=None,landmarks_method='random',verbose=0):
         # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
         
         """
@@ -214,7 +217,7 @@ class Tester:
 
         Parameters
         ----------
-        nlandmarks:      number of landmarks in total (proportionnaly sampled according to the data)
+        nlandmarks:    (1/10 * n if None)  number of landmarks in total (proportionnaly sampled according to the data)
         landmarks_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
         """
 
@@ -224,7 +227,9 @@ class Tester:
                        verbose = verbose)
             
             
-        
+        if nlandmarks is None:
+            nlandmarks = 1/10 * (self.n1 + self.n2)
+
         xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
         self.nlandmarks = nlandmarks
         self.nxlandmarks=np.int(np.floor(xratio * nlandmarks)) 
@@ -298,7 +303,54 @@ class Tester:
                         dict_of_variables={'nanchors':nanchors},
                         start=False,
                         verbose = verbose)
-    
+
+    def compute_nystrom_anchors_per_sample(self,nanchors=None,covariance='x',verbose=0):
+        """
+        Determines the nystrom anchors using 
+        Stores the results as a list of eigenvalues and the 
+        
+        Parameters
+        ----------
+        nanchors:      <= nlandmarks (= by default). Number of anchors to determine in total (proportionnaly according to the data)
+        """
+        
+        
+        self.verbosity(function_name='compute_nystrom_anchors_per_sample',
+                        dict_of_variables={'nanchors':nanchors,
+                                           'covariance':covariance},
+                        start=True,
+                        verbose = verbose)
+
+
+        kernel = self.kernel
+        x = covariance =='x'
+        # bien faire l'arbre des possibles ici 
+        if x:
+            self.nxanchors = self.nxlandmarks if nanchors is None else nanchors
+            assert(self.nxanchors <= self.nxlandmarks)
+            landmarks = self.xlandmarks
+        else:
+            self.nyanchors = self.nylandmarks if nanchors is None else nanchors
+            assert(self.nyanchors <= self.nylandmarks)
+            landmarks = self.ylandmarks
+            # self.nxanchors, self.nyanchors = self.nxlandmarks, self.nylandmarks
+
+
+        Km = kernel(landmarks,landmarks)
+
+        sp_anchors,ev_anchors = eigsy(Km)
+                
+        order = sp_anchors.argsort()[::-1]
+        sp_anchors = torch.tensor(sp_anchors[order][:self.nanchors], dtype=torch.float64)
+        ev_anchors = torch.tensor(ev_anchors[:,order][:,:self.nanchors],dtype=torch.float64) 
+        self.spev[covariance]['anchors'] = {'sp':sp_anchors,'ev':ev_anchors}
+
+        self.verbosity(function_name='compute_nystrom_anchors_per_sample',
+                        dict_of_variables={'nanchors':nanchors},
+                        start=False,
+                        verbose = verbose)
+
+
     def compute_gram_matrix(self,landmarks=False): 
         """
         Computes Gram matrix, on anchors if nystrom is True, else on data. 
@@ -350,7 +402,21 @@ class Tester:
         return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
                             torch.cat((kz2x, kz2y), dim=1)), dim=0))
     
-    def compute_bicentering_matrix(self,quantization=False):
+    def compute_centering_matrix(self,covariance='x',quantization=False):
+                
+        
+
+        if quantization:
+            assignations = self.xassignations if x else self.yassignations
+            ngroupe =  self.n1 if x else self.n2
+            A = 1/ngroupe*torch.diag(torch.bincount(assignations)).double()
+            pn = idn - torch.matmul(A,onen)
+
+        else:
+            pn = idn - 1/n * onen
+        return(pn)
+
+    def compute_centering_matrix(self,quantization=False,sample='xy'):
         """
         Computes the bicentering Gram matrix Pn. 
         Let I1,I2 the identity matrix of size n1 and n2 (or nxanchors and nyanchors if nystrom).
@@ -361,11 +427,28 @@ class Tester:
              [     021     ,I2 - 1/n2 J2]
 
         Returns
+        sample in 'x','y','xy'
         -------
         torch.Tensor of size (nxanchors+nyanchors)**2 if quantization else (n1+n2)**2 
         """
 
         
+        if 'x' in sample:
+            n1 = self.nxlandmarks if quantization else self.n1 
+            idn1 = torch.eye(n1, dtype=torch.float64)
+
+        if 'y' in sample:
+            n2 = self.nylandmarks if quantization else self.n2
+            idn2 = torch.eye(n2, dtype=torch.float64)
+       
+
+        x = covariance =='x'
+        n1,n2 = (self.nxlandmarks,self.nylandmarks)  if quantization else (self.n1,self.n2) 
+        n = n1 if x else n2
+        idn = torch.eye(n, dtype=torch.float64)
+        onen = torch.ones(n, n, dtype=torch.float64)
+
+
         n1,n2 = (self.nxlandmarks,self.nylandmarks)  if quantization else (self.n1,self.n2) 
         
         idn1 = torch.eye(n1, dtype=torch.float64)
@@ -375,8 +458,8 @@ class Tester:
         onen2 = torch.ones(n2, n2, dtype=torch.float64)
 
         if quantization: 
-            A1 = 1/self.n1*torch.diag(torch.bincount(self.xassignations)).double()
-            A2 = 1/self.n2*torch.diag(torch.bincount(self.yassignations)).double()
+            A1 = torch.diag(1/self.n1*torch.bincount(self.xassignations)).double()
+            A2 = torch.diag(1/self.n2*torch.bincount(self.yassignations)).double()
             pn1 = np.sqrt(self.n1/(self.n1+self.n2))*(idn1 - torch.matmul(A1,onen1))
             pn2 = np.sqrt(self.n2/(self.n1+self.n2))*(idn2 - torch.matmul(A2,onen2))
         else:
@@ -388,6 +471,68 @@ class Tester:
 
         return(torch.cat((torch.cat((pn1, z12), dim=1), torch.cat(
             (z21, pn2), dim=1)), dim=0))  # bloc diagonal
+
+    def compute_centered_gram(self,approximation='full',covariance='x',verbose=0):
+
+        self.verbosity(function_name='compute_centered_gram',
+                dict_of_variables={'approximation':approximation,
+                                'covariance':covariance},
+                start=True,
+                verbose = verbose)    
+        
+        x = covariance =='x'
+        quantization = approximation == 'quantization'
+        n1,n2 =  (self.n1,self.n2)
+        n1,n2 = (self.nxlandmarks,self.nylandmarks)  if quantization else (self.n1,self.n2) 
+        n = n1 if x else n2
+        kernel = self.kernel
+        sample = self.x if x else self.y
+
+        # nystrom et standard : c'est la même (pbi par blocs n1 n2) 
+        P = self.compute_centering_matrix(covariance=covariance,quantization=quantization).double()
+        
+            
+        if approximation == 'quantization':
+            if self.quantization_with_landmarks_possible:
+                Z = self.xlandmarks if x else self.ylandmarks 
+                K = kernel(Z,Z)
+                assignations = self.xassignations if covariance =='x' else self.yassignations
+                ngroupe =  self.n1 if x else self.n2
+                A = 1/ngroupe*torch.diag(torch.bincount(assignations)).double()
+                K = torch.chain_matmul(A**(1/2),P, K,P,A**(1/2))
+            else:
+                print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmarks_method='kmeans'")
+
+        elif approximation == 'nystrom':
+            # version brute mais a terme utiliser la svd ?? 
+            if self.has_landmarks and self.has_anchors:
+                Z = self.xlandmarks if x else self.ylandmarks 
+                Kmn = kernel(Z,sample)
+                Lp_inv = torch.diag(self.spev[covariance]['anchors']['sp']**(-1))
+                Up = self.spev[covariance]['anchors']['ev']
+                K = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)
+
+                # print(f"rectangle pour svd ")
+                # Lp_inv = torch.diag(self.spev['anchors']['sp']**(-1/2))
+                # B = torch.chain_matmul(Lp_inv,Up.T,Kmn,Pbi)
+                # print(f"B {B.shape} {B[:3,:3]}")
+                # print(f"1/sqrt(n) B {B.shape} {1/np.sqrt(n1+n2)*B[:3,:3]}")
+
+            else:
+                print("nystrom impossible, you need compute landmarks and/or anchors")
+        
+        
+        elif approximation == 'full':
+            K = kernel(sample,sample)
+            K = 1/(n) * torch.chain_matmul(P,K,P)
+
+
+        self.verbosity(function_name='compute_centered_gram',
+                dict_of_variables={'approximation':approximation},
+                start=False,
+                verbose = verbose)    
+
+        return K
 
     def compute_bicentered_gram(self,approximation='full',verbose=0):
         """ 
@@ -456,46 +601,78 @@ class Tester:
 
         return Kw
 
-    def diagonalize_bicentered_gram(self,approximation='full',verbose=0):
+    def diagonalize_centered_gram(self,approximation='full',covariance='x',overwrite=False,verbose=0):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
         """
-        self.verbosity(function_name='diagonalize_bicentered_gram',
-                dict_of_variables={'approximation':approximation},
-                start=True,
-                verbose = verbose)
-        
-        Kw = self.compute_bicentered_gram(approximation=approximation,verbose=verbose)
-        sp,ev = eigsy(Kw)
-        order = sp.argsort()[::-1]
-        
-        ev = torch.tensor(ev[:,order],dtype=torch.float64) 
-        sp = torch.tensor(sp[order], dtype=torch.float64)
+        if approximation in self.spev[covariance] and not overwrite:
+            if verbose:
+                print('No need to diagonalize')
+        else:
+            self.verbosity(function_name='diagonalize_centered_gram',
+                    dict_of_variables={'approximation':approximation,
+                    'covariance':covariance},
+                    start=True,
+                    verbose = verbose)
+            
+            K = self.compute_centered_gram(approximation=approximation,covariance=covariance,verbose=verbose)
+            sp,ev = eigsy(K)
+            order = sp.argsort()[::-1]
+            
+            ev = torch.tensor(ev[:,order],dtype=torch.float64) 
+            sp = torch.tensor(sp[order], dtype=torch.float64)
 
-        self.spev[approximation] = {'sp':sp,'ev':ev}
+            self.spev[covariance][approximation] = {'sp':sp,'ev':ev}
+            
+            self.verbosity(function_name='diagonalize_centered_gram',
+                    dict_of_variables={'approximation':approximation,
+                                     'covariance':covariance},
+                    start=False,
+                    verbose = verbose)
         
-        self.verbosity(function_name='diagonalize_bicentered_gram',
-                dict_of_variables={'approximation':approximation},
-                start=False,
-                verbose = verbose)
-     
+    def diagonalize_bicentered_gram(self,approximation='full',overwrite=False,verbose=0):
+        """
+        Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
+        Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
+        """
+        if approximation in self.spev and not overwrite:
+            if verbose:
+                print('No need to diagonalize')
+        else:
+            self.verbosity(function_name='diagonalize_bicentered_gram',
+                    dict_of_variables={'approximation':approximation},
+                    start=True,
+                    verbose = verbose)
+            
+            Kw = self.compute_bicentered_gram(approximation=approximation,verbose=verbose)
+            sp,ev = eigsy(Kw)
+            order = sp.argsort()[::-1]
+            
+            ev = torch.tensor(ev[:,order],dtype=torch.float64) 
+            sp = torch.tensor(sp[order], dtype=torch.float64)
+
+            self.spev[approximation] = {'sp':sp,'ev':ev}
+            
+            self.verbosity(function_name='diagonalize_bicentered_gram',
+                    dict_of_variables={'approximation':approximation},
+                    start=False,
+                    verbose = verbose)
+        
     def compute_kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
-        Two ways of using Nystrom: 
-        nystrom = False or 0 -> Statistic computed without nystrom
-        nystrom = True or 1  -> Statistic computed using nystrom for the diagonalized bicentered gram matrix (~Sigma_W) and not for mn (\mu_2 - \mu_1)
-        nystrom = 2          -> Statistic computed using nystrom for the diagonalized bicentered gram matrix (~Sigma_W) and for mn (\mu_2 - \mu_1)
-        Depending on the situation, the coeficient of the statistic changes. 
-
-
+        9 methods : 
+        approximation_cov in ['full','nystrom','quantization']
+        approximation_mmd in ['full','nystrom','quantization']
+        
         Stores the result as a column in the dataframe df_kfdat
         """
         
+        name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
         sp,ev = self.spev[approximation_cov]['sp'],self.spev[approximation_cov]['ev']
-        tmax = len(sp)
+        tmax = len(sp)+1
         t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
                 
         self.verbosity(function_name='compute_kfdat',
@@ -534,7 +711,7 @@ class Tester:
             elif approximation_mmd == 'quantization':
                 pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
                 kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-       
+    
         if approximation_cov == 'nystrom':
             if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
                 pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
@@ -570,123 +747,274 @@ class Tester:
 
         self.verbosity(function_name='compute_kfdat',
                                 dict_of_variables={
-                'trunc':trunc,
+                't':t,
                 'approximation_cov':approximation_cov,
                 'approximation_mmd':approximation_mmd,
                 'name':name},
                 start=False,
                 verbose = verbose)
 
-
-
-                        
-
-    def compute_proj_kfda(self,trunc = None,nystrom=False,name=None,verbose=0):
-        # ajouter nystrom dans m et dans la colonne sample
+    def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,
+            overwrite_kfdat=False,overwrite_cov = False,overwrite_landmarks=False,overwrite_anchors=False,
+            nlandmarks=None,landmarks_method='random',nanchors=None,verbose=0):
+        #nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+        # mettre des verbose - 1 dans les fonctions intermediaires si j'ajoute verbosity ici 
         
-        self.verbosity(function_name='compute_proj_kfda',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
-                start=True,
-                verbose = verbose)
-
-
-        n1,n2 = (self.n1,self.n2) 
-        ntot = n1+n2
-        if nystrom >=1:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            mtot = m1+m2
-        
-        maxtrunc = ntot if nystrom ==0 else mtot
-        if trunc is None:
-            trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
-        
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        if nystrom in [0,3]:
-            Pbi   = self.compute_bicentering_matrix(quantization=False)
-            sp,ev     = (self.sp.to(device),self.ev.to(device))  
-        
-        else:    
-            Pbi = self.compute_bicentering_matrix(quantization=True,test_data=False)
-            sp,ev = (self.spny.to(device),self.evny.to(device)) 
-        
-        if nystrom ==0:
-            K = self.compute_gram_matrix(landmarks=False).to(device)
-            pk2 = torch.matmul(Pbi,K)
-        elif nystrom == 1:
-            kmn = self.compute_kmn().to(device)
-            pk2 = torch.matmul(Pbi,kmn)
-        elif nystrom == 2:
-            kny = self.compute_gram_matrix(landmarks=nystrom).to(device)
-            pk2 = torch.matmul(Pbi,kny)
+        cov,mmd = approximation_cov,approximation_mmd
+        name = name if name is not None else f'{cov}{mmd}' 
+        if name in self.df_kfdat and not overwrite_kfdat :
+            if verbose : 
+                print(f'kfdat {name} already computed')
         else:
-            kmn = self.compute_kmn().to(device)
-            pk2 = torch.matmul(kmn,Pbi).T
+            if 'quantization' in [cov,mmd]: # besoin des poids des ancres de kmeans en quantization
+                if not self.quantization_with_landmarks_possible or overwrite_landmarks: # on lance kmeans si il n'a pas été lancé ou qu'on veut le refaire avec un nlandmarks différent
+                    self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
+                    if cov=='quantization': # on calcule les vp de ce qu'on vient de calculer si on en a besoin
+                        self.diagonalize_bicentered_gram(approximation='quantization',overwrite=True,verbose=verbose)
+                elif cov=='quantization':
+                    if 'quantization' not in self.spev or overwrite_cov: 
+                        self.diagonalize_bicentered_gram(approximation='quantization',overwrite=overwrite_cov,verbose=verbose)
+
+            if 'nystrom' in [cov,mmd]:
+                if not self.has_anchors or overwrite_anchors:
+                    if not self.has_landmarks or overwrite_landmarks:
+                        self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
+                    self.compute_nystrom_anchors(nanchors=nanchors,verbose=verbose)
+                    self.diagonalize_bicentered_gram(approximation='nystrom',overwrite=overwrite_cov,verbose=verbose)
+                elif cov == 'nystrom':
+                    print('première fois ici')
+                    if 'nystrom' not in self.spev or overwrite_cov: 
+                        self.diagonalize_bicentered_gram(approximation='nystrom',overwrite=overwrite_cov,verbose=verbose)
+
+            if cov=='full':
+                if 'full' not in self.spev or overwrite_cov: 
+                    self.diagonalize_bicentered_gram(approximation='full',overwrite=overwrite_cov,verbose=verbose)
+
+
+            self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose)
         
-        pkm = self.compute_pkm(nystrom=nystrom)
-           
+        
+        # which_dict={'kfdat':path if save else ''}
+        # self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
+        # obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
+
+    def compute_proj_kfda(self,trunc=None,approximation_cov='full',approximation_mmd='full',overwrite=False,name=None,verbose=0):
+        # je n'ai plus besoin de trunc, seulement d'un t max 
+        """ 
+        Projections of the embeddings of the observation onto the discriminant axis
+        9 methods : 
+        approximation_cov in ['full','nystrom','quantization']
+        approximation_mmd in ['full','nystrom','quantization']
+        
+        Stores the result as a column in the dataframe df_proj_kfda
+        """
+
+
+        name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
+        if name in self.df_proj_kfda and not overwrite :
+            if verbose : 
+                print('Proj on discriminant axis Already computed')
+        else:
+
+            sp,ev = self.spev[approximation_cov]['sp'],self.spev[approximation_cov]['ev']
+            tmax = len(sp)+1
+            t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
+            trunc = range(1,tmax) if (trunc is None or trunc[-1]>tmax) else trunc
+            self.verbosity(function_name='compute_proj_kfda',
+                    dict_of_variables={
+                    't':t,
+                    'approximation_cov':approximation_cov,
+                    'approximation_mmd':approximation_mmd,
+                    'name':name},
+                    start=True,
+                    verbose = verbose)
+
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            n1,n2 = (self.n1,self.n2) 
+            n = n1+n2
+
+            m = self.compute_m(quantization=(approximation_mmd=='quantization'))
+            Pbi = self.compute_bicentering_matrix(quantization=(approximation_cov=='quantization'))
+
+            if 'nystrom' in [approximation_mmd,approximation_cov]:
+                Up = self.spev['anchors']['ev']
+                Lp_inv = torch.diag(self.spev['anchors']['sp']**-1)
+
+            if not (approximation_mmd == approximation_cov == 'full'):
+                Kmn = self.compute_kmn()
+            if approximation_cov == 'full':
+                K = self.compute_gram_matrix()
+
+            if approximation_cov == 'full':
+                if approximation_mmd == 'full':
+                    pkm = torch.mv(Pbi,torch.mv(K,m))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+                    
+                elif approximation_mmd == 'nystrom':
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+
+                elif approximation_mmd == 'quantization':
+                    pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+                    
+            if approximation_cov == 'nystrom':
+                if approximation_mmd == 'full':
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+
+                elif approximation_mmd == 'nystrom':
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+
+                elif approximation_mmd == 'quantization':
+                    Kmm = self.compute_gram_matrix(landmarks=True)
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmm,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+
+            if approximation_cov == 'quantization':
+                A_12 = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))**(1/2)).double()
+                if approximation_mmd == 'full':
+                    apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmn,m)))
+                    # pas de n ici
+                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+
+                elif approximation_mmd == 'nystrom':
+                    Kmm = self.compute_gram_matrix(landmarks=True)
+                    apkuLukm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m)))))))
+                    # pas de n ici
+                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkuLukm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+
+                elif approximation_mmd == 'quantization':
+                    Kmm = self.compute_gram_matrix(landmarks=True)
+                    apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,m)))
+                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+
+            name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
+            if name in self.df_proj_kfda:
+                print(f"écrasement de {name} dans df_proj_kfda")
+            self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
+            self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
             
-        t=trunc[-1]
-        proj = (ntot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.matmul(ev[:t],pk2).T).cumsum(axis=1).numpy() if nystrom ==0  else \
-               (mtot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.matmul(ev[:t],pk2).T).cumsum(axis=0).numpy() if nystrom ==1  else \
-               (mtot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.matmul(ev[:t],pk2).T).cumsum(axis=0).numpy() if nystrom ==2  else \
-               (ntot**-1*sp[:t]**(-3/2)*torch.mv(ev[:t],pkm)*torch.matmul(ev[:t],pk2).T).cumsum(axis=0).numpy() 
+            self.verbosity(function_name='compute_proj_kfda',
+                                    dict_of_variables={
+                    't':t,
+                    'approximation_cov':approximation_cov,
+                    'approximation_mmd':approximation_mmd,
+                    'name':name},
+                    start=False,
+                    verbose = verbose)
+
+    def compute_proj_kpca(self,trunc=None,approximation_cov='full',covariance='x',overwrite=False,name=None,verbose=0):
+        # je n'ai plus besoin de trunc, seulement d'un t max 
+        """ 
         
-        name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
-        self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
+        """
+        name = name if name is not None else f'{approximation_cov}{covariance}' 
+        if name in self.df_proj_kfda and not overwrite :
+            if verbose : 
+                print('Proj on principal componant axis Already computed')
+        else:
+            w = covariance.lower() =='w'
+            x = covariance.lower() =='x'
+            quantization = approximation_cov =='quantization'
+            if w:
+                sp,ev = self.spev[approximation_cov]['sp'],self.spev[approximation_cov]['ev']
+            else:
+                sp,ev = self.spev[covariance][approximation_cov]['sp'],self.spev[covariance][approximation_cov]['ev']
+            
+            tmax = len(sp)+1
+            t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
+            trunc = range(1,tmax) if (trunc is None or trunc[-1]>tmax) else trunc
+            self.verbosity(function_name='compute_proj_kpca',
+                    dict_of_variables={
+                    't':t,
+                    'approximation_cov':approximation_cov,
+                    'covariance':covariance,
+                    'name':name},
+                    start=True,
+                    verbose = verbose)
+
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            n1,n2 = (self.n1,self.n2) 
+            n = n1+n2
+            kernel = self.kernel        
+            
+
+            # faire une seule fct de bicentering-centering
+            # faire une seule fct diagonalize gram (centered/bicentered)
+            # faire une seule fct de compute kmn 
+            if w:
+                P = self.compute_bicentering_matrix(quantization=quantization)
+                if approximation_cov in ['nystrom','quantization']:
+                    Kmn = self.compute_kmn()
+                    if approximation_cov == 'nystrom':
+                        Up = self.spev['anchors']['ev']
+                        Lp_inv = torch.diag(self.spev['anchors']['sp']**-1)
+                    else:
+                        A_12 = torch.diag(torch.cat((1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations)))**(1/2)).double()
+                
+                else:
+                    K = self.compute_gram_matrix()
+            else:
+                P = self.compute_centering_matrix(covariance=covariance,quantization=quantization)
+                sample = self.x if x else self.y 
+                if approximation_cov in ['nystrom','quantization']:
+                    Z = self.xlandmarks if x else self.ylandmarks 
+                    Kmn = kernel(Z,sample)
+                    if approximation_cov == 'nystrom':
+                        Up = self.spev[covariance]['anchors']['ev']
+                        Lp_inv = torch.diag(self.spev[covariance]['anchors']['sp']**-1)
+                    else:
+                        if x:
+                            A_12 = torch.diag(1/n1*torch.bincount(self.xassignations)**(1/2)).double()
+                        else:
+                            A_12 = torch.diag(1/n2*torch.bincount(self.yassignations)**(1/2)).double()
+               
+                else:
+                    K = kernel(sample,sample)
+
         
-        self.verbosity(function_name='compute_proj_kfda',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
-                start=False,
-                verbose = verbose)
 
-    def compute_proj_kpca(self,trunc=None,nystrom=False,name=None,verbose=0):
+            if approximation_cov == 'full':
+                proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
+            if approximation_cov == 'nystrom':
+                proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+            if approximation_cov =='quantization':
+                proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
 
-        self.verbosity(function_name='compute_proj_kpca',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
-                start=True,
-                verbose = verbose)
+            name = name if name is not None else f'{approximation_cov}{covariance}' 
+            if name in self.df_proj_kpca:
+                print(f"écrasement de {name} dans df_proj_kfda")
+            if w:
+                self.df_proj_kpca[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
+                self.df_proj_kpca[name]['sample'] = ['x']*n1 + ['y']*n2
+            else:
+                if x:
+                    self.df_proj_kpca[name] = pd.DataFrame(proj,index= self.x_index[self.xmask],columns=[str(t) for t in trunc])
+                    self.df_proj_kpca[name]['sample'] = ['x']*n1 
+                else:
+                    self.df_proj_kpca[name] = pd.DataFrame(proj,index= self.y_index[self.ymask],columns=[str(t) for t in trunc])
+                    self.df_proj_kpca[name]['sample'] = ['y']*n2 
+                    
+            self.verbosity(function_name='compute_proj_kpca',
+                                    dict_of_variables={
+                    't':t,
+                    'approximation_cov':approximation_cov,
+                    'covariance':covariance,
+                    'name':name},
+                    start=False,
+                    verbose = verbose)
 
-        n1,n2 =  (self.n1,self.n2) 
-        ntot = n1+n2
-        if nystrom >=1:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            mtot = m1+m2
-        
-        maxtrunc = ntot if nystrom ==0 else mtot
-        if trunc is None:
-            trunc = np.arange(1,ntot+1) if nystrom==False else np.arange(1,mtot+1)
-        
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        if nystrom in [0,3]:
-            Pbi   = self.compute_bicentering_matrix(quantization=False,)
-            sp,ev     = (self.sp.to(device),self.ev.to(device))  
-        else:    
-            Pbi = self.compute_bicentering_matrix(quantization=True,)
-            sp,ev = (self.spny.to(device),self.evny.to(device)) 
-        
-        K = self.compute_kmn() if nystrom in [1,2] else \
-            self.compute_gram_matrix()   
-
-
-        t = trunc[-1]
-        proj = (  ntot**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev[:t],Pbi,K).T).numpy()
-        
-        name = name if name is not None else self.name_generator(trunc,nystrom)
-        self.df_proj_kpca[name] = pd.DataFrame(proj,index=self.index[self.imask],columns=[str(t) for t in trunc])
-        self.df_proj_kpca[name]['sample'] = ['x']*self.n1 + ['y']*self.n2 
-
-        self.verbosity(function_name='compute_proj_kpca',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'name':name},
-                start=False,
-                verbose = verbose)
-
-    def compute_corr_proj_var(self,trunc=None,nystrom=False,which='proj_kfda',name_corr=None,name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
+    def compute_corr_proj_var(self,trunc=None,
+                            covariance='w',
+                            which='proj_kfda',
+                            name_corr=None,
+                            name_proj=None,prefix_col='',verbose=0): # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
         
         self.verbosity(function_name='compute_corr_proj_var',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+                dict_of_variables={'trunc':trunc,
+                            'covariance':covariance,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
                 start=True,
                 verbose = verbose)
 
@@ -695,17 +1023,28 @@ class Tester:
         df_proj= self.init_df_proj(which,name_proj)
         if trunc is None:
             trunc = range(1,df_proj.shape[1] - 1) # -1 pour la colonne sample
-        df_array = pd.DataFrame(torch.cat((self.x[self.xmask,:],self.y[self.ymask,:]),dim=0).numpy(),index=self.index[self.imask],columns=self.variables)
+        w = covariance =='w'
+        x = covariance =='x'
+        if w:
+            df_array = pd.DataFrame(torch.cat((self.x[self.xmask,:],self.y[self.ymask,:]),dim=0).numpy(),index=self.index[self.imask],columns=self.variables)
+        else:
+            df_array = pd.DataFrame((self.x[self.xmask,:]).numpy(),index=self.x_index[self.xmask],columns=self.variables) if x else \
+                       pd.DataFrame((self.y[self.ymask,:]).numpy(),index=self.y_index[self.ymask],columns=self.variables)
         for t in trunc:
             df_array[f'{prefix_col}{t}'] = pd.Series(df_proj[f'{t}'])
         
-        name_corr = name_corr if name_corr is not None else self.name_generator(trunc,nystrom)
+        name_corr = name_corr if name_corr is not None else which.split(sep='_')[1]+name_proj if name_proj is not None else which.split(sep='_')[1] + covariance
+        # if w:
         self.corr[name_corr] = df_array.corr().loc[self.variables,[f'{prefix_col}{t}' for t in trunc]]
-        
+        # else:
+        #     print(df_array.head(20))
+        #     df = df_array.corr()
+        #     print(df.shape)
         self.verbosity(function_name='compute_corr_proj_var',
-                dict_of_variables={'trunc':trunc,'nystrom':nystrom,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+                dict_of_variables={'trunc':trunc,'covariance':covariance,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
                 start=False,
                 verbose = verbose)
+
 
     def compute_mmd(self,unbiaised=False,nystrom=False,name='',verbose=0):
         
@@ -759,10 +1098,6 @@ class Tester:
         return(name_)
     
 
-    def kfdat(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        which_dict={'kfdat':path if save else ''}
-        self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-        obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
     def proj_kfda(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         which_dict={'proj_kfda':path if save else ''}
@@ -972,16 +1307,18 @@ class Tester:
         # except Exception as e:
         #     print(type(e),e)
         
-    def plot_spectrum(self,ax=None,figsize=(10,10),trunc=None,title=None,generate_spectrum=True):
+    def plot_spectrum(self,ax=None,figsize=(10,10),trunc=None,title=None,generate_spectrum=True,approximation_cov='full',covariance='w'):
         if ax is None:
             fig,ax = plt.subplots(figsize=figsize)
         if title is not None:
             ax.set_title(title,fontsize=40)
-        if not hasattr(self,'sp') and generate_spectrum:
-            self.diagonalize_bicentered_gram()
+        if covariance == 'w':
+            sp = self.spev[approximation_cov]['sp']
+        else:
+            sp = self.spev[covariance][approximation_cov]['sp']
         if trunc is None:
-            trunc = range(1,len(self.sp))
-        ax.plot(trunc,self.sp[:trunc[-1]])
+            trunc = range(1,len(sp))
+        ax.plot(trunc,sp[:trunc[-1]])
         ax.set_xlabel('t',fontsize= 20)
 
         return(ax)
@@ -993,10 +1330,10 @@ class Tester:
         for xy,l in zip('xy','CT'):
             
             dfxy = df_proj.loc[df_proj['sample']==xy][str(projection)]
-            
-            ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=int(np.floor(np.sqrt(len(dfxy)))),color='blue' if xy =='x' else 'orange')
-            ax.hist(dfxy,density=True,histtype='step',bins=int(np.floor(np.sqrt(len(dfxy)))),lw=3,edgecolor='blue' if xy =='x' else 'orange')
-            ax.axvline(dfxy.mean(),c='blue' if xy=='x' else 'orange')
+            if len(dfxy)>0:
+                ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=int(np.floor(np.sqrt(len(dfxy)))),color='blue' if xy =='x' else 'orange')
+                ax.hist(dfxy,density=True,histtype='step',bins=int(np.floor(np.sqrt(len(dfxy)))),lw=3,edgecolor='blue' if xy =='x' else 'orange')
+                ax.axvline(dfxy.mean(),c='blue' if xy=='x' else 'orange')
         
         ax.set_xlabel(f't={projection}',fontsize=20)    
         ax.legend()
@@ -1011,25 +1348,25 @@ class Tester:
             df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
             df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
             m = 'x' if xy =='x' else '+'
+            if len(df_abscisse_xy)>0 and len(df_ordonnee_xy)>0 :
+                if color is None or color in list(self.variables): # list vraiment utile ? 
+                    c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
+                    if color in list(self.variables):
+                        c = self.x[self.xmask,:][:,self.variables.get_loc(color)] if xy=='x' else self.y[self.ymask,:][:,self.variables.get_loc(color)]   
+                    x_ = df_abscisse_xy[f'{p1}']
+                    y_ = df_ordonnee_xy[f'{p2}']
 
-            if color is None or color in list(self.variables): # list vraiment utile ? 
-                c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
-                if color in list(self.variables):
-                    c = self.x[self.xmask,:][:,self.variables.get_loc(color)] if xy=='x' else self.y[self.ymask,:][:,self.variables.get_loc(color)]   
-                x_ = df_abscisse_xy[f'{p1}']
-                y_ = df_ordonnee_xy[f'{p2}']
-
-                ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
-            else:
-                if xy in color: # a complexifier si besoin (nystrom ou mask) 
-                    x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
-                    ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
-                for pop,ipop in color.items():
-                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
-                    if len(x_)>0:
-                        ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
+                    ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
+                else:
+                    if xy in color: # a complexifier si besoin (nystrom ou mask) 
+                        x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
+                        y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
+                        ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
+                    for pop,ipop in color.items():
+                        x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
+                        y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                        if len(x_)>0:
+                            ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
 
         
         for xy,l in zip('xy','CT'):
@@ -1038,15 +1375,16 @@ class Tester:
             df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
             x_ = df_abscisse_xy[f'{p1}']
             y_ = df_ordonnee_xy[f'{p2}']
-            if highlight is not None:
-                x_ = df_abscisse_xy[f'{p1}']
-                y_ = df_ordonnee_xy[f'{p2}']
-                c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
-                ax.scatter(x_[x_.index.isin(highlight)],y_[y_.index.isin(highlight)],c=c,s=100,marker='*',edgecolor='black',linewidths=1)
+            if len(df_abscisse_xy)>0 and len(df_ordonnee_xy)>0 :
+                if highlight is not None:
+                    x_ = df_abscisse_xy[f'{p1}']
+                    y_ = df_ordonnee_xy[f'{p2}']
+                    c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
+                    ax.scatter(x_[x_.index.isin(highlight)],y_[y_.index.isin(highlight)],c=c,s=100,marker='*',edgecolor='black',linewidths=1)
 
-            mx_ = x_.mean()
-            my_ = y_.mean()
-            ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200)
+                mx_ = x_.mean()
+                my_ = y_.mean()
+                ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200)
 
         if color in list(self.variables) :
             ax.set_title(color,fontsize=20)
@@ -1083,7 +1421,7 @@ class Tester:
 
         return(df_proj)
 
-    def init_axes_projs(self,fig,axes,projections,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
+    def init_axes_projs(self,fig,axes,projections,approximation_cov,covariance,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
         if axes is None:
             rows=1;cols=len(projections) + kfda + spectrum
             fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
@@ -1093,12 +1431,12 @@ class Tester:
             self.plot_kfdat(axes[0],ylim=kfda_ylim,trunc = trunc,title=kfda_title)
             axes = axes[1:]
         if spectrum:
-            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum')
+            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum',approximation_cov=approximation_cov,covariance=covariance)
             axes = axes[1:]
         return(fig,axes)
 
-    def density_projs(self,fig=None,axes=None,which='proj_kfda',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False):
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
+    def density_projs(self,fig=None,axes=None,which='proj_kfda',approximation_cov='full',covariance='w',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False):
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,approximation_cov=approximation_cov,covariance=covariance,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
@@ -1106,10 +1444,10 @@ class Tester:
             self.density_proj(ax,proj,which=which,name=name)
         return(fig,axes)
 
-    def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',yproj=None,name=None,projections=[(i*2+1,i*2+2) for i in range(10)],suptitle=None,
+    def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',approximation_cov='full',covariance='w',yproj=None,name=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
                         highlight=None,color=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False,iterate_over='projections'):
         to_iterate = projections if iterate_over == 'projections' else color
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,suptitle=suptitle,kfda=kfda,
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,approximation_cov=approximation_cov,covariance=covariance,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
