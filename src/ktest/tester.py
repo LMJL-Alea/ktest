@@ -30,29 +30,13 @@ def ordered_eigsy(matrix):
 
 # Choix à faire ( trouver les bonnes pratiques )
 
-# est ce que je range la gram ou la calcule à chaque besoin ? 
-# Je calcule la gram a chaque fois mais la diagonalise une fois par setting 
-# nouvelle question : est ce que je garde en mémoire toute les matrices diag ou pas ( si je fais des tests avec Nystrom)
-# est ce que je crée deux variables, une pour la gram et une pour la gram nystrom ?
-# reponse : au moment de la calculer, ce uqi est calculé est selectionné automatiquement 
-
-# les assignations du nystrom anchors pourront servir à calculer une somme de carrés résiduels par ex.
-
 # voir comment ils gèrent les plot dans scanpy
 
 # initialiser le mask aussi au moment de tracer des figures
-# ranger les dataframes de proj dans des dict pour en avoir plusieurs en mémoire en même temps. 
-# faire les plot par defaut sur toutes les proj en mémoire 
 
-
-# tracer les spectres 
 # tracer l'evolution des corrélations par rapport aux gènes ordonnés
 
-# tout rendre verbose 
-
 # ecrire les docstring de chaque fonction 
-
-# faire des dict pour sp et ev ? pour : quand on veut tracer les spectres. 
 
 # faire des fonctions compute kfdat et proj qui font appelle au scheduleur "compute and load" (a renommer) 
 # le name de corr doit spécifier en plus du nom la projection auxquel il fiat référence (acp ou fda)
@@ -68,8 +52,6 @@ def ordered_eigsy(matrix):
 # plot proj :on a dfx et dfy pour tracer le result en fct d'un axe de la pca 
 # on peut aussi vouloir tracer en fonction de ll'expression d'un gène 
 
-# ajouter un get_xy pour gérer les masks 
-# a partir d'un moment, j'ai supposé que test data n'était plus d'actualité et cessé de l'utiliser. A vérifier et supprimer si oui 
 # def des fonction type get pour les opérations d'initialisation redondantes
 # acces facile aux noms des dict de dataframes. 
 # faire en sorte de pouvoir calculer corr kfda et kpca 
@@ -122,7 +104,7 @@ class Tester:
 
         if x is not None and y is not None:
             self.init_data(x=x,y=y,kernel=kernel,x_index=x_index,y_index=y_index,variables=variables)
-            
+       
     def init_data(self,x,y,kernel=None, x_index=None, y_index=None,variables=None):
         # Tester works with torch tensor objects 
         self.x = torch.from_numpy(x).double() if (isinstance(x, np.ndarray)) else x
@@ -215,6 +197,79 @@ class Tester:
                 start_time = self.start_times[function_name]
                 print(f"Done {function_name} in  {time() - start_time:.2f}")
 
+    def load_kfdat(self,path):
+        df = pd.read_csv(path,header=0,index_col=0)
+        for c in df.columns:
+            if c not in self.df_kfdat.columns:
+                self.df_kfdat[c] = df[c]
+            else: 
+                print(f'kfdat {c} already here')
+
+    def load_proj_kfda(self,path,name,):
+        df = pd.read_csv(path,header=0,index_col=0)
+        if name not in self.df_proj_kfda:
+            self.df_proj_kfda[name] = df
+        else:
+            print(f'proj kfda {name} already here')
+
+    def load_proj_kpca(self,path,name):
+        df = pd.read_csv(path,header=0,index_col=0)
+        if name not in self.df_proj_kpca:
+            self.df_proj_kpca[name] = df
+        else:
+            print(f'proj kpca {name} already here')
+
+    def load_correlations(self,path,name):
+        df = pd.read_csv(path,header=0,index_col=0)
+        if name not in self.corr:
+            self.corr[name] = df
+        else:
+            print(f'corr {name} already here')
+
+
+
+    def save_kfdat(self,path):
+        self.df_kfdat.to_csv(path,index=True)
+
+    def save_proj_kfda(self,path,name):
+        self.df_proj_kfda[name].to_csv(path,index=True)
+    
+    def save_proj_kpca(self,path,name):
+        self.df_proj_kpca[name].to_csv(path,index=True)
+
+    def save_correlations(self,path,name):
+        self.corr[name].to_csv(path,index=True)
+
+    def load_data(self,to_load):
+        """
+        to_load ={'kfdat':path_kfdat,
+                    'proj_kfda':{name1:path1,name2,path2},
+                    'proj_kpca':{name1:path1,name2,path2},
+                    'correlations':{name1:path1,name2,path2}}
+        """
+        types_ref= {'proj_kfda':self.load_proj_kfda,
+                    'proj_kpca':self.load_proj_kpca,
+                    'correlations':self.load_correlations}
+        
+        for type in to_load:
+            if type == 'kfdat':
+                self.load_kfdat(to_load[type]) 
+            else:
+                for name,path in to_load[type].items():
+                    types_ref[type](path,name)
+
+
+    # def load_data(self,data_dict,):
+    # def save_data():
+    # def save_a_dataframe(self,path,which)
+
+    def get_xy(self,landmarks=False):
+        if landmarks: 
+            x,y = self.xlandmarks,self.ylandmarks
+        else:
+            x,y = self.x[self.xmask,:],self.y[self.ymask,:]
+        return(x,y)
+
     def compute_nystrom_landmarks(self,nlandmarks=None,landmarks_method='random',verbose=0):
         # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
         
@@ -234,31 +289,33 @@ class Tester:
                        start=True,
                        verbose = verbose)
             
-            
-        if nlandmarks is None:
-            nlandmarks = 1/10 * (self.n1 + self.n2)
+        x,y = self.get_xy()
+        n1,n2 = self.n1,self.n2 
+        xratio,yratio = n1/(n1 + n2), n2/(n1 +n2)
 
-        xratio,yratio = self.n1/(self.n1 + self.n2), self.n2/(self.n1 + self.n2)
+        if nlandmarks is None:
+            nlandmarks = 1/10 * (n1 + n2)
+
+        
         self.nlandmarks = nlandmarks
         self.nxlandmarks=np.int(np.floor(xratio * nlandmarks)) 
         self.nylandmarks=np.int(np.floor(yratio * nlandmarks))
 
-        xmask_ny = self.xmask
-        ymask_ny = self.ymask  
+        
 
         if landmarks_method == 'kmeans':
             # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
             # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
-            self.xassignations,self.xlandmarks = kmeans(X=self.x[xmask_ny,:], num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
-            self.yassignations,self.ylandmarks = kmeans(X=self.y[ymask_ny,:], num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.xassignations,self.xlandmarks = kmeans(X=x, num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+            self.yassignations,self.ylandmarks = kmeans(X=y, num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
             self.xlandmarks = self.xlandmarks.double()
             self.ylandmarks = self.ylandmarks.double()
             self.quantization_with_landmarks_possible = True
             
 
         elif landmarks_method == 'random':
-            self.xlandmarks = self.x[xmask_ny,:][np.random.choice(self.x[xmask_ny,:].shape[0], size=self.nxlandmarks, replace=False)]
-            self.ylandmarks = self.y[ymask_ny,:][np.random.choice(self.y[ymask_ny,:].shape[0], size=self.nylandmarks, replace=False)]
+            self.xlandmarks = x[np.random.choice(x.shape[0], size=self.nxlandmarks, replace=False)]
+            self.ylandmarks = y[np.random.choice(y.shape[0], size=self.nylandmarks, replace=False)]
             
             # Necessaire pour remettre a false au cas ou on a déjà utilisé 'kmeans' avant 
             self.quantization_with_landmarks_possible = False
@@ -331,13 +388,13 @@ class Tester:
 
         kernel = self.kernel
         
+        x,y = self.get_xy(sample=sample,landmarks=landmarks)
+        
         if 'x' in sample:
-            x = self.xlandmarks if landmarks else self.x[self.xmask,:]
             kxx = kernel(x,x)
         if 'y' in sample:
-            y = self.ylandmarks if landmarks else self.y[self.ymask,:]
             kyy = kernel(y,y)
-        
+
         if sample == 'xy':
             kxy = kernel(x, y)
             return(torch.cat((torch.cat((kxx, kxy), dim=1),
@@ -361,13 +418,11 @@ class Tester:
         assert(self.has_landmarks)
         kernel = self.kernel
         
+        x,y = self.get_xy()
+        z1,z2 = self.get_xy(landmarks=True)
         if 'x' in sample:
-            x = self.x[self.xmask,:]
-            z1 = self.xlandmarks
             kz1x = kernel(z1,x)
         if 'y' in sample:
-            y = self.y[self.ymask,:]
-            z2 = self.ylandmarks
             kz2y = kernel(z2,y)
         
         if sample =='xy':
@@ -491,12 +546,12 @@ class Tester:
 
         return Kw
 
-    def diagonalize_centered_gram(self,approximation='full',sample='xy',overwrite=False,verbose=0):
+    def diagonalize_centered_gram(self,approximation='full',sample='xy',verbose=0):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
         """
-        if approximation in self.spev[sample] and not overwrite:
+        if approximation in self.spev[sample]:
             if verbose:
                 print('No need to diagonalize')
         else:
@@ -612,43 +667,34 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
+    def initialize_computation(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
+                               nanchors=None,landmarks_method='random',verbose=0):
+        cov,mmd = approximation_cov,approximation_mmd
+        if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
+            self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
+        
+        if 'nystrom' in [cov,mmd]:
+            if not self.has_landmarks:
+                self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
+            if "anchors" not in self.spev[sample]:
+                self.compute_nystrom_anchors(nanchors=nanchors,sample=sample,verbose=verbose)
+            
+        if cov not in self.spev[sample]:
+            self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
+
     def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,
-            overwrite_kfdat=False,overwrite_cov = False,overwrite_landmarks=False,overwrite_anchors=False,
             nlandmarks=None,landmarks_method='random',nanchors=None,verbose=0):
         #nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
         # mettre des verbose - 1 dans les fonctions intermediaires si j'ajoute verbosity ici 
         
         cov,mmd = approximation_cov,approximation_mmd
         name = name if name is not None else f'{cov}{mmd}' 
-        if name in self.df_kfdat and not overwrite_kfdat :
+        if name in self.df_kfdat :
             if verbose : 
                 print(f'kfdat {name} already computed')
         else:
-            if 'quantization' in [cov,mmd]: # besoin des poids des ancres de kmeans en quantization
-                if not self.quantization_with_landmarks_possible or overwrite_landmarks: # on lance kmeans si il n'a pas été lancé ou qu'on veut le refaire avec un nlandmarks différent
-                    self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
-                    if cov=='quantization': # on calcule les vp de ce qu'on vient de calculer si on en a besoin
-                        self.diagonalize_centered_gram(approximation='quantization',sample='xy',overwrite=True,verbose=verbose)
-                elif cov=='quantization':
-                    if 'quantization' not in self.spev['xy'] or overwrite_cov: 
-                        self.diagonalize_centered_gram(approximation='quantization',sample='xy',overwrite=overwrite_cov,verbose=verbose)
-
-            if 'nystrom' in [cov,mmd]:
-                if not "anchors" in self.spev['xy'] or overwrite_anchors:
-                    if not self.has_landmarks or overwrite_landmarks:
-                        self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
-                    self.compute_nystrom_anchors(nanchors=nanchors,verbose=verbose)
-                    self.diagonalize_centered_gram(approximation='nystrom',sample='xy',overwrite=overwrite_cov,verbose=verbose)
-                elif cov == 'nystrom':
-                    print('première fois ici')
-                    if 'nystrom' not in self.spev['xy'] or overwrite_cov: 
-                        self.diagonalize_centered_gram(approximation='nystrom',sample='xy',overwrite=overwrite_cov,verbose=verbose)
-
-            if cov=='full':
-                if 'full' not in self.spev['xy'] or overwrite_cov: 
-                    self.diagonalize_centered_gram(approximation='full',sample='xy',overwrite=overwrite_cov,verbose=verbose)
-
-
+            self.initialize_computation(approximation_cov,approximation_mmd=approximation_mmd,nlandmarks=nlandmarks,
+                               nanchors=nanchors,landmarks_method=landmarks_method,verbose=verbose)            
             self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose)
         
         
@@ -842,10 +888,12 @@ class Tester:
         df_proj= self.init_df_proj(which,name_proj)
         if trunc is None:
             trunc = range(1,df_proj.shape[1] - 1) # -1 pour la colonne sample
-        
-        array = torch.cat((self.x[self.xmask,:],self.y[self.ymask,:]),dim=0).numpy() if sample == 'xy' else\
-                (self.x[self.xmask,:]).numpy() if sample=='x' else (self.y[self.ymask,:]).numpy()
+
+        x,y = self.get_xy()
+
+        array = torch.cat((x,y),dim=0).numpy() if sample == 'xy' else x.numpy() if sample=='x' else y.numpy()
         index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
+        
         df_array = pd.DataFrame(array,index=index,columns=self.variables)
         for t in trunc:
             df_array[f'{prefix_col}{t}'] = pd.Series(df_proj[f'{t}'])
@@ -1059,13 +1107,15 @@ class Tester:
             self.ignored_obs.append(obs_to_ignore)
 
         if obs_to_ignore is not None:
+            x,y = self.get_xy()
             self.xmask = ~self.x_index.isin(obs_to_ignore)
             self.ymask = ~self.y_index.isin(obs_to_ignore)
             self.imask = ~self.index.isin(obs_to_ignore)
-            self.n1 = self.x[self.xmask,:].shape[0]
-            self.n2 = self.y[self.ymask,:].shape[0]
+            self.n1 = x.shape[0]
+            self.n2 = y.shape[0]
 
     def unignore_obs(self):
+        
         self.xmask = [True]*len(self.x)
         self.ymask = [True]*len(self.y)
         self.imask = [True]*len(self.index)
@@ -1161,7 +1211,8 @@ class Tester:
                 if color is None or color in list(self.variables): # list vraiment utile ? 
                     c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
                     if color in list(self.variables):
-                        c = self.x[self.xmask,:][:,self.variables.get_loc(color)] if xy=='x' else self.y[self.ymask,:][:,self.variables.get_loc(color)]   
+                        x,y = self.get_xy()
+                        c = x[:,self.variables.get_loc(color)] if xy=='x' else y[:,self.variables.get_loc(color)]   
                     x_ = df_abscisse_xy[f'{p1}']
                     y_ = df_ordonnee_xy[f'{p2}']
 
