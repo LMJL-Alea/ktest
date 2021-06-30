@@ -149,16 +149,19 @@ def add_genes_of_interest_in_df_proj(acorr,df_proj,df_array,ngenes = 4,trunc=ran
 
 
 
-def generate_which_dict(path_kfda,dataset_id,genes_selection,spec):
+def generate_which_dict(path_kfda,dataset_id,genes_selection='sg',spec=''):
 
     path_proj_kfda = path_kfda  + dataset_id + genes_selection + spec + 'projfdaxis' + '.csv'
     path_kfdat = path_kfda  + dataset_id + genes_selection + spec + 'kfda' + '.csv'
     path_proj_kpca = path_kfda  + dataset_id + genes_selection + spec + 'proj' + '.csv'
     path_corr_pv = path_kfda  + dataset_id + genes_selection + spec + 'corr_pv' + '.csv'
-    return({'proj_kfda':path_proj_kfda,
+    
+    return({
             'kfdat':path_kfdat,
-            'proj_kpca':path_proj_kpca,
-            'corr':path_corr_pv})
+            'proj_kfda':{'discriminant':path_proj_kfda},
+            'proj_kpca':{'variant':path_proj_kpca},
+            'correlations':{'genes':path_corr_pv}
+            })
 
 
 

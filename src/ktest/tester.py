@@ -61,6 +61,7 @@ def ordered_eigsy(matrix):
  
 # verbosity devient aussi un verificateur de code 
 
+# repenser les plots et df_init_proj
 
 class Tester:
     """
@@ -259,6 +260,14 @@ class Tester:
                     types_ref[type](path,name)
 
 
+    def get_names(self):
+        names = {'kfdat':[c for c in self.df_kfdat],
+                'proj_kfda':[name for name in self.df_proj_kfda.keys()],
+                'proj_kpca':[name for name in self.df_proj_kpca.keys()],
+                'correlations':[name for name in self.corr.keys()]}
+        return(names)
+
+
     # def load_data(self,data_dict,):
     # def save_data():
     # def save_a_dataframe(self,path,which)
@@ -375,6 +384,27 @@ class Tester:
                         start=False,
                         verbose = verbose)
 
+    def reinitialize_landmarks(self):
+        if self.quantization_with_landmarks_possible:
+            self.quantization_with_landmarks_possible = False
+            delattr(self,'xassignations')
+            delattr(self,'yassignations')
+            for sample in ['x','y','xy']: 
+                self.spev[sample].pop('quantization',None)
+
+        if self.has_landmarks:
+            self.has_landmarks = False
+            delattr(self,'nlandmarks')
+            delattr(self,'nxlandmarks')
+            delattr(self,'nylandmarks')
+            delattr(self,'xlandmarks')
+            delattr(self,'ylandmarks')
+        
+    def reinitialize_anchors(self):
+        for sample in ['x','y','xy']: 
+            # self.spev[sample].pop('anchors',None)
+            self.spev[sample].pop('nystrom',None)
+
     def compute_gram(self,sample='xy',landmarks=False): 
         """
         Computes Gram matrix, on anchors if nystrom is True, else on data. 
@@ -388,7 +418,7 @@ class Tester:
 
         kernel = self.kernel
         
-        x,y = self.get_xy(sample=sample,landmarks=landmarks)
+        x,y = self.get_xy(landmarks=landmarks)
         
         if 'x' in sample:
             kxx = kernel(x,x)
@@ -669,6 +699,7 @@ class Tester:
 
     def initialize_computation(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
                                nanchors=None,landmarks_method='random',verbose=0):
+        # verbose -1 au lieu de verbose ? 
         cov,mmd = approximation_cov,approximation_mmd
         if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
             self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
@@ -682,10 +713,7 @@ class Tester:
         if cov not in self.spev[sample]:
             self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
 
-    def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,
-            nlandmarks=None,landmarks_method='random',nanchors=None,verbose=0):
-        #nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        # mettre des verbose - 1 dans les fonctions intermediaires si j'ajoute verbosity ici 
+    def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
         
         cov,mmd = approximation_cov,approximation_mmd
         name = name if name is not None else f'{cov}{mmd}' 
@@ -693,16 +721,13 @@ class Tester:
             if verbose : 
                 print(f'kfdat {name} already computed')
         else:
-            self.initialize_computation(approximation_cov,approximation_mmd=approximation_mmd,nlandmarks=nlandmarks,
-                               nanchors=nanchors,landmarks_method=landmarks_method,verbose=verbose)            
+            self.initialize_computation(approximation_cov=cov,approximation_mmd=mmd,
+                                        verbose=verbose)            
             self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose)
         
         
-        # which_dict={'kfdat':path if save else ''}
-        # self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-        # obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    def compute_proj_kfda(self,trunc=None,approximation_cov='full',approximation_mmd='full',overwrite=False,name=None,verbose=0):
+    def compute_proj_kfda(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Projections of the embeddings of the observation onto the discriminant axis
@@ -715,7 +740,7 @@ class Tester:
 
 
         name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
-        if name in self.df_proj_kfda and not overwrite :
+        if name in self.df_proj_kfda :
             if verbose : 
                 print('Proj on discriminant axis Already computed')
         else:
@@ -809,69 +834,76 @@ class Tester:
                     start=False,
                     verbose = verbose)
 
-    def compute_proj_kpca(self,trunc=None,approximation_cov='full',sample='xy',overwrite=False,name=None,verbose=0):
+    def compute_proj_kpca(self,trunc=None,approximation_cov='full',sample='xy',name=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         
         """
         name = name if name is not None else f'{approximation_cov}{sample}' 
-        if name in self.df_proj_kfda and not overwrite :
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        quantization = approximation_cov =='quantization'
+        sp,ev = self.spev[sample][approximation_cov]['sp'],self.spev[sample][approximation_cov]['ev']
+        P = self.compute_centering_matrix(sample=sample,quantization=quantization)    
+        n1,n2 = (self.n1,self.n2) 
+        n = (n1*('x' in sample)+n2*('y' in sample))
+        
+        tmax = len(sp)+1
+        t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
+        trunc = range(1,tmax) if (trunc is None or trunc[-1]>tmax) else trunc
+
+
+        self.verbosity(function_name='compute_proj_kpca',
+                dict_of_variables={
+                't':t,
+                'approximation_cov':approximation_cov,
+                'sample':sample,
+                'name':name},
+                start=True,
+                verbose = verbose)
+
+    
+        if approximation_cov =='quantization':
+            Kmn = self.compute_kmn(sample=sample)
+            A_12 = self.compute_quantization_weights(sample=sample,power=1/2)                
+            proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
+        elif approximation_cov == 'nystrom':
+            Kmn = self.compute_kmn(sample=sample)
+            Up = self.spev[sample]['anchors']['ev']
+            Lp_inv = torch.diag(self.spev[sample]['anchors']['sp']**-1)
+            proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+        elif approximation_cov == 'full':
+            K = self.compute_gram(sample=sample)
+            proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
+
+    
+        if name in self.df_proj_kpca:
+            print(f"écrasement de {name} dans df_proj_kfda")
+        
+        index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
+        self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
+        self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
+                
+        self.verbosity(function_name='compute_proj_kpca',
+                                dict_of_variables={
+                't':t,
+                'approximation_cov':approximation_cov,
+                'sample':sample,
+                'name':name},
+                start=False,
+                verbose = verbose)
+
+    def kpca(self,trunc=None,approximation_cov='full',sample='xy',name=None,verbose=0):
+        
+        cov = approximation_cov
+        name = name if name is not None else f'{cov}{sample}' 
+        if name in self.df_proj_kpca :
             if verbose : 
-                print('Proj on principal componant axis Already computed')
+                print(f'kfdat {name} already computed')
         else:
-
-
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            quantization = approximation_cov =='quantization'
-            sp,ev = self.spev[sample][approximation_cov]['sp'],self.spev[sample][approximation_cov]['ev']
-            P = self.compute_centering_matrix(sample=sample,quantization=quantization)    
-            n1,n2 = (self.n1,self.n2) 
-            n = (n1*('x' in sample)+n2*('y' in sample))
-            
-            tmax = len(sp)+1
-            t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
-            trunc = range(1,tmax) if (trunc is None or trunc[-1]>tmax) else trunc
-
-
-            self.verbosity(function_name='compute_proj_kpca',
-                    dict_of_variables={
-                    't':t,
-                    'approximation_cov':approximation_cov,
-                    'sample':sample,
-                    'name':name},
-                    start=True,
-                    verbose = verbose)
-
+            self.initialize_computation(approximation_cov=cov,sample=sample,verbose=verbose)            
+            self.compute_proj_kpca(trunc=trunc,approximation_cov=cov,sample=sample,name=name,verbose=verbose)
         
-            if approximation_cov =='quantization':
-                Kmn = self.compute_kmn(sample=sample)
-                A_12 = self.compute_quantization_weights(sample=sample,power=1/2)                
-                proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
-            elif approximation_cov == 'nystrom':
-                Kmn = self.compute_kmn(sample=sample)
-                Up = self.spev[sample]['anchors']['ev']
-                Lp_inv = torch.diag(self.spev[sample]['anchors']['sp']**-1)
-                proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-            elif approximation_cov == 'full':
-                K = self.compute_gram(sample=sample)
-                proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
 
-        
-            if name in self.df_proj_kpca:
-                print(f"écrasement de {name} dans df_proj_kfda")
-            
-            index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
-            self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
-            self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
-                    
-            self.verbosity(function_name='compute_proj_kpca',
-                                    dict_of_variables={
-                    't':t,
-                    'approximation_cov':approximation_cov,
-                    'sample':sample,
-                    'name':name},
-                    start=False,
-                    verbose = verbose)
 
     def compute_corr_proj_var(self,trunc=None,sample='xy',which='proj_kfda',name_corr=None,
                             name_proj=None,prefix_col='',verbose=0): 
@@ -991,8 +1023,8 @@ class Tester:
                 name
 
 
-        if main or not hasattr(self,'main_name'):
-            self.main_name = name_
+        # if main or not hasattr(self,'main_name'):
+        #     self.main_name = name_
         
         # if verbose >0:
         #     none = 'None'
@@ -1125,7 +1157,7 @@ class Tester:
     def infer_nobs(self,which ='proj_kfda',name=None):
         if not hasattr(self,'n1'):
             if name is None:
-                name = self.main_name
+                name = self.get_names()[which][0]
             df_proj= self.init_df_proj(which,name)
             self.n1 =  df_proj[df_proj['sample']=='x'].shape[0]
             self.n2 =  df_proj[df_proj['sample']=='y'].shape[0]
@@ -1137,11 +1169,11 @@ class Tester:
                 columns = self.df_kfdat.columns
             kfdat = self.df_kfdat[columns].copy()
             
-            if self.main_name in columns and highlight_main and len(columns)>1:
-                kfdat[self.main_name].plot(ax=ax,lw=4,c='black')
-                kfdat = kfdat.drop(columns=self.main_name) 
-            elif highlight and len(columns)==1:
-                kfdat.plot(ax=ax,lw=4,c='black')
+            # if self.main_name in columns and highlight_main and len(columns)>1:
+            #     kfdat[self.main_name].plot(ax=ax,lw=4,c='black')
+            #     kfdat = kfdat.drop(columns=self.main_name) 
+            # elif highlight and len(columns)==1:
+            #     kfdat.plot(ax=ax,lw=4,c='black')
             # print(self.df_kfdat.columns,'\n',kfdat.columns)
             if ax is None:
                 fig,ax = plt.subplots(figsize=figsize)
@@ -1272,16 +1304,16 @@ class Tester:
         if nproj >1:
             if name is not None and name not in names:
                 print(f'{name} not found in {names}')
-            if name is None and self.main_name not in names:
-                print("the default name {self.main_name} is not in {names} so you need to specify 'name' argument")
-            if name is None and self.main_name in names:
+            # if name is None and self.main_name not in names:
+            #     print("the default name {self.main_name} is not in {names} so you need to specify 'name' argument")
+            # if name is None and self.main_name in names:
                 df_proj = dict_df_proj[self.main_name]
             else: 
                 df_proj = dict_df_proj[name]
 
         return(df_proj)
 
-    def init_axes_projs(self,fig,axes,projections,approximation_cov,covariance,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
+    def init_axes_projs(self,fig,axes,projections,approximation_cov,sample,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
         if axes is None:
             rows=1;cols=len(projections) + kfda + spectrum
             fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
@@ -1291,12 +1323,12 @@ class Tester:
             self.plot_kfdat(axes[0],ylim=kfda_ylim,trunc = trunc,title=kfda_title)
             axes = axes[1:]
         if spectrum:
-            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum',approximation_cov=approximation_cov,covariance=covariance)
+            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum',approximation_cov=approximation_cov,sample=sample)
             axes = axes[1:]
         return(fig,axes)
 
-    def density_projs(self,fig=None,axes=None,which='proj_kfda',approximation_cov='full',covariance='w',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False):
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,approximation_cov=approximation_cov,covariance=covariance,suptitle=suptitle,kfda=kfda,
+    def density_projs(self,fig=None,axes=None,which='proj_kfda',approximation_cov='full',sample='xy',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False):
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,approximation_cov=approximation_cov,sample=sample,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
@@ -1304,10 +1336,10 @@ class Tester:
             self.density_proj(ax,proj,which=which,name=name)
         return(fig,axes)
 
-    def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',approximation_cov='full',covariance='w',yproj=None,name=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
+    def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',approximation_cov='full',sample='xy',yproj=None,name=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
                         highlight=None,color=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False,iterate_over='projections'):
         to_iterate = projections if iterate_over == 'projections' else color
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,approximation_cov=approximation_cov,covariance=covariance,suptitle=suptitle,kfda=kfda,
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,approximation_cov=approximation_cov,sample=sample,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
@@ -1324,7 +1356,7 @@ class Tester:
 
     def find_correlated_variables(self,name=None,nvar=1,t=1,prefix_col=''):
         if name is None:
-            name = self.main_name
+            name = self.get_names()['correlations'][0]
         if nvar==0:
             return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:])
         else: 
@@ -1332,7 +1364,7 @@ class Tester:
         
     def plot_correlation_proj_var(self,ax=None,name=None,figsize=(10,10),nvar=30,projections=range(1,10),title=None,prefix_col=''):
         if name is None:
-            name = self.main_name
+            name = self.get_names()['correlations'][0]
         if ax is None:
             fig,ax = plt.subplots(figsize=figsize)
         if title is not None:
