@@ -374,9 +374,10 @@ class Tester:
             assert(self.nyanchors <= self.nylandmarks)
 
         nanchors = self.nanchors if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
-        Km = self.compute_gram(sample=sample,landmarks=True)
         
-        sp_anchors,ev_anchors = ordered_eigsy(Km)        
+        Km = self.compute_gram(sample=sample,landmarks=True)
+        Pm = self.compute_centering_matrix(sample=sample,landmarks=True)
+        sp_anchors,ev_anchors = ordered_eigsy(torch.chain_matmul(Pm,Km,Pm))        
         self.spev[sample]['anchors'] = {'sp':sp_anchors[:nanchors],'ev':ev_anchors[:,:nanchors]}
 
         self.verbosity(function_name='compute_nystrom_anchors',
@@ -463,7 +464,7 @@ class Tester:
         else:
             return(kz1x if sample =='x' else kz2y)
 
-    def compute_centering_matrix(self,sample='xy',quantization=False):
+    def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False):
         """
         Computes the bicentering Gram matrix Pn. 
         Let I1,I2 the identity matrix of size n1 and n2 (or nxanchors and nyanchors if nystrom).
@@ -479,7 +480,13 @@ class Tester:
         torch.Tensor of size (nxanchors+nyanchors)**2 if quantization else (n1+n2)**2 
         """
 
-        
+        if landmarks:
+            n = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.nlandmarks
+            idn = torch.eye(n, dtype=torch.float64)
+            onen = torch.ones(n, n, dtype=torch.float64)
+            pn = idn - 1/n * onen
+            return(pn)
+
         if 'x' in sample:
             n1 = self.nxlandmarks if quantization else self.n1 
             idn1 = torch.eye(n1, dtype=torch.float64)
@@ -1214,7 +1221,7 @@ class Tester:
 
         return(ax)
 
-    def density_proj(self,ax,projection,which='proj_kfda',name=None):
+    def density_proj(self,ax,projection,which='proj_kfda',name=None,orientation='vertical'):
         
         df_proj= self.init_df_proj(which,name)
 
@@ -1222,10 +1229,15 @@ class Tester:
             
             dfxy = df_proj.loc[df_proj['sample']==xy][str(projection)]
             if len(dfxy)>0:
-                ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=int(np.floor(np.sqrt(len(dfxy)))),color='blue' if xy =='x' else 'orange')
-                ax.hist(dfxy,density=True,histtype='step',bins=int(np.floor(np.sqrt(len(dfxy)))),lw=3,edgecolor='blue' if xy =='x' else 'orange')
-                ax.axvline(dfxy.mean(),c='blue' if xy=='x' else 'orange')
-        
+                color = 'blue' if xy =='x' else 'orange'
+                bins=int(np.floor(np.sqrt(len(dfxy))))
+                ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=bins,color=color,orientation=orientation)
+                ax.hist(dfxy,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
+                if orientation =='vertical':
+                    ax.axvline(dfxy.mean(),c=color)
+                else:
+                    ax.axhline(dfxy.mean(),c=color)
+
         ax.set_xlabel(f't={projection}',fontsize=20)    
         ax.legend()
         
