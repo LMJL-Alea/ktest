@@ -433,15 +433,20 @@ class Tester:
         else:
             return(kxx if sample =='x' else kyy)
 
-    def compute_m(self,quantization=False):
+    def compute_m(self,sample='xy',quantization=False):
         n1,n2 = (self.n1,self.n2)
-        if quantization:
-            return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
-        else:
-            m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
-            m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
-            return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
-        
+        if sample =='xy':
+            if quantization:
+                return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
+            else:
+                m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
+                m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+                return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
+        elif sample=='x':
+            return(1/n1 * torch.ones(n1, dtype=torch.float64))
+        elif sample=='y':
+            return(1/n2 * torch.ones(n2, dtype=torch.float64))
+
     def compute_kmn(self,sample='xy'):
         """
         Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
@@ -704,7 +709,7 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
-    def initialize_computation(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
+    def initialize_kfda(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
                                nanchors=None,landmarks_method='random',verbose=0):
         # verbose -1 au lieu de verbose ? 
         cov,mmd = approximation_cov,approximation_mmd
@@ -728,7 +733,7 @@ class Tester:
             if verbose : 
                 print(f'kfdat {name} already computed')
         else:
-            self.initialize_computation(approximation_cov=cov,approximation_mmd=mmd,
+            self.initialize_kfda(approximation_cov=cov,approximation_mmd=mmd,
                                         verbose=verbose)            
             self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose)
         
@@ -907,7 +912,7 @@ class Tester:
             if verbose : 
                 print(f'kfdat {name} already computed')
         else:
-            self.initialize_computation(approximation_cov=cov,sample=sample,verbose=verbose)            
+            self.initialize_kfda(approximation_cov=cov,sample=sample,verbose=verbose)            
             self.compute_proj_kpca(trunc=trunc,approximation_cov=cov,sample=sample,name=name,verbose=verbose)
         
 
@@ -945,44 +950,133 @@ class Tester:
                 verbose = verbose)
 
 
-    def compute_mmd(self,unbiaised=False,nystrom=False,name='',verbose=0):
+    def compute_mmd(self,unbiaised=False,approximation='full',shared_anchors=True,name=None,verbose=0):
         
         self.verbosity(function_name='compute_mmd',
-                dict_of_variables={'unbiaised':unbiaised,'nystrom':nystrom,'name':name},
+                dict_of_variables={'unbiaised':unbiaised,
+                                   'approximation':approximation,
+                                   'shared_anchors':shared_anchors,
+                                   'name':name},
                 start=True,
                 verbose = verbose)
 
-        n1,n2 = (self.n1,self.n2) 
-        ntot = n1+n2
-        if nystrom >=1:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            mtot = m1+m2
-        npoints = mtot if nystrom else ntot
+        if approximation == 'full':
+            m = self.compute_m(sample='xy',quantization=False)
+            K = self.compute_gram()
+            if unbiaised:
+                K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
+            mmd = torch.dot(torch.mv(K,m),m)**2
         
-        if nystrom:
-            m1,m2 = (self.nxanchors,self.nyanchors)
-            m_mu1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
-            m_mu2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
-        else:
-            m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
-            m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
-        m_mu12 = torch.cat((m_mu1, m_mu2), dim=0) #.to(device)
+        if approximation == 'nystrom' and shared_anchors:
+            m = self.compute_m(sample='xy',quantization=False)
+            Up = self.spev['xy']['anchors']['ev']
+            Lp_inv2 = torch.diag(self.spev['xy']['anchors']['sp']**-(1/2))
+            Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Kmn = self.compute_kmn(sample='xy')
+            psi_m = torch.mv(Lp_inv2,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))
+            mmd = torch.dot(psi_m,psi_m)**2
         
-        K = self.compute_gram(landmarks=nystrom)
-        
-        if name is None:
-            name=''
-        self.dict_mmd['B'+name] = torch.dot(torch.mv(K,m_mu12),m_mu12)
+        if approximation == 'nystrom' and not shared_anchors:
+            
+            mx = self.compute_m(sample='x',quantization=False)
+            my = self.compute_m(sample='y',quantization=False)
+            Upx = self.spev['x']['anchors']['ev']
+            Upy = self.spev['y']['anchors']['ev']
+            Lpx_inv2 = torch.diag(self.spev['x']['anchors']['sp']**-(1/2))
+            Lpy_inv2 = torch.diag(self.spev['y']['anchors']['sp']**-(1/2))
+            Lpy_inv = torch.diag(self.spev['y']['anchors']['sp']**-1)
+            Pmx = self.compute_centering_matrix(sample='x',landmarks=True)
+            Pmy = self.compute_centering_matrix(sample='y',landmarks=True)
+            Kmnx = self.compute_kmn(sample='x')
+            Kmny = self.compute_kmn(sample='y')
+            
+            Km = self.compute_gram(sample='xy',landmarks=True)
+            m1 = Kmnx.shape[0]
+            m2 = Kmny.shape[0]
+            Kmxmy = Km[:m1,m2:]
 
-        if unbiaised:                
-            mask = torch.eye(npoints,npoints).byte()
-            K.masked_fill_(mask, 0)
-            self.dict_mmd['U'+name] = torch.dot(torch.mv(K,m_mu12),m_mu12)
+            psix_mx = torch.mv(Lpx_inv2,torch.mv(Upx.T,torch.mv(Pmx,torch.mv(Kmnx,mx))))
+            psiy_my = torch.mv(Lpy_inv2,torch.mv(Upy.T,torch.mv(Pmy,torch.mv(Kmny,my))))
+            Cpsiy_my = torch.mv(Lpx_inv2,torch.mv(Upx.T,torch.mv(Pmx,torch.mv(Kmxmy,\
+                torch.mv(Pmy,torch.mv(Upy,torch.mv(Lpy_inv,torch.mv(Upy.T,torch.mv(Pmy,torch.mv(Kmny,my))))))))))
+            mmd = torch.dot(psix_mx,psix_mx)**2 + torch.dot(psiy_my,psiy_my)**2 - 2*torch.dot(psix_mx,Cpsiy_my)
+        
+        if approximation == 'quantization':
+            mq = self.compute_m(sample='xy',quantization=True)
+            Km = self.compute_gram(sample='xy',landmarks=True)
+            mmd = torch.dot(torch.mv(Km,mq),mq)**2
+
+
+        if name is None:
+            name=f'{approximation}'
+            if approximation == 'nystrom':
+                name += 'shared' if shared_anchors else 'diff'
+        
+        self.dict_mmd[name] = mmd
         
         self.verbosity(function_name='compute_mmd',
-                dict_of_variables={'unbiaised':unbiaised,'nystrom':nystrom,'name':name},
+                dict_of_variables={'unbiaised':unbiaised,
+                                   'approximation':approximation,
+                                   'shared_anchors':shared_anchors,
+                                   'name':name},
                 start=False,
                 verbose = verbose)
+
+    def initialize_mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
+                               nanchors=None,landmarks_method='random',verbose=0):
+    
+        """
+        Calculs preliminaires pour lancer le MMD.
+        approximation: determine les calculs a faire en amont du calcul du mmd
+                    full : aucun calcul en amont puisque la Gram et m seront calcules dans mmd
+                    nystrom : 
+                            si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmarks_method
+                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille nanchors pour les deux echantillons
+                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille nanchors//2
+                                        attention : le parametre nanchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
+                    quantization : nlandmarks sont determines comme les centroides de l'algo kmeans 
+        shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
+        nlandmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
+        landmarks_method : dans ['random','kmeans'] methode de choix des landmarks
+        verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
+        """
+            # verbose -1 au lieu de verbose ? 
+        
+        if approximation == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
+            self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
+        
+        if approximation == 'nystrom':
+            if not self.has_landmarks:
+                    self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
+            
+            if shared_anchors:
+                if "anchors" not in self.spev['xy']:
+                    self.compute_nystrom_anchors(nanchors=nanchors,sample='xy',verbose=verbose)
+            else:
+                for xy in 'xy':
+                    if 'anchors' not in self.spev[xy]:
+                        self.compute_nystrom_anchors(nanchors=nanchors//2,sample=xy,verbose=verbose)
+
+    def mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
+                               nanchors=None,landmarks_method='random',name=None,unbiaised=False,verbose=0):
+        """
+        appelle la fonction initialize mmd puis la fonction compute_mmd si le mmd n'a pas deja ete calcule. 
+        """
+        if name is None:
+            name=f'{approximation}'
+            if approximation == 'nystrom':
+                name += 'shared' if shared_anchors else 'diff'
+        
+        if name in self.dict_mmd :
+            if verbose : 
+                print(f'mmd {name} already computed')
+        else:
+            self.initialize_mmd(approximation=approximation,shared_anchors=shared_anchors,
+                    nlandmarks=nlandmarks,nanchors=nanchors,landmarks_method=landmarks_method,verbose=verbose)
+            self.compute_mmd(approximation=approximation,shared_anchors=shared_anchors,
+                            name=name,unbiaised=unbiaised,verbose=0)
+        
+       
 
     def name_generator(self,trunc=None,nystrom=0,nystrom_method='kmeans',nanchors=None,obs_to_ignore=None):
         
@@ -1013,10 +1107,6 @@ class Tester:
         self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
         obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which=corr_which,corr_prefix_col='')
 
-    def mmd(self,unbiaised=True,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        which_dict={'mmd':path if save else ''}
-        self.test(which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-        obs_to_ignore=obs_to_ignore,mmd_unbiaised=unbiaised,save=save,verbose=verbose)
 
 
     def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
