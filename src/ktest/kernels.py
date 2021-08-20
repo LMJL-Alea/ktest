@@ -2,7 +2,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from rv_gen import gen_couple
 import torch
 import numpy as np
 
@@ -80,6 +79,7 @@ def linear_kernel(x,y):
     return K
 
 if __name__ == "__main__":
+    from rv_gen import gen_couple
 
     x,y = gen_couple().values()
     print('\n *** distance \n',distances(x,y))

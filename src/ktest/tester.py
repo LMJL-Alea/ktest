@@ -14,7 +14,11 @@ from scipy.linalg import svd
 from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
-from kernels import gauss_kernel_mediane
+# CCIPL 
+# from kernels import gauss_kernel_mediane
+# Local 
+from ktest.kernels import gauss_kernel_mediane
+
 from apt.eigen_wrapper import eigsy
 import apt.kmeans # For kmeans
 from kmeans_pytorch import kmeans
@@ -279,7 +283,7 @@ class Tester:
             x,y = self.x[self.xmask,:],self.y[self.ymask,:]
         return(x,y)
 
-    def compute_nystrom_landmarks(self,nlandmarks=None,landmarks_method='random',verbose=0):
+    def compute_nystrom_landmarks(self,nlandmarks=None,landmarks_method=None,verbose=0):
         # anciennement compute_nystrom_anchors(self,nanchors,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
         
         """
@@ -303,8 +307,12 @@ class Tester:
         xratio,yratio = n1/(n1 + n2), n2/(n1 +n2)
 
         if nlandmarks is None:
-            nlandmarks = 1/10 * (n1 + n2)
+            print("nlandmarks not specified, by default, nlandmarks = (n1+n2)//10")
+            nlandmarks = (n1 + n2)//10
 
+        if landmarks_method is None:
+            print("landmarks_method not specified, by default, landmarks_method='random'")
+            landmarks_method = 'random'
         
         self.nlandmarks = nlandmarks
         self.nxlandmarks=np.int(np.floor(xratio * nlandmarks)) 
@@ -363,9 +371,13 @@ class Tester:
                         start=True,
                         verbose = verbose)
 
+        if nanchors is None:
+            print("nanchors not specified, by default, nanchors = nlandmarks" )
+
         if sample == 'xy':
             self.nanchors = self.nlandmarks if nanchors is None else nanchors
             assert(self.nanchors <= self.nlandmarks)
+            
         elif sample =='x':
             self.nxanchors = self.nxlandmarks if nanchors is None else nanchors
             assert(self.nxanchors <= self.nxlandmarks)
@@ -520,7 +532,7 @@ class Tester:
         else:
             return(pn1 if sample=='x' else pn2)  
 
-    def compute_centered_gram(self,approximation='full',sample='xy',verbose=0):
+    def compute_centered_gram(self,approximation='full',sample='xy',verbose=0,center_anchors=False):
         """ 
         Computes the bicentered Gram matrix which shares its spectrom with the 
         within covariance operator. 
@@ -565,7 +577,11 @@ class Tester:
                 Kmn = self.compute_kmn(sample=sample)
                 Lp_inv = torch.diag(self.spev[sample]['anchors']['sp']**(-1))
                 Up = self.spev[sample]['anchors']['ev']
-                Kw = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)
+                if center_anchors:
+                    Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+                    Kw = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)            
+                else:
+                    Kw = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)
 
                 # print(f"rectangle pour svd ")
                 # Lp_inv = torch.diag(self.spev['anchors']['sp']**(-1/2))
@@ -588,7 +604,7 @@ class Tester:
 
         return Kw
 
-    def diagonalize_centered_gram(self,approximation='full',sample='xy',verbose=0):
+    def diagonalize_centered_gram(self,approximation='full',sample='xy',verbose=0,center_anchors=False):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
@@ -603,7 +619,7 @@ class Tester:
                     start=True,
                     verbose = verbose)
             
-            Kw = self.compute_centered_gram(approximation=approximation,sample=sample,verbose=verbose)
+            Kw = self.compute_centered_gram(approximation=approximation,sample=sample,verbose=verbose,center_anchors=center_anchors)
             
             sp,ev = ordered_eigsy(Kw)
             self.spev[sample][approximation] = {'sp':sp,'ev':ev}
@@ -614,7 +630,7 @@ class Tester:
                     start=False,
                     verbose = verbose)
                 
-    def compute_kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
+    def compute_kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0,center_anchors=False):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -660,8 +676,14 @@ class Tester:
                 kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'nystrom':
-                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                if center_anchors:
+                    Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+
+                else:
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
                 pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
@@ -669,8 +691,14 @@ class Tester:
     
         if approximation_cov == 'nystrom':
             if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
-                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                if center_anchors:
+                    Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+
+                else:
+                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
                 Kmm = self.compute_gram(landmarks=True)
@@ -709,8 +737,8 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
-    def initialize_kfda(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
-                               nanchors=None,landmarks_method='random',verbose=0):
+    def initialize_kfdat(self,approximation_cov='full',approximation_mmd=None,sample='xy',nlandmarks=None,
+                               nanchors=None,landmarks_method='random',verbose=0,center_anchors=False,**kwargs):
         # verbose -1 au lieu de verbose ? 
         cov,mmd = approximation_cov,approximation_mmd
         if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
@@ -723,19 +751,22 @@ class Tester:
                 self.compute_nystrom_anchors(nanchors=nanchors,sample=sample,verbose=verbose)
             
         if cov not in self.spev[sample]:
-            self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
+            self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose,center_anchors=center_anchors)
 
-    def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0):
-        
+    def kfdat(self,trunc=None,approximation_cov='full',approximation_mmd='full',
+                nlandmarks=None,nanchors=None,landmarks_method='random',
+                name=None,verbose=0,center_anchors=False):
+                
         cov,mmd = approximation_cov,approximation_mmd
         name = name if name is not None else f'{cov}{mmd}' 
         if name in self.df_kfdat :
             if verbose : 
                 print(f'kfdat {name} already computed')
         else:
-            self.initialize_kfda(approximation_cov=cov,approximation_mmd=mmd,
-                                        verbose=verbose)            
-            self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose)
+            self.initialize_kfdat(approximation_cov=cov,approximation_mmd=mmd,sample='xy',
+                                nlandmarks=nlandmarks,nanchors=nanchors,landmarks_method=landmarks_method,
+                                        verbose=verbose,center_anchors=center_anchors)            
+            self.compute_kfdat(trunc=trunc,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose,center_anchors=center_anchors)
         
         
 
@@ -1012,7 +1043,7 @@ class Tester:
             if approximation == 'nystrom':
                 name += 'shared' if shared_anchors else 'diff'
         
-        self.dict_mmd[name] = mmd
+        self.dict_mmd[name] = mmd.item()
         
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
@@ -1041,7 +1072,7 @@ class Tester:
         verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
         """
             # verbose -1 au lieu de verbose ? 
-        
+
         if approximation == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
             self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
         
@@ -1055,6 +1086,7 @@ class Tester:
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
+                        assert(nanchors is not None,"nanchors not specified")
                         self.compute_nystrom_anchors(nanchors=nanchors//2,sample=xy,verbose=verbose)
 
     def mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
