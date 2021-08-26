@@ -355,7 +355,7 @@ class Tester:
         else:
             return(torch.diag(A1).double() if sample =='x' else torch.diag(A2).double())
     
-    def compute_nystrom_anchors(self,sample='xy',nanchors=None,verbose=0):
+    def compute_nystrom_anchors(self,sample='xy',nanchors=None,verbose=0,center_anchors=False):
         """
         Determines the nystrom anchors using 
         Stores the results as a list of eigenvalues and the 
@@ -388,8 +388,12 @@ class Tester:
         nanchors = self.nanchors if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
         
         Km = self.compute_gram(sample=sample,landmarks=True)
-        Pm = self.compute_centering_matrix(sample=sample,landmarks=True)
-        sp_anchors,ev_anchors = ordered_eigsy(torch.chain_matmul(Pm,Km,Pm))        
+        if center_anchors:
+            Pm = self.compute_centering_matrix(sample=sample,landmarks=True)
+            sp_anchors,ev_anchors = ordered_eigsy(torch.chain_matmul(Pm,Km,Pm))        
+        else:
+            sp_anchors,ev_anchors = ordered_eigsy(Km)        
+        
         self.spev[sample]['anchors'] = {'sp':sp_anchors[:nanchors],'ev':ev_anchors[:,:nanchors]}
 
         self.verbosity(function_name='compute_nystrom_anchors',
@@ -678,8 +682,8 @@ class Tester:
             elif approximation_mmd == 'nystrom':
                 if center_anchors:
                     Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                    pkpuLupkm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
 
                 else:
                     pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
@@ -693,8 +697,8 @@ class Tester:
             if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
                 if center_anchors:
                     Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                    pkpuLupkm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
 
                 else:
                     pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
@@ -748,7 +752,7 @@ class Tester:
             if not self.has_landmarks:
                 self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
             if "anchors" not in self.spev[sample]:
-                self.compute_nystrom_anchors(nanchors=nanchors,sample=sample,verbose=verbose)
+                self.compute_nystrom_anchors(nanchors=nanchors,sample=sample,verbose=verbose,center_anchors=center_anchors)
             
         if cov not in self.spev[sample]:
             self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose,center_anchors=center_anchors)
@@ -1054,7 +1058,7 @@ class Tester:
                 verbose = verbose)
 
     def initialize_mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
-                               nanchors=None,landmarks_method='random',verbose=0):
+                               nanchors=None,landmarks_method='random',verbose=0,center_anchors=False):
     
         """
         Calculs preliminaires pour lancer le MMD.
@@ -1082,12 +1086,12 @@ class Tester:
             
             if shared_anchors:
                 if "anchors" not in self.spev['xy']:
-                    self.compute_nystrom_anchors(nanchors=nanchors,sample='xy',verbose=verbose)
+                    self.compute_nystrom_anchors(nanchors=nanchors,sample='xy',verbose=verbose,center_anchors=center_anchors)
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
                         assert(nanchors is not None,"nanchors not specified")
-                        self.compute_nystrom_anchors(nanchors=nanchors//2,sample=xy,verbose=verbose)
+                        self.compute_nystrom_anchors(nanchors=nanchors//2,sample=xy,verbose=verbose,center_anchors=center_anchors)
 
     def mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
                                nanchors=None,landmarks_method='random',name=None,unbiaised=False,verbose=0):
@@ -1141,21 +1145,21 @@ class Tester:
 
 
 
-    def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
-             nystrom=False,nanchors=None,nystrom_method='kmeans',
-             name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,mmd_unbiaised=False,save=False,verbose=0):
+    # def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
+    #          nystrom=False,nanchors=None,nystrom_method='kmeans',
+    #          name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,mmd_unbiaised=False,save=False,verbose=0):
 
-        # for output,path in which.items()
-        name_ = "main" if not hasattr(self,'main_name') and name is None else \
-                self.name_generator(trunc=trunc,nystrom=nystrom,nystrom_method=nystrom_method,nanchors=nanchors,
-                obs_to_ignore=obs_to_ignore) if name is None else \
-                name
+    #     # for output,path in which.items()
+    #     name_ = "main" if not hasattr(self,'main_name') and name is None else \
+    #             self.name_generator(trunc=trunc,nystrom=nystrom,nystrom_method=nystrom_method,nanchors=nanchors,
+    #             obs_to_ignore=obs_to_ignore) if name is None else \
+    #             name
 
 
-        # if main or not hasattr(self,'main_name'):
-        #     self.main_name = name_
+    #     if main or not hasattr(self,'main_name'):
+    #         self.main_name = name_
         
-        # if verbose >0:
+    #     if verbose >0:
         #     none = 'None'
         #     datastr = f'n1:{self.n1} n2:{self.n2} trunc:{none if trunc is None else len(trunc)}'
         #     datastr += f'\nname:{name}\n' 
@@ -1171,91 +1175,91 @@ class Tester:
         #     print(f"trunc:{len(trunc)} \n which:{which_dict} nystrom:{nystrom} nanchors:{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size}\n")
         #     print(f"main:{main} corr:{corr_which} mmd_unbiaised:{mmd_unbiaised} seva:{save}")
         
-        loaded = []    
-        if save:
-            if 'kfdat' in which_dict and os.path.isfile(which_dict['kfdat']):
-                loaded_kfdat = pd.read_csv(which_dict['kfdat'],header=0,index_col=0)
-                if len(loaded_kfdat.columns)==1 and name is not None:
-                    c= loaded_kfdat.columns[0]
-                    self.df_kfdat[name] = loaded_kfdat[c]
-                else:
-                    for c in loaded_kfdat.columns:
-                        if c not in self.df_kfdat.columns:
-                            self.df_kfdat[c] = loaded_kfdat[c]
-                loaded += ['kfdat']
+        # loaded = []    
+        # if save:
+        #     if 'kfdat' in which_dict and os.path.isfile(which_dict['kfdat']):
+        #         loaded_kfdat = pd.read_csv(which_dict['kfdat'],header=0,index_col=0)
+        #         if len(loaded_kfdat.columns)==1 and name is not None:
+        #             c= loaded_kfdat.columns[0]
+        #             self.df_kfdat[name] = loaded_kfdat[c]
+        #         else:
+        #             for c in loaded_kfdat.columns:
+        #                 if c not in self.df_kfdat.columns:
+        #                     self.df_kfdat[c] = loaded_kfdat[c]
+        #         loaded += ['kfdat']
 
-            if 'proj_kfda' in which_dict and os.path.isfile(which_dict['proj_kfda']):
-                self.df_proj_kfda[name_] = pd.read_csv(which_dict['proj_kfda'],header=0,index_col=0)
-                loaded += ['proj_kfda']
+        #     if 'proj_kfda' in which_dict and os.path.isfile(which_dict['proj_kfda']):
+        #         self.df_proj_kfda[name_] = pd.read_csv(which_dict['proj_kfda'],header=0,index_col=0)
+        #         loaded += ['proj_kfda']
 
-            if 'proj_kpca' in which_dict and os.path.isfile(which_dict['proj_kpca']):
-                self.df_proj_kpca[name_] = pd.read_csv(which_dict['proj_kpca'],header=0,index_col=0)
-                loaded += ['proj_kpca']
+        #     if 'proj_kpca' in which_dict and os.path.isfile(which_dict['proj_kpca']):
+        #         self.df_proj_kpca[name_] = pd.read_csv(which_dict['proj_kpca'],header=0,index_col=0)
+        #         loaded += ['proj_kpca']
             
-            if 'corr' in which_dict and os.path.isfile(which_dict['corr']):
-                self.corr[name_] =pd.read_csv(which_dict['corr'],header=0,index_col=0)
-                loaded += ['corr']
+        #     if 'corr' in which_dict and os.path.isfile(which_dict['corr']):
+        #         self.corr[name_] =pd.read_csv(which_dict['corr'],header=0,index_col=0)
+        #         loaded += ['corr']
 
             # if 'mmd' in which_dict and os.path.isfile(which_dict['mmd']):
             #     self.mmd[name_] =pd.read_csv(which_dict['mmd'],header=0,index_col=0)
             #     loaded += ['mmd']
 
 
-            if verbose >0:
-                print('loaded:',loaded)
+        #     if verbose >0:
+        #         print('loaded:',loaded)
 
-        if len(loaded) < len(which_dict):
+        # if len(loaded) < len(which_dict):
             
-            missing = [k for k in which_dict.keys() if k not in loaded]
-            # try:
+        #     missing = [k for k in which_dict.keys() if k not in loaded]
+        #     # try:
 
             
-            self.ignore_obs(obs_to_ignore=obs_to_ignore)
+        #     self.ignore_obs(obs_to_ignore=obs_to_ignore)
             
-            if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
-                if nystrom:
-                    self.nystrom_method = nystrom_method
-                    self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,verbose=verbose) # max_iter=1000,
+        #     if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
+        #         if nystrom:
+        #             self.nystrom_method = nystrom_method
+        #             self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,verbose=verbose,center_anchors=center_anchors) # max_iter=1000,
 
-                if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
-                    self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
-                else:
-                    self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
+        #         if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
+        #             self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
+        #         else:
+        #             self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
 
-            if 'kfdat' in which_dict and 'kfdat' not in loaded:
-                self.compute_kfdat(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)  
-                loaded += ['kfdat']
-                if save and obs_to_ignore is None:
-                    self.df_kfdat.to_csv(which_dict['kfdat'],index=True)    
+        #     if 'kfdat' in which_dict and 'kfdat' not in loaded:
+        #         self.compute_kfdat(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)  
+        #         loaded += ['kfdat']
+        #         if save and obs_to_ignore is None:
+        #             self.df_kfdat.to_csv(which_dict['kfdat'],index=True)    
     
-            if 'proj_kfda' in which_dict and 'proj_kfda' not in loaded:
-                self.compute_proj_kfda(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-                loaded += ['proj_kfda']
-                if save and obs_to_ignore is None:
-                    self.df_proj_kfda[name_].to_csv(which_dict['proj_kfda'],index=True)
+        #     if 'proj_kfda' in which_dict and 'proj_kfda' not in loaded:
+        #         self.compute_proj_kfda(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
+        #         loaded += ['proj_kfda']
+        #         if save and obs_to_ignore is None:
+        #             self.df_proj_kfda[name_].to_csv(which_dict['proj_kfda'],index=True)
 
-            if 'proj_kpca' in which_dict and 'proj_kpca' not in loaded:
-                self.compute_proj_kpca(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-                loaded += ['proj_kpca']
-                if save and obs_to_ignore is None:
-                    self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
+        #     if 'proj_kpca' in which_dict and 'proj_kpca' not in loaded:
+        #         self.compute_proj_kpca(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
+        #         loaded += ['proj_kpca']
+        #         if save and obs_to_ignore is None:
+        #             self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
             
-            if 'corr' in which_dict and 'corr' not in loaded:
-                self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
-                loaded += ['corr']
-                if save and obs_to_ignore is None:
-                    self.corr[name_].to_csv(which_dict['corr'],index=True)
+        #     if 'corr' in which_dict and 'corr' not in loaded:
+        #         self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
+        #         loaded += ['corr']
+        #         if save and obs_to_ignore is None:
+        #             self.corr[name_].to_csv(which_dict['corr'],index=True)
             
-            if 'mmd' in which_dict and 'mmd' not in loaded:
-                self.compute_mmd(unbiaised=mmd_unbiaised,nystrom=nystrom,name=name_,verbose=verbose)
-                loaded += ['mmd']
-                if save and obs_to_ignore is None:
-                    self.corr[name_].to_csv(which_dict['mmd'],index=True)
+        #     if 'mmd' in which_dict and 'mmd' not in loaded:
+        #         self.compute_mmd(unbiaised=mmd_unbiaised,nystrom=nystrom,name=name_,verbose=verbose)
+        #         loaded += ['mmd']
+        #         if save and obs_to_ignore is None:
+        #             self.corr[name_].to_csv(which_dict['mmd'],index=True)
             
-            if verbose>0:
-                print('computed:',missing)
-            if obs_to_ignore is not None:
-                self.unignore_obs()
+        #     if verbose>0:
+        #         print('computed:',missing)
+        #     if obs_to_ignore is not None:
+        #         self.unignore_obs()
         
             # except:
             #     print('No computed')        
