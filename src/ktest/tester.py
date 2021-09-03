@@ -5,6 +5,7 @@ import numpy as np
 from numpy.lib.function_base import kaiser
 import pandas as pd
 import torch
+from torch import mv
 import os
 from time import time
 
@@ -15,9 +16,9 @@ from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
 # CCIPL 
-# from kernels import gauss_kernel_mediane
+from kernels import gauss_kernel_mediane
 # Local 
-from ktest.kernels import gauss_kernel_mediane
+# from ktest.kernels import gauss_kernel_mediane
 
 from apt.eigen_wrapper import eigsy
 import apt.kmeans # For kmeans
@@ -565,7 +566,7 @@ class Tester:
         if 'y' in sample:
             n2 = self.n2
             n+=n2
-
+        
         if approximation == 'quantization':
             if self.quantization_with_landmarks_possible:
                 Kmm = self.compute_gram(sample=sample,landmarks=True)
@@ -583,20 +584,29 @@ class Tester:
                 Up = self.spev[sample]['anchors']['ev']
                 if center_anchors:
                     Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
-                    Kw = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)            
+                    Kw = 1/n * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
                 else:
                     Kw = 1/n * torch.chain_matmul(P,Kmn.T,Up,Lp_inv,Up.T,Kmn,P)
-
-                # print(f"rectangle pour svd ")
-                # Lp_inv = torch.diag(self.spev['anchors']['sp']**(-1/2))
-                # B = torch.chain_matmul(Lp_inv,Up.T,Kmn,Pbi)
-                # print(f"B {B.shape} {B[:3,:3]}")
-                # print(f"1/sqrt(n) B {B.shape} {1/np.sqrt(n1+n2)*B[:3,:3]}")
-
-
+            
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
         
+        elif approximation == 'nystromnew':
+            if self.has_landmarks and "anchors" in self.spev[sample]:
+                Kmn = self.compute_kmn(sample=sample)
+                Lp_inv_12 = torch.diag(self.spev[sample]['anchors']['sp']**(-(1/2)))
+                Up = self.spev[sample]['anchors']['ev']
+
+                if center_anchors:
+                    Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+                    Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+                else:
+                    Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Kmn,P,Kmn.T,Up,Lp_inv_12)
+
+            else:
+                print("nystrom new version impossible, you need compute landmarks and/or anchors")
+                    
+
         elif approximation == 'full':
             K = self.compute_gram(landmarks=False,sample=sample)
             Kw = 1/n * torch.chain_matmul(P,K,P)
@@ -647,9 +657,10 @@ class Tester:
         
         name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
         sp,ev = self.spev['xy'][approximation_cov]['sp'],self.spev['xy'][approximation_cov]['ev']
-        tmax = len(sp)+1
-        t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
-                
+        t = len(sp)+1
+        # t = tmax if (trunc is None or trunc[-1]>tmax) else trunc[-1]
+
+        trunc = range(1,t)        
         self.verbosity(function_name='compute_kfdat',
                 dict_of_variables={
                 't':t,
@@ -666,7 +677,7 @@ class Tester:
         m = self.compute_m(quantization=(approximation_mmd=='quantization'))
         Pbi = self.compute_centering_matrix(sample='xy',quantization=(approximation_cov=='quantization'))
 
-        if 'nystrom' in [approximation_mmd,approximation_cov]:
+        if 'nystrom' in [approximation_mmd,approximation_cov] or 'nystromnew' in [approximation_mmd,approximation_cov] :
             Up = self.spev['xy']['anchors']['ev']
             Lp_inv = torch.diag(self.spev['xy']['anchors']['sp']**-1)
 
@@ -676,56 +687,75 @@ class Tester:
         if approximation_cov == 'full':
             if approximation_mmd == 'full':
                 K = self.compute_gram()
-                pkm = torch.mv(Pbi,torch.mv(K,m))
-                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
+                pkm = mv(Pbi,mv(K,m))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'nystrom':
                 if center_anchors:
                     Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
-                    pkpuLupkm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
+                    pkpuLupkm = mv(Pbi,mv(Kmn.T,mv(Pm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pm,mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
 
                 else:
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
-                pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
-                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
+                pkm = mv(Pbi,mv(Kmn.T,m))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
     
         if approximation_cov == 'nystrom':
             if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
                 if center_anchors:
                     Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
-                    pkpuLupkm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Pm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
+                    pkpuLupkm = mv(Pbi,mv(Kmn.T,mv(Pm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pm,mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkpuLupkm)**2).cumsum(axis=0).numpy() 
 
                 else:
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
+                    kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
                 Kmm = self.compute_gram(landmarks=True)
-                pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmm,m))))))
-                kfda = ((n1*n2)/(n**2*sp[:t]**2)*torch.mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+                pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m))))))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
+        
+        if approximation_cov == 'nystromnew':
+            Lp12 = torch.diag(self.spev['xy']['anchors']['sp']**-(1/2))
+            if approximation_mmd in ['full','nystrom']: # c'est exactement la même stat  
+                if center_anchors:
+                    Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+                    LupkpkpuLupkm = mv(Lp12,mv(Up.T,mv(Pm,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Pm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pm,mv(Kmn,m))))))))))))
+                    # pkpuLupkm = mv(Pbi,mv(Kmn.T,mv(Pm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pm,mv(Kmn,m))))))))
+                    kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],LupkpkpuLupkm)**2).cumsum(axis=0).numpy() 
+
+                else:
+                    LupkpkpuLupkm = mv(Lp12,mv(Up.T,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))))
+                    kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],LupkpkpuLupkm)**2).cumsum(axis=0).numpy() 
+
+            elif approximation_mmd == 'quantization':
+                # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
+                Kmm = self.compute_gram(landmarks=True)
+                LukpkuLukm = mv(Lp12,mv(Up.T,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m)))))))))
+                kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],LukpkuLukm)**2).cumsum(axis=0).numpy() 
         
         if approximation_cov == 'quantization':
             A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
             if approximation_mmd == 'full':
-                apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmn,m)))
+                apkm = mv(A_12,mv(Pbi,mv(Kmn,m)))
                 # le n n'est pas au carré ici
-                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
+                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'nystrom':
                 Kmm = self.compute_gram(landmarks=True)
-                apkuLukm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m)))))))
+                apkuLukm = mv(A_12,mv(Pbi,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
                 # le n n'est pas au carré ici
-                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev.T[:t],apkuLukm)**2).cumsum(axis=0).numpy() 
+                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
                 Kmm = self.compute_gram(landmarks=True)
-                apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,m)))
-                kfda = ((n1*n2)/(n*sp[:t]**2)*torch.mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
+                apkm = mv(A_12,mv(Pbi,mv(Kmm,m)))
+                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
 
         name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
         if name in self.df_kfdat:
@@ -748,7 +778,7 @@ class Tester:
         if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
             self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method='kmeans',verbose=verbose)
         
-        if 'nystrom' in [cov,mmd]:
+        if 'nystrom' in [cov,mmd] or 'nystromnew' in [cov,mmd] :
             if not self.has_landmarks:
                 self.compute_nystrom_landmarks(nlandmarks=nlandmarks,landmarks_method=landmarks_method,verbose=verbose)
             if "anchors" not in self.spev[sample]:
@@ -823,48 +853,48 @@ class Tester:
 
             if approximation_cov == 'full':
                 if approximation_mmd == 'full':
-                    pkm = torch.mv(Pbi,torch.mv(K,m))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+                    pkm = mv(Pbi,mv(K,m))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
                     
                 elif approximation_mmd == 'nystrom':
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
 
                 elif approximation_mmd == 'quantization':
-                    pkm = torch.mv(Pbi,torch.mv(Kmn.T,m))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
+                    pkm = mv(Pbi,mv(Kmn.T,m))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
                     
             if approximation_cov == 'nystrom':
                 if approximation_mmd == 'full':
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
 
                 elif approximation_mmd == 'nystrom':
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m))))))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
 
                 elif approximation_mmd == 'quantization':
                     Kmm = self.compute_gram(landmarks=True)
-                    pkuLukm = torch.mv(Pbi,torch.mv(Kmn.T,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmm,m))))))
-                    proj = (n**-1*sp[:t]**(-3/2)*torch.mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+                    pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m))))))
+                    proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
 
             if approximation_cov == 'quantization':
                 A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
                 if approximation_mmd == 'full':
-                    apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmn,m)))
+                    apkm = mv(A_12,mv(Pbi,mv(Kmn,m)))
                     # pas de n ici
-                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+                    proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
 
                 elif approximation_mmd == 'nystrom':
                     Kmm = self.compute_gram(landmarks=True)
-                    apkuLukm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,torch.mv(Up,torch.mv(Lp_inv,torch.mv(Up.T,torch.mv(Kmn,m)))))))
+                    apkuLukm = mv(A_12,mv(Pbi,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
                     # pas de n ici
-                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkuLukm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+                    proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkuLukm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
 
                 elif approximation_mmd == 'quantization':
                     Kmm = self.compute_gram(landmarks=True)
-                    apkm = torch.mv(A_12,torch.mv(Pbi,torch.mv(Kmm,m)))
-                    proj = (sp[:t]**(-3/2)*torch.mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
+                    apkm = mv(A_12,mv(Pbi,mv(Kmm,m)))
+                    proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
 
             name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
             if name in self.df_proj_kfda:
@@ -1000,7 +1030,7 @@ class Tester:
             K = self.compute_gram()
             if unbiaised:
                 K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
-            mmd = torch.dot(torch.mv(K,m),m)**2
+            mmd = torch.dot(mv(K,m),m)**2
         
         if approximation == 'nystrom' and shared_anchors:
             m = self.compute_m(sample='xy',quantization=False)
@@ -1008,7 +1038,7 @@ class Tester:
             Lp_inv2 = torch.diag(self.spev['xy']['anchors']['sp']**-(1/2))
             Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
             Kmn = self.compute_kmn(sample='xy')
-            psi_m = torch.mv(Lp_inv2,torch.mv(Up.T,torch.mv(Pm,torch.mv(Kmn,m))))
+            psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
             mmd = torch.dot(psi_m,psi_m)**2
         
         if approximation == 'nystrom' and not shared_anchors:
@@ -1030,16 +1060,16 @@ class Tester:
             m2 = Kmny.shape[0]
             Kmxmy = Km[:m1,m2:]
 
-            psix_mx = torch.mv(Lpx_inv2,torch.mv(Upx.T,torch.mv(Pmx,torch.mv(Kmnx,mx))))
-            psiy_my = torch.mv(Lpy_inv2,torch.mv(Upy.T,torch.mv(Pmy,torch.mv(Kmny,my))))
-            Cpsiy_my = torch.mv(Lpx_inv2,torch.mv(Upx.T,torch.mv(Pmx,torch.mv(Kmxmy,\
-                torch.mv(Pmy,torch.mv(Upy,torch.mv(Lpy_inv,torch.mv(Upy.T,torch.mv(Pmy,torch.mv(Kmny,my))))))))))
+            psix_mx = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmnx,mx))))
+            psiy_my = mv(Lpy_inv2,mv(Upy.T,mv(Pmy,mv(Kmny,my))))
+            Cpsiy_my = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmxmy,\
+                mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
             mmd = torch.dot(psix_mx,psix_mx)**2 + torch.dot(psiy_my,psiy_my)**2 - 2*torch.dot(psix_mx,Cpsiy_my)
         
         if approximation == 'quantization':
             mq = self.compute_m(sample='xy',quantization=True)
             Km = self.compute_gram(sample='xy',landmarks=True)
-            mmd = torch.dot(torch.mv(Km,mq),mq)**2
+            mmd = torch.dot(mv(Km,mq),mq)**2
 
 
         if name is None:
@@ -1568,13 +1598,13 @@ class Tester:
         # mn2_test    = 1/n2_test * torch.ones(n2_test, dtype=torch.float64) # , device=device) 
         # m_ntot_test = torch.cat((mn1_test, mn2_test), dim=0) #.to(device)
         
-        vpkm    = torch.mv(torch.chain_matmul(V,Pbi,k),m_ntot)
-        vpkm_ny = torch.mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test) if nystrom==1 else \
-                  torch.mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)
+        vpkm    = mv(torch.chain_matmul(V,Pbi,k),m_ntot)
+        vpkm_ny = mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test) if nystrom==1 else \
+                  mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)
 
-        norm_h   = (ntot**-1 * sp**-2   * torch.mv(torch.chain_matmul(V,Pbi,k),m_ntot)**2).sum()**(1/2)
-        norm_hny = (mtot**-1 * spny**-2 * torch.mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test)**2).sum()**(1/2) if nystrom==1 else \
-                   (mtot**-1 * spny**-2 * torch.mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)**2).sum()**(1/2)
+        norm_h   = (ntot**-1 * sp**-2   * mv(torch.chain_matmul(V,Pbi,k),m_ntot)**2).sum()**(1/2)
+        norm_hny = (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test)**2).sum()**(1/2) if nystrom==1 else \
+                   (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)**2).sum()**(1/2)
 
         # print(norm_h,norm_hny)
 
