@@ -16,9 +16,9 @@ from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
 # CCIPL 
-from kernels import gauss_kernel_mediane
+# from kernels import gauss_kernel_mediane
 # Local 
-# from ktest.kernels import gauss_kernel_mediane
+from ktest.kernels import gauss_kernel_mediane
 
 from apt.eigen_wrapper import eigsy
 import apt.kmeans # For kmeans
@@ -345,17 +345,23 @@ class Tester:
                        start=False,
                        verbose = verbose)
 
-    def compute_quantization_weights(self,power=1,sample='xy'):
+    def compute_quantization_weights(self,power=1,sample='xy',diag=True):
         if 'x' in sample:
-            A1 = 1/self.n1*torch.bincount(self.xassignations)**power
+            a1 = torch.tensor(torch.bincount(self.xassignations),dtype=torch.float64)**power
         if 'y' in sample:
-            A2 = 1/self.n2*torch.bincount(self.yassignations)**power
+            a2 = torch.tensor(torch.bincount(self.yassignations),dtype=torch.float64)**power
         
-        if sample =='xy':
-            return(torch.diag(torch.cat((A1,A2))).double())
+        if diag:
+            if sample =='xy':
+                return(torch.diag(torch.cat((a1,a2))).double())
+            else:
+                return(torch.diag(a1).double() if sample =='x' else torch.diag(a2).double())
         else:
-            return(torch.diag(A1).double() if sample =='x' else torch.diag(A2).double())
-    
+            if sample=='xy':
+                return(torch.cat(a1,a2))
+            else:    
+                return(a1 if sample =='x' else a2)
+
     def compute_nystrom_anchors(self,sample='xy',nanchors=None,verbose=0,center_anchors=False):
         """
         Determines the nystrom anchors using 
@@ -514,8 +520,10 @@ class Tester:
             idn1 = torch.eye(n1, dtype=torch.float64)
             onen1 = torch.ones(n1, n1, dtype=torch.float64)
             if quantization: 
-                A1 = self.compute_quantization_weights(sample='x')
-                pn1 = np.sqrt(self.n1/(self.n1+self.n2))*(idn1 - torch.matmul(A1,onen1))
+                a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
+                pn1 = (idn1 - 1/self.n2 * torch.ger(a1,a1))
+                # A1 = self.compute_quantization_weights(sample='x')
+                # pn1 = np.sqrt(self.n1/(self.n1+self.n2))*(idn1 - torch.matmul(A1,onen1))
             else:
                 pn1 = idn1 - 1/n1 * onen1
 
@@ -524,8 +532,10 @@ class Tester:
             idn2 = torch.eye(n2, dtype=torch.float64)
             onen2 = torch.ones(n2, n2, dtype=torch.float64)
             if quantization: 
-                A2 = self.compute_quantization_weights(sample='y')
-                pn2 = np.sqrt(self.n2/(self.n1+self.n2))*(idn2 - torch.matmul(A2,onen2))
+                a2 = self.compute_quantization_weights(sample='y',power=.5,diag=False)
+                pn2 = (idn2 - 1/self.n2 * torch.ger(a2,a2))
+                # A2 = self.compute_quantization_weights(sample='y')
+                # pn2 = np.sqrt(self.n2/(self.n1+self.n2))*(idn2 - torch.matmul(A2,onen2))
             else:
                 pn2 = idn2 - 1/n2 * onen2
 
@@ -570,8 +580,8 @@ class Tester:
         if approximation == 'quantization':
             if self.quantization_with_landmarks_possible:
                 Kmm = self.compute_gram(sample=sample,landmarks=True)
-                A = self.compute_quantization_weights(sample=sample)
-                Kw = torch.chain_matmul(A**(1/2),P, Kmm,P,A**(1/2))
+                A = self.compute_quantization_weights(sample=sample,power=.5)
+                Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
             else:
                 print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmarks_method='kmeans'")
 
@@ -742,20 +752,20 @@ class Tester:
         if approximation_cov == 'quantization':
             A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
             if approximation_mmd == 'full':
-                apkm = mv(A_12,mv(Pbi,mv(Kmn,m)))
+                apkm = mv(Pbi,mv(A_12,mv(Kmn,m)))
                 # le n n'est pas au carré ici
-                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'nystrom':
                 Kmm = self.compute_gram(landmarks=True)
-                apkuLukm = mv(A_12,mv(Pbi,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
+                apkuLukm = mv(Pbi,mv(A_12,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
                 # le n n'est pas au carré ici
-                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkuLukm)**2).cumsum(axis=0).numpy() 
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],apkuLukm)**2).cumsum(axis=0).numpy() 
 
             elif approximation_mmd == 'quantization':
                 Kmm = self.compute_gram(landmarks=True)
-                apkm = mv(A_12,mv(Pbi,mv(Kmm,m)))
-                kfda = ((n1*n2)/(n*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
+                apkm = mv(Pbi,mv(A_12,mv(Kmm,m)))
+                kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],apkm)**2).cumsum(axis=0).numpy() 
 
         name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
         if name in self.df_kfdat:
