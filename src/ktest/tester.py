@@ -33,6 +33,17 @@ def ordered_eigsy(matrix):
     return(sp,ev)
 
 
+
+def pytorch_eigsy(matrix):
+    # j'ai codé cette fonction pour tester les approches de nystrom 
+    # avec la diag de pytorch mais ça semble marcher moins bien que la fonction eigsy
+    # cpdt je devrais comparer sur le meme graphique 
+    sp,ev = torch.symeig(matrix,eigenvectors=True)
+    order = sp.argsort()
+    ev = ev[:,order]
+    sp = sp[order]
+    return(sp,ev)
+
 # Choix à faire ( trouver les bonnes pratiques )
 
 # voir comment ils gèrent les plot dans scanpy
@@ -397,7 +408,8 @@ class Tester:
         
         Km = self.compute_gram(sample=sample,landmarks=True)
         P = self.compute_centering_matrix(sample=sample,landmarks=True,nystrom_operator=nystrom_operator)
-        sp_anchors,ev_anchors = ordered_eigsy(torch.chain_matmul(P,Km,P))        
+        
+        sp_anchors,ev_anchors = ordered_eigsy(1/nanchors*torch.chain_matmul(P,Km,P))        
 
         if 'anchors' in self.spev[sample]:
             self.spev[sample]['anchors'][nystrom_operator] = {'sp':sp_anchors[:nanchors],'ev':ev_anchors[:,:nanchors]}
@@ -594,7 +606,8 @@ class Tester:
         if 'y' in sample:
             n2 = self.n2
             n+=n2
-        
+        if 'nystrom' in approximation:
+            m = self.nanchors if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors
         if approximation == 'quantization':
             if self.quantization_with_landmarks_possible:
                 Kmm = self.compute_gram(sample=sample,landmarks=True)
@@ -611,18 +624,20 @@ class Tester:
                 Lp_inv = torch.diag(self.spev[sample]['anchors'][nystrom_operator]['sp']**(-1))
                 Up = self.spev[sample]['anchors'][nystrom_operator]['ev']
                 Pm = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                Kw = 1/n * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
+                Kw = 1/(n*m**2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
+                # Kw = 1/(n) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
                 
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
         
-        elif approximation == 'nystrom2' or approximation == 'nystrom3' :
+        elif approximation in ['nystrom2','nystrom3']:
             if self.has_landmarks and "anchors" in self.spev[sample]:
                 Kmn = self.compute_kmn(sample=sample)
                 Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][nystrom_operator]['sp']**(-(1/2)))
                 Up = self.spev[sample]['anchors'][nystrom_operator]['ev']
                 Pm = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+                Kw = 1/(n*m**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+                # Kw = 1/(n) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
                 # else:
                 #     Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Kmn,P,Kmn.T,Up,Lp_inv_12)
 
@@ -675,8 +690,11 @@ class Tester:
         # omega = self.compute_m(quantization=(mmd=='quantization'))
         omega = self.compute_m(quantization=(mmd=='quantization'))
         Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+        
+        if 'nystrom' in approximation_cov or 'nystrom' in approximation_mmd :
+            m = self.nanchors
 
-        if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3']]):
+        if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3','nystrom']]):
             Uz = self.spev['xy']['anchors'][nystrom_operator]['ev']
             Lz = torch.diag(self.spev['xy']['anchors'][nystrom_operator]['sp']**-1)
             
@@ -690,7 +708,8 @@ class Tester:
 
             elif mmd == 'nystrom':
                 Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+                pkm = 1/m * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+                # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
             elif mmd == 'quantization':
                 pkm = mv(Pbi,mv(Kzx.T,omega))
@@ -698,33 +717,39 @@ class Tester:
         if cov == 'nystrom1' and cov_anchors == 'shared':
             if mmd in ['full','nystrom']: # c'est exactement la même stat  
                 Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+                pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+                # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
             elif mmd == 'quantization':
                 Kz = self.compute_gram(landmarks=True)
-                pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
+                pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
+                # pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
         
         if cov == 'nystrom2' and cov_anchors == 'shared':
             Lz12 = torch.diag(self.spev['xy']['anchors'][nystrom_operator]['sp']**-(1/2))
             if mmd in ['full','nystrom']: # c'est exactement la même stat  
                 Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
+                pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
+                # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
 
             elif mmd == 'quantization': # pas à jour
                 # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
                 Kz = self.compute_gram(landmarks=True)
-                pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
+                pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
+                # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
         if cov == 'nystrom3' and cov_anchors == 'shared':
             Lz12 = torch.diag(self.spev['xy']['anchors'][nystrom_operator]['sp']**-(1/2))
+            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
             if mmd in ['full','nystrom']: # c'est exactement la même stat  
-                Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
-                pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
+                pkm = 1/m * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
+                # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
 
             elif mmd == 'quantization': # pas à jour 
                 # il faut ajouter Pi ici . 
                 Kz = self.compute_gram(landmarks=True)
-                pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
+                pkm = 1/m**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
+                # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
         if cov == 'nystrom1' and cov_anchors == 'separated':
             if mmd == 'full':
@@ -752,8 +777,9 @@ class Tester:
                 pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
 
             elif mmd == 'nystrom':
+                Pi = self.compute_centering_matrix(sample='xy',landmarks=True,nystrom_operator=nystrom_operator)
                 Kz = self.compute_gram(landmarks=True)
-                pkm = mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Kzx,omega)))))))
+                pkm = 1/m * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
             elif mmd == 'quantization':
                 Kz = self.compute_gram(landmarks=True)
