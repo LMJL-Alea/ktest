@@ -188,7 +188,6 @@ def gen_couple_H1(key={}):
     for which the difference has already been used to assess the performances of a two sample test.
     Attention: the information contained in key may be ignored in order to fit exactly the distribution       
     """
-    
     assert('alternative' in key)
     
     alternative = key['alternative'] 

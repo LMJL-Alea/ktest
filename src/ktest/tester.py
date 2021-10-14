@@ -111,6 +111,7 @@ class Tester:
         self.df_kfdat = pd.DataFrame()
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
+        self.df_proj_mmd = {}
         self.corr = {}     
         self.dict_mmd = {}
         self.spev = {'x':{},'y':{},'xy':{}} # dict containing every result of diagonalization
@@ -1010,8 +1011,6 @@ class Tester:
                                         verbose=verbose,nystrom_operator=nystrom_operator)            
             self.compute_kfdat(t=t,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose,nystrom_operator=nystrom_operator)
         
-        
-
     def compute_proj_kfda(self,t=None,approximation_cov='full',approximation_mmd='full',name=None,verbose=0,nystrom_operator=None):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
@@ -1132,10 +1131,11 @@ class Tester:
         n1,n2 = (self.n1,self.n2) 
         n = (n1*('x' in sample)+n2*('y' in sample))
         
-        tmax = 200
-        t = tmax if (t is None and len(sp)+1>tmax) else len(sp)+1 if (t is None and len(sp)+1<=tmax) else t
-        trunc = range(1,t+1) 
 
+        tmax = 200
+
+        t = tmax if (t is None and len(sp)+1>tmax) else len(sp) if (t is None and len(sp)+1<=tmax) else t
+        trunc = range(1,t+1) 
 
         self.verbosity(function_name='compute_proj_kpca',
                 dict_of_variables={
@@ -1294,6 +1294,43 @@ class Tester:
                 start=False,
                 verbose = verbose)
 
+    def compute_proj_mmd(self,approximation='full',name=None,verbose=0):
+        name = name if name is not None else f'{approximation}' 
+        if name in self.df_proj_mmd :
+            if verbose : 
+                print('Proj on discriminant axis Already computed')
+        else:
+            self.verbosity(function_name='compute_proj_kfda',
+                    dict_of_variables={
+                    'approximation':approximation,
+                    'name':name},
+                    start=True,
+                    verbose = verbose)
+
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            n1,n2 = (self.n1,self.n2) 
+            n = n1+n2
+
+            m = self.compute_m(quantization=(approximation=='quantization'))
+            if approximation == 'full':
+                K = self.compute_gram()
+            
+            
+            proj = torch.matmul(K,m)
+            if name in self.df_proj_mmd:
+                print(f"écrasement de {name} dans df_proj_mmd")
+            self.df_proj_mmd[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=['mmd'])
+            self.df_proj_mmd[name]['sample'] = ['x']*n1 + ['y']*n2
+            
+            self.verbosity(function_name='compute_proj_mmd',
+                                    dict_of_variables={
+                    'approximation':approximation,
+                    'name':name},
+                    start=False,
+                    verbose = verbose)
+
+
+
     def initialize_mmd(self,approximation='full',shared_anchors=True,nlandmarks=None,
                                nanchors=None,landmarks_method='random',verbose=0,nystrom_operator=None):
     
@@ -1349,8 +1386,7 @@ class Tester:
             self.compute_mmd(approximation=approximation,shared_anchors=shared_anchors,
                             name=name,unbiaised=unbiaised,verbose=0)
         
-       
-
+    
     def name_generator(self,t=None,nystrom=0,nystrom_method='kmeans',nanchors=None,obs_to_ignore=None):
         
         if obs_to_ignore is not None:
@@ -1365,141 +1401,141 @@ class Tester:
     
 
 
-    # def proj_kfda(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-    #     which_dict={'proj_kfda':path if save else ''}
-    #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-    #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
+        # def proj_kfda(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+        #     which_dict={'proj_kfda':path if save else ''}
+        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
+        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    # def proj_kpca(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-    #     which_dict={'proj_kpca':path if save else ''}
-    #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-    #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
+        # def proj_kpca(self,trunc=None,nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+        #     which_dict={'proj_kpca':path if save else ''}
+        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
+        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
 
-    # def correlations(self,trunc=None,corr_which='proj_kfda',nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-    #     which_dict={'corr':path if save else ''}
-    #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
-    #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which=corr_which,corr_prefix_col='')
-
-
-
-    # def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
-    #          nystrom=False,nanchors=None,nystrom_method='kmeans',
-    #          name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,mmd_unbiaised=False,save=False,verbose=0):
-
-    #     # for output,path in which.items()
-    #     name_ = "main" if not hasattr(self,'main_name') and name is None else \
-    #             self.name_generator(trunc=trunc,nystrom=nystrom,nystrom_method=nystrom_method,nanchors=nanchors,
-    #             obs_to_ignore=obs_to_ignore) if name is None else \
-    #             name
+        # def correlations(self,trunc=None,corr_which='proj_kfda',nystrom=False,nanchors=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
+        #     which_dict={'corr':path if save else ''}
+        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,nanchors=nanchors,nystrom_method=nystrom_method,name=name,main=main,
+        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which=corr_which,corr_prefix_col='')
 
 
-    #     if main or not hasattr(self,'main_name'):
-    #         self.main_name = name_
-        
-    #     if verbose >0:
-        #     none = 'None'
-        #     datastr = f'n1:{self.n1} n2:{self.n2} trunc:{none if trunc is None else len(trunc)}'
-        #     datastr += f'\nname:{name}\n' 
-        #     inwhich = ' and '.join(which_dict.keys()) if len(which_dict)>1 else list(which_dict.keys())[0]
-        #     ny=''
-        #     if nystrom:
-        #         ny += f' nystrom:{nystrom} {nystrom_method} nanchors={nanchors}' 
-        #         if split_data:
-        #             ny+=f' split{test_size}' 
- 
-        #     print(f'{datastr}Compute {inwhich} {ny}') #  of {self.n1} and {self.n2} points{ny} ')
-        # if verbose >1:
-        #     print(f"trunc:{len(trunc)} \n which:{which_dict} nystrom:{nystrom} nanchors:{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size}\n")
-        #     print(f"main:{main} corr:{corr_which} mmd_unbiaised:{mmd_unbiaised} seva:{save}")
-        
-        # loaded = []    
-        # if save:
-        #     if 'kfdat' in which_dict and os.path.isfile(which_dict['kfdat']):
-        #         loaded_kfdat = pd.read_csv(which_dict['kfdat'],header=0,index_col=0)
-        #         if len(loaded_kfdat.columns)==1 and name is not None:
-        #             c= loaded_kfdat.columns[0]
-        #             self.df_kfdat[name] = loaded_kfdat[c]
-        #         else:
-        #             for c in loaded_kfdat.columns:
-        #                 if c not in self.df_kfdat.columns:
-        #                     self.df_kfdat[c] = loaded_kfdat[c]
-        #         loaded += ['kfdat']
 
-        #     if 'proj_kfda' in which_dict and os.path.isfile(which_dict['proj_kfda']):
-        #         self.df_proj_kfda[name_] = pd.read_csv(which_dict['proj_kfda'],header=0,index_col=0)
-        #         loaded += ['proj_kfda']
+        # def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
+        #          nystrom=False,nanchors=None,nystrom_method='kmeans',
+        #          name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,mmd_unbiaised=False,save=False,verbose=0):
 
-        #     if 'proj_kpca' in which_dict and os.path.isfile(which_dict['proj_kpca']):
-        #         self.df_proj_kpca[name_] = pd.read_csv(which_dict['proj_kpca'],header=0,index_col=0)
-        #         loaded += ['proj_kpca']
+        #     # for output,path in which.items()
+        #     name_ = "main" if not hasattr(self,'main_name') and name is None else \
+        #             self.name_generator(trunc=trunc,nystrom=nystrom,nystrom_method=nystrom_method,nanchors=nanchors,
+        #             obs_to_ignore=obs_to_ignore) if name is None else \
+        #             name
+
+
+        #     if main or not hasattr(self,'main_name'):
+        #         self.main_name = name_
             
-        #     if 'corr' in which_dict and os.path.isfile(which_dict['corr']):
-        #         self.corr[name_] =pd.read_csv(which_dict['corr'],header=0,index_col=0)
-        #         loaded += ['corr']
-
-            # if 'mmd' in which_dict and os.path.isfile(which_dict['mmd']):
-            #     self.mmd[name_] =pd.read_csv(which_dict['mmd'],header=0,index_col=0)
-            #     loaded += ['mmd']
-
-
         #     if verbose >0:
-        #         print('loaded:',loaded)
-
-        # if len(loaded) < len(which_dict):
-            
-        #     missing = [k for k in which_dict.keys() if k not in loaded]
-        #     # try:
-
-            
-        #     self.ignore_obs(obs_to_ignore=obs_to_ignore)
-            
-        #     if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
-        #         if nystrom:
-        #             self.nystrom_method = nystrom_method
-        #             self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,verbose=verbose,center_anchors=center_anchors) # max_iter=1000,
-
-        #         if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
-        #             self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
-        #         else:
-        #             self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
-
-        #     if 'kfdat' in which_dict and 'kfdat' not in loaded:
-        #         self.compute_kfdat(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)  
-        #         loaded += ['kfdat']
-        #         if save and obs_to_ignore is None:
-        #             self.df_kfdat.to_csv(which_dict['kfdat'],index=True)    
+            #     none = 'None'
+            #     datastr = f'n1:{self.n1} n2:{self.n2} trunc:{none if trunc is None else len(trunc)}'
+            #     datastr += f'\nname:{name}\n' 
+            #     inwhich = ' and '.join(which_dict.keys()) if len(which_dict)>1 else list(which_dict.keys())[0]
+            #     ny=''
+            #     if nystrom:
+            #         ny += f' nystrom:{nystrom} {nystrom_method} nanchors={nanchors}' 
+            #         if split_data:
+            #             ny+=f' split{test_size}' 
     
-        #     if 'proj_kfda' in which_dict and 'proj_kfda' not in loaded:
-        #         self.compute_proj_kfda(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-        #         loaded += ['proj_kfda']
-        #         if save and obs_to_ignore is None:
-        #             self.df_proj_kfda[name_].to_csv(which_dict['proj_kfda'],index=True)
+            #     print(f'{datastr}Compute {inwhich} {ny}') #  of {self.n1} and {self.n2} points{ny} ')
+            # if verbose >1:
+            #     print(f"trunc:{len(trunc)} \n which:{which_dict} nystrom:{nystrom} nanchors:{nanchors} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size}\n")
+            #     print(f"main:{main} corr:{corr_which} mmd_unbiaised:{mmd_unbiaised} seva:{save}")
+            
+            # loaded = []    
+            # if save:
+            #     if 'kfdat' in which_dict and os.path.isfile(which_dict['kfdat']):
+            #         loaded_kfdat = pd.read_csv(which_dict['kfdat'],header=0,index_col=0)
+            #         if len(loaded_kfdat.columns)==1 and name is not None:
+            #             c= loaded_kfdat.columns[0]
+            #             self.df_kfdat[name] = loaded_kfdat[c]
+            #         else:
+            #             for c in loaded_kfdat.columns:
+            #                 if c not in self.df_kfdat.columns:
+            #                     self.df_kfdat[c] = loaded_kfdat[c]
+            #         loaded += ['kfdat']
 
-        #     if 'proj_kpca' in which_dict and 'proj_kpca' not in loaded:
-        #         self.compute_proj_kpca(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-        #         loaded += ['proj_kpca']
-        #         if save and obs_to_ignore is None:
-        #             self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
-            
-        #     if 'corr' in which_dict and 'corr' not in loaded:
-        #         self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
-        #         loaded += ['corr']
-        #         if save and obs_to_ignore is None:
-        #             self.corr[name_].to_csv(which_dict['corr'],index=True)
-            
-        #     if 'mmd' in which_dict and 'mmd' not in loaded:
-        #         self.compute_mmd(unbiaised=mmd_unbiaised,nystrom=nystrom,name=name_,verbose=verbose)
-        #         loaded += ['mmd']
-        #         if save and obs_to_ignore is None:
-        #             self.corr[name_].to_csv(which_dict['mmd'],index=True)
-            
-        #     if verbose>0:
-        #         print('computed:',missing)
-        #     if obs_to_ignore is not None:
-        #         self.unignore_obs()
+            #     if 'proj_kfda' in which_dict and os.path.isfile(which_dict['proj_kfda']):
+            #         self.df_proj_kfda[name_] = pd.read_csv(which_dict['proj_kfda'],header=0,index_col=0)
+            #         loaded += ['proj_kfda']
+
+            #     if 'proj_kpca' in which_dict and os.path.isfile(which_dict['proj_kpca']):
+            #         self.df_proj_kpca[name_] = pd.read_csv(which_dict['proj_kpca'],header=0,index_col=0)
+            #         loaded += ['proj_kpca']
+                
+            #     if 'corr' in which_dict and os.path.isfile(which_dict['corr']):
+            #         self.corr[name_] =pd.read_csv(which_dict['corr'],header=0,index_col=0)
+            #         loaded += ['corr']
+
+                # if 'mmd' in which_dict and os.path.isfile(which_dict['mmd']):
+                #     self.mmd[name_] =pd.read_csv(which_dict['mmd'],header=0,index_col=0)
+                #     loaded += ['mmd']
+
+
+            #     if verbose >0:
+            #         print('loaded:',loaded)
+
+            # if len(loaded) < len(which_dict):
+                
+            #     missing = [k for k in which_dict.keys() if k not in loaded]
+            #     # try:
+
+                
+            #     self.ignore_obs(obs_to_ignore=obs_to_ignore)
+                
+            #     if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
+            #         if nystrom:
+            #             self.nystrom_method = nystrom_method
+            #             self.compute_nystrom_anchors(nanchors=nanchors,nystrom_method=nystrom_method,verbose=verbose,center_anchors=center_anchors) # max_iter=1000,
+
+            #         if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
+            #             self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
+            #         else:
+            #             self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
+
+            #     if 'kfdat' in which_dict and 'kfdat' not in loaded:
+            #         self.compute_kfdat(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)  
+            #         loaded += ['kfdat']
+            #         if save and obs_to_ignore is None:
+            #             self.df_kfdat.to_csv(which_dict['kfdat'],index=True)    
         
-            # except:
-            #     print('No computed')        
+            #     if 'proj_kfda' in which_dict and 'proj_kfda' not in loaded:
+            #         self.compute_proj_kfda(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
+            #         loaded += ['proj_kfda']
+            #         if save and obs_to_ignore is None:
+            #             self.df_proj_kfda[name_].to_csv(which_dict['proj_kfda'],index=True)
+
+            #     if 'proj_kpca' in which_dict and 'proj_kpca' not in loaded:
+            #         self.compute_proj_kpca(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
+            #         loaded += ['proj_kpca']
+            #         if save and obs_to_ignore is None:
+            #             self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
+                
+            #     if 'corr' in which_dict and 'corr' not in loaded:
+            #         self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
+            #         loaded += ['corr']
+            #         if save and obs_to_ignore is None:
+            #             self.corr[name_].to_csv(which_dict['corr'],index=True)
+                
+            #     if 'mmd' in which_dict and 'mmd' not in loaded:
+            #         self.compute_mmd(unbiaised=mmd_unbiaised,nystrom=nystrom,name=name_,verbose=verbose)
+            #         loaded += ['mmd']
+            #         if save and obs_to_ignore is None:
+            #             self.corr[name_].to_csv(which_dict['mmd'],index=True)
+                
+            #     if verbose>0:
+            #         print('computed:',missing)
+            #     if obs_to_ignore is not None:
+            #         self.unignore_obs()
+            
+                # except:
+                #     print('No computed')        
 
     def ignore_obs(self,obs_to_ignore=None,reinitialize_ignored_obs=False):
         
@@ -1551,13 +1587,19 @@ class Tester:
                 ax.plot(kfdat.mean(axis=1),label=mean_label,c=mean_color)
                 ax.plot(kfdat.mean(axis=1)- 2* kfdat.std(axis=1)/(~kfdat[columns[0]].isna()).sum(),c=mean_color,ls = '--',alpha=.5)
                 ax.plot(kfdat.mean(axis=1)+ 2* kfdat.std(axis=1)/(~kfdat[columns[0]].isna()).sum(),c=mean_color,ls = '--',alpha=.5)
-            else:
+            # on peut faire le plot même si il n'y a rien a tracer, alors on verra juste le quantile asymptotique 
+            if len(self.df_kfdat.columns)>0:
                 kfdat.plot(ax=ax)
             if trunc is None:
                 trunc = range(1,max([(~kfdat[c].isna()).sum() for c in columns]))
             
-            yas = [chi2.ppf(0.95,t) for t in trunc]    
-            ax.plot(trunc,yas,ls=asymp_ls,c=asymp_c,lw=4)
+            yas = [chi2.ppf(0.95,t) for t in trunc] 
+            
+            # si on trace rien a part le quantile asymptotique, on le légende 
+            if len(self.df_kfdat.columns)==0:
+                ax.plot(trunc,yas,ls=asymp_ls,c=asymp_c,lw=4,label='asymptotic quantile')
+            else:
+                ax.plot(trunc,yas,ls=asymp_ls,c=asymp_c,lw=4)
             ax.set_xlabel('t',fontsize= 20)
             ax.set_xlim(0,trunc[-1])
             if title is not None:
@@ -1571,7 +1613,7 @@ class Tester:
         # except Exception as e:
         #     print(type(e),e)
         
-    def plot_spectrum(self,ax=None,figsize=(10,10),trunc=None,title=None,generate_spectrum=True,approximation_cov='full',sample='xy'):
+    def plot_spectrum(self,ax=None,figsize=(10,10),trunc=None,title=None,generate_spectrum=True,approximation_cov='full',sample='xy',label=None):
         if ax is None:
             fig,ax = plt.subplots(figsize=figsize)
         if title is not None:
@@ -1579,16 +1621,16 @@ class Tester:
         sp = self.spev[sample][approximation_cov]['sp']
         if trunc is None:
             trunc = range(1,len(sp))
-        ax.plot(trunc,sp[:trunc[-1]])
+        ax.plot(trunc,sp[:trunc[-1]],label=label)
         ax.set_xlabel('t',fontsize= 20)
 
         return(ax)
 
-    def density_proj(self,ax,projection,which='proj_kfda',name=None,orientation='vertical'):
+    def density_proj(self,ax,projection,which='proj_kfda',name=None,orientation='vertical',sample='xy',labels='CT'):
         
         df_proj= self.init_df_proj(which,name)
 
-        for xy,l in zip('xy','CT'):
+        for xy,l in zip(sample,labels):
             
             dfxy = df_proj.loc[df_proj['sample']==xy][str(projection)]
             if len(dfxy)>0:
@@ -1604,13 +1646,13 @@ class Tester:
         ax.set_xlabel(f't={projection}',fontsize=20)    
         ax.legend()
         
-    def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,name=None,highlight=None,color=None):
+    def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,name=None,highlight=None,color=None,sample='xy',labels='CT'):
         p1,p2 = projection
         yproj = xproj if yproj is None else yproj
         df_abscisse = self.init_df_proj(xproj,name)
         df_ordonnee = self.init_df_proj(yproj,name)
         
-        for xy,l in zip('xy','CT'):
+        for xy,l in zip(sample,labels):
             df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
             df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
             m = 'x' if xy =='x' else '+'
@@ -1636,7 +1678,7 @@ class Tester:
                             ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
 
         
-        for xy,l in zip('xy','CT'):
+        for xy,l in zip(sample,labels):
 
             df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
             df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
@@ -1688,7 +1730,7 @@ class Tester:
 
         return(df_proj)
 
-    def init_axes_projs(self,fig,axes,projections,approximation_cov,sample,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum):
+    def init_axes_projs(self,fig,axes,projections,approximation_cov,sample,suptitle,kfda,kfda_ylim,trunc,kfda_title,spectrum,spectrum_label):
         if axes is None:
             rows=1;cols=len(projections) + kfda + spectrum
             fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
@@ -1698,31 +1740,33 @@ class Tester:
             self.plot_kfdat(axes[0],ylim=kfda_ylim,trunc = trunc,title=kfda_title)
             axes = axes[1:]
         if spectrum:
-            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum',approximation_cov=approximation_cov,sample=sample)
+            self.plot_spectrum(axes[0],trunc=trunc,title='spectrum',approximation_cov=approximation_cov,sample=sample,label=spectrum_label)
             axes = axes[1:]
         return(fig,axes)
 
-    def density_projs(self,fig=None,axes=None,which='proj_kfda',approximation_cov='full',sample='xy',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False):
+    def density_projs(self,fig=None,axes=None,which='proj_kfda',approximation_cov='full',sample='xy',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False,spectrum_label=None,labels='CT'):
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,approximation_cov=approximation_cov,sample=sample,suptitle=suptitle,kfda=kfda,
-                                        kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
+                                        kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,proj in zip(axes,projections):
-            self.density_proj(ax,proj,which=which,name=name)
+            self.density_proj(ax,proj,which=which,name=name,labels=labels,sample=sample)
+        fig.tight_layout()
         return(fig,axes)
 
     def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',approximation_cov='full',sample='xy',yproj=None,name=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
-                        highlight=None,color=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False,iterate_over='projections'):
+                        highlight=None,color=None,kfda=False,kfda_ylim=None,trunc=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',labels='CT'):
         to_iterate = projections if iterate_over == 'projections' else color
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,approximation_cov=approximation_cov,sample=sample,suptitle=suptitle,kfda=kfda,
-                                        kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum)
+                                        kfda_ylim=kfda_ylim,trunc=trunc,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,obj in zip(axes,to_iterate):
             if iterate_over == 'projections':
-                self.scatter_proj(ax,obj,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=color)
+                self.scatter_proj(ax,obj,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=color,labels=labels,sample=sample)
             elif iterate_over == 'color':
-                self.scatter_proj(ax,projections,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=obj)
+                self.scatter_proj(ax,projections,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=obj,labels=labels,sample=sample)
+        fig.tight_layout()
         return(fig,axes)
 
     def find_cells_from_proj(self,which='proj_kfda',name=None,t=1,bound=0,side='left'):
