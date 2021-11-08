@@ -133,8 +133,7 @@ class Tester:
     from .initializations import \
         init_data,\
         verbosity
-
-
+        
     def __init__(self,
         x:Union[np.array,torch.tensor]=None,
         y:Union[np.array,torch.tensor]=None,
