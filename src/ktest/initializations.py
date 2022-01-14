@@ -2,10 +2,37 @@ import torch
 import numpy as np
 import pandas as pd
 from ktest.kernels import gauss_kernel_mediane
+# from ktest._testdata import TestData
 from time import time
 
+from typing_extensions import Literal
+from typing import Optional,Callable,Union,List
 
-def init_data(self,x,y,kernel=None, x_index=None, y_index=None,variables=None):
+
+def init_testdata(self,x,y,x_index=None,y_index=None,variables=None,kernel=None,name=None):
+    if name is None:
+        name = 'data'+len(self.dict_data)
+    if name in self.dict_data:
+        print(f"{name} overwritten")
+    self.dict_data[name] = TestData(x,y,x_index,y_index,variables,kernel)
+
+
+
+def init_data_from_dataframe(self,dfx,dfy,kernel=None):
+    x = dfx.to_numpy()
+    y = dfy.to_numpy()
+    x_index = dfx.index
+    y_index = dfy.index
+    variables = dfx.columns
+    self.init_data(x,y,x_index,y_index,variables,kernel)
+
+def init_data(self,
+        x:Union[np.array,torch.tensor]=None,
+        y:Union[np.array,torch.tensor]=None,
+        x_index:List = None,
+        y_index:List = None,
+        variables:List = None,
+        kernel:Callable[[torch.Tensor,torch.Tensor],torch.Tensor]=None):
     # Tester works with torch tensor objects 
     self.x = torch.from_numpy(x).double() if (isinstance(x, np.ndarray)) else x
     self.y = torch.from_numpy(y).double() if (isinstance(y, np.ndarray)) else y
@@ -19,6 +46,10 @@ def init_data(self,x,y,kernel=None, x_index=None, y_index=None,variables=None):
     # generates range index if no index
     self.x_index=pd.Index(range(1,self.n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
     self.y_index=pd.Index(range(self.n1,self.n1+self.n2)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
+    
+    assert(len(self.x_index) == self.n1)
+    assert(len(self.y_index) == self.n2)
+
     self.index = self.x_index.append(self.y_index) 
     self.variables = range(x.shape[1]) if variables is None else variables
 
@@ -34,6 +65,34 @@ def init_data(self,x,y,kernel=None, x_index=None, y_index=None,variables=None):
     # if self.df_kfdat.empty:
     #     self.df_kfdat = pd.DataFrame(index= list(range(1,self.n1+self.n2)))
     self.has_data = True        
+
+def init_model(self,approximation_cov='standard',approximation_mmd='standard',
+                m=None,r=None,landmark_method='random',anchors_basis='W'):
+
+    self.approximation_cov = approximation_cov
+    self.m = m
+    self.r = r
+    self.landmark_method = landmark_method
+    self.anchors_basis = anchors_basis
+    self.approximation_mmd = approximation_mmd
+
+
+# def init_model(self,approximation_cov='standard',approximation_mmd='standard',
+#                 m=None,r=None,landmark_method='random',anchors_basis='W',name=None):
+
+#     if name is None:
+#         name = 'model'+len(self.dict_model)
+#     if name in self.dict_model:
+#         print(f'{name} overwritten')
+#     self.dict_model[name] = {
+#                 'approximation_cov' : approximation_cov,
+#                 'm' : m,
+#                 'r' : r,
+#                 'landmark_method' : landmark_method,
+#                 'anchors_basis' : anchors_basis,
+#                 'approximation_mmd' : approximation_mmd,
+#                 }
+    
 
 
 def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):

@@ -30,7 +30,7 @@ class Kfdat:
     from .initializations import \
         init_data,verbosity
 
-    def __init__(self,approximation='standard',m=None,r=None,landmarks_method='random',anchors_basis='W',verbose=0,approximation_mmd='standard'):
+    def __init__(self,approximation='standard',m=None,r=None,landmark_method='random',anchors_basis='W',verbose=0,approximation_mmd='standard'):
         
         if approximation == 'standard':
             assert(m is None, r is None)
@@ -41,7 +41,7 @@ class Kfdat:
         self.approximation = approximation
         self.m = m
         self.r = r
-        self.landmarks_method = landmarks_method
+        self.landmark_method = landmark_method
         self.anchors_basis = anchors_basis
         self.verbose = 0
         self.approximation_mmd = approximation_mmd
@@ -59,6 +59,6 @@ class Kfdat:
         self.init_data(x,y,kernel,x_index,y_index,variables)   
         
         self.initialize_kfdat(approximation_cov=self.approximation,approximation_mmd=self.approximation_mmd,
-        sample='xy',m=self.m,r=self.r,landmarks_method=self.landmarks_method,anchors_basis=self.anchors_basis,verbose=self.verbose)
+        sample='xy',m=self.m,r=self.r,landmark_method=self.landmark_method,anchors_basis=self.anchors_basis,verbose=self.verbose)
 
 

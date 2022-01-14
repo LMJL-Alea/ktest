@@ -43,7 +43,12 @@ def mediane(x, y=None):
     dyx = dxy.t()
     dtot = torch.cat((torch.cat((dxx,dxy),dim=1),
                       torch.cat((dyx,dyy),dim=1)),dim=0)
-    return dtot.median()
+    median = dtot.median()
+    if median == 0:
+        print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+        return dtot.mean()
+    else:
+        return dtot.median()
 
 def gauss_kernel(x, y, sigma=1):
     """

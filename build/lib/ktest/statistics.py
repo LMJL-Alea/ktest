@@ -1,17 +1,24 @@
 import torch
 import pandas as pd
 from torch import mv
+from scipy.stats import chi2
 
 
-
-def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',anchors_basis=None,cov_anchors='shared', mmd_anchors='shared'):
-    cov,mmd = approximation_cov,approximation_mmd
-    # omega = self.compute_m(quantization=(mmd=='quantization'))
+def compute_pkm(self):
+    """
+    pkm is an alias for the product PKomega in the standard KFDA statistic. 
+    This functions computes the corresponding block with respect to the model parameters. 
+    """
+    cov,mmd = self.approximation_cov,self.approximation_mmd
+    anchors_basis = self.anchors_basis
+    cov_anchors = 'shared' # pas terminé  
+    
+    if 'nystrom' in cov or 'nystrom' in mmd :
+        r = self.r
+    
     omega = self.compute_omega(quantization=(mmd=='quantization'))
     Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
     
-    if 'nystrom' in approximation_cov or 'nystrom' in approximation_mmd :
-        r = self.r
 
     if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3','nystrom']]):
         Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
@@ -26,7 +33,7 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
             pkm = mv(Pbi,mv(Kx,omega))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -35,7 +42,7 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
 
     if cov == 'nystrom1' and cov_anchors == 'shared':
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -47,7 +54,7 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
     if cov == 'nystrom2' and cov_anchors == 'shared':
         Lz12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
 
@@ -59,7 +66,7 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
     
     if cov == 'nystrom3' and cov_anchors == 'shared':
         Lz12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
-        Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+        Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
             pkm = 1/r * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
@@ -96,7 +103,7 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
             pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
             Kz = self.compute_gram(landmarks=True)
             pkm = 1/r * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -104,8 +111,45 @@ def compute_pkm(self,approximation_cov='standard',approximation_mmd='standard',a
             Kz = self.compute_gram(landmarks=True)
             pkm = mv(Pbi,mv(A,mv(Kz,omega)))
     return(pkm)
+
+
+def compute_epk(self,t):
+    """
+    epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
+    This functions computes the corresponding block with respect to the model parameters. 
+    
+    warning: some work remains to be done to :
+        - normalize the vecters with respect to r as in pkm 
+        - separate the different nystrom approaches 
+    """
+    
+    cov = self.approximation_cov
+    anchors_basis = self.anchors_basis
+    suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
+    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+    
+
+    Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+      
+    if not (cov == 'standard'):
+        Kzx = self.compute_kmn(sample='xy')
+    
+    if cov == 'standard':
+        Kx = self.compute_gram()
+        epk = torch.chain_matmul(ev.T[:t],Pbi,Kx).T
+    if 'nystrom' in cov:
+        Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
+        Lz = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        r = self.r
+        epk = 1/r*torch.chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
+    if cov == 'quantization':
+        A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
+        epk = torch.chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
+    
+    return(epk)
+
 #
-def compute_kfdat(self,t=None,approximation_cov='standard',approximation_mmd='standard',name=None,verbose=0,anchors_basis=None,cov_anchors='shared',mmd_anchors='shared'):
+def compute_kfdat(self,t=None,name=None,verbose=0,):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
     Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -116,7 +160,11 @@ def compute_kfdat(self,t=None,approximation_cov='standard',approximation_mmd='st
     Stores the result as a column in the dataframe df_kfdat
     """
     
-    cov,mmd = approximation_cov,approximation_mmd
+    cov,mmd = self.approximation_cov,self.approximation_mmd
+    anchors_basis = self.anchors_basis
+    cov_anchors='shared'
+    mmd_anchors='shared'
+    
     name = name if name is not None else f'{cov}{mmd}' 
 
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
@@ -137,7 +185,7 @@ def compute_kfdat(self,t=None,approximation_cov='standard',approximation_mmd='st
             verbose = verbose)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    pkm = self.compute_pkm(approximation_cov=cov,approximation_mmd=mmd,anchors_basis=anchors_basis,cov_anchors = cov_anchors,mmd_anchors=mmd_anchors)
+    pkm = self.compute_pkm()
     n1,n2 = (self.n1,self.n2) 
     n = n1+n2
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
@@ -146,7 +194,6 @@ def compute_kfdat(self,t=None,approximation_cov='standard',approximation_mmd='st
     if name in self.df_kfdat:
         print(f"écrasement de {name} dans df_kfdat")
     self.df_kfdat[name] = pd.Series(kfda,index=trunc)
-
     self.verbosity(function_name='compute_kfdat',
                             dict_of_variables={
             't':t,
@@ -156,205 +203,131 @@ def compute_kfdat(self,t=None,approximation_cov='standard',approximation_mmd='st
             start=False,
             verbose = verbose)
 
-def compute_kfdat_old(self,t=None,approximation_cov='standard',approximation_mmd='standard',name=None,verbose=0,anchors_basis=None):
-    # je n'ai plus besoin de trunc, seulement d'un t max 
-    """ 
-    Computes the kfda truncated statistic of [Harchaoui 2009].
-    9 methods : 
-    approximation_cov in ['standard','nystrom1','quantization']
-    approximation_mmd in ['standard','nystrom','quantization']
-    
-    Stores the result as a column in the dataframe df_kfdat
+
+def compute_pval(self,t=None):
     """
+    Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
+    Attention, la présence de Nan augmente considérablement le temps de calcul. 
+    """
+    pvals = {}
+    if t is None:
+        t = min(100,len(self.df_kfdat))
+    else : 
+        t = min(t,len(self.df_kfdat))
+    trunc=range(1,t+1)
+
+    # est-ce qu'on peut accelérer cette boucle avec une approche vectorielle ? 
+    for t_ in trunc:
+        pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
+    self.df_pval = pd.DataFrame(pvals).T 
+
+def correct_BenjaminiHochberg_pval(self,t=None,columns=None):
+    """
+    Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
+    This is to use when the different tests correspond to multiple testing. 
+    The results are stored in self.df_BH_corrected_pval 
+    The pvalues are adjusted for each truncation lower or equal to t. 
+    """
+    if columns is None: 
+        columns = self.df_pval.columns
+    if t is None:
+        t=5
+    trunc = range(1,t+1)
+    corrected_pvals = []
     
-    cov,mmd = approximation_cov,approximation_mmd
-    name = name if name is not None else f'{cov}{mmd}' 
-
-    suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
-    tmax = 200
-    t = tmax if (t is None and len(sp)+1>tmax) else len(sp)+1 if (t is None and len(sp)+1<=tmax) else t
     
+    for t in trunc:
+        
+        df = pd.concat([self.df_pval.T[t],self.df_pval.T[t].rank()],keys=['pval','rank'],axis=1)
+        df['pvalc'] = df.apply(lambda x: len(df) * x['pval']/x['rank'],axis=1) # correction
+        df['rankc'] = df['pvalc'].rank() # calcul du nouvel ordre
+        
+        # correction des pval qui auraient changé d'ordre
+        l = []
+        if not df['rankc'].equals(df['rank']):
+            first_rank = df['rank'].sort_values().values[0] # égal à 1 sauf si égalité 
+            pvalc_prec = df.loc[df['rank']==first_rank,'pvalc'].iat[0]
+            for rank in df['rank'].sort_values().values[1:]: # le 1 est déjà dans rank prec et on prend le dernier 
+                pvalc = df.loc[df['rank']==rank,'pvalc'].iat[0]
+                if pvalc_prec >= 1 : 
+                    pvalue = 1 # l += [1]
+                elif pvalc_prec > pvalc :
+                    pvalue = pvalc # l += [pvalc]
+                elif pvalc_prec <= pvalc:
+                    pvalue = pvalc_prec # l+= [pvalc_prec]
+                else: 
+                    print('error pval correction')
+                pvalc_prec = pvalc
+                l += [pvalue]
+            # dernier terme 
+            pvalue = 1 if pvalc >1 else pvalc
+            l += [pvalue]
+    #             corrected_pvals[t] = pd.Series(l,index=ranks)#df['rank'].sort_values().index)
+        if len(l)>0:
+            corrected_pvals += [pd.Series(l,index=df['rank'].sort_values().index)]
+        else:
+            corrected_pvals +=  [pd.Series(df['pvalc'].values,index=df['rank'].sort_values().index)]
+        
+    #     print(pd.concat(corrected_pvals,axis=1).T)
+    self.df_pval_BH_corrected = pd.concat(corrected_pvals,axis=1).T
 
-    trunc = range(1,t)        
-    self.verbosity(function_name='compute_kfdat',
-            dict_of_variables={
-            't':t,
-            'approximation_cov':cov,
-            'approximation_mmd':mmd,
-            'name':name},
-            start=True,
-            verbose = verbose)
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    n1,n2 = (self.n1,self.n2) 
-    n = n1+n2
-
-
-    m = self.compute_omega(quantization=(mmd=='quantization'))
-    Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
-
-    if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3']]):
-        Up = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lp_inv = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
-
-    if not (mmd == cov) or mmd == 'nystrom':
-        Kmn = self.compute_kmn(sample='xy')
-    
-    if cov == 'standard':
-        if mmd == 'standard':
-            K = self.compute_gram()
-            pkm = mv(Pbi,mv(K,m))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'nystrom':
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            pkm = mv(Pbi,mv(Kmn.T,mv(Pi,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pi,mv(Kmn,m))))))))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-            # else:
-            #     pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
-            #     kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkuLukm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'quantization':
-            pkm = mv(Pbi,mv(Kmn.T,m))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-    if cov == 'nystrom1':
-        if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            pkm = mv(Pbi,mv(Kmn.T,mv(Pi,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pi,mv(Kmn,m))))))))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'quantization':
-            Kmm = self.compute_gram(landmarks=True)
-            pkm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m))))))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-    
-    if cov == 'nystrom2':
-        Lp12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
-        if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            pkm = mv(Lp12,mv(Up.T,mv(Pi,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Pi,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pi,mv(Kmn,m))))))))))))
-            kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-            # else:
-            #     LupkpkpuLupkm = mv(Lp12,mv(Up.T,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))))
-            #     kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],LupkpkpuLupkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'quantization': # pas à jour
-            # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
-            Kmm = self.compute_gram(landmarks=True)
-            pkm = mv(Lp12,mv(Up.T,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m)))))))))
-            kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-    
-    if cov == 'nystrom3':
-        Lp12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
-        if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            pkm = mv(Lp12,mv(Up.T,mv(Pi,mv(Kmn,m))))
-                # pkpuLupkm = mv(Pbi,mv(Kmn.T,mv(Pm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Pm,mv(Kmn,m))))))))
-            kfda = ((n1*n2)/(n*sp[:t])*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-            # else:
-            #     LupkpkpuLupkm = mv(Lp12,mv(Up.T,mv(Kmn,m)))
-            #     kfda = ((n1*n2)/(n*sp[:t])*mv(ev.T[:t],LupkpkpuLupkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'quantization': # pas à jour 
-            # il faut ajouter Pi ici . 
-            Kmm = self.compute_gram(landmarks=True)
-            pkm = mv(Lp12,mv(Up.T,mv(Kmn,mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m)))))))))
-            kfda = ((n1*n2)/(n**3*sp[:t]**3)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-    
-    if cov == 'quantization': # pas à jour 
-        A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-        if mmd == 'standard':
-            pkm = mv(Pbi,mv(A_12,mv(Kmn,m)))
-            # le n n'est pas au carré ici
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'nystrom':
-            Kmm = self.compute_gram(landmarks=True)
-            pkm = mv(Pbi,mv(A_12,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
-            # le n n'est pas au carré ici # en fait si ? 
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-        elif mmd == 'quantization':
-            Kmm = self.compute_gram(landmarks=True)
-            pkm = mv(Pbi,mv(A_12,mv(Kmm,m)))
-            kfda = ((n1*n2)/(n**2*sp[:t]**2)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy() 
-
-    name = name if name is not None else f'{cov}{mmd}{suffix_nystrom}' 
-    if name in self.df_kfdat:
-        print(f"écrasement de {name} dans df_kfdat")
-    self.df_kfdat[name] = pd.Series(kfda,index=trunc)
-
-    self.verbosity(function_name='compute_kfdat',
-                            dict_of_variables={
-            't':t,
-            'approximation_cov':cov,
-            'approximation_mmd':mmd,
-            'name':name},
-            start=False,
-            verbose = verbose)
-#
-def initialize_kfdat(self,approximation_cov='standard',approximation_mmd=None,sample='xy',m=None,
-                            r=None,landmarks_method='random',verbose=0,anchors_basis=None,**kwargs):
+def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
     # verbose -1 au lieu de verbose ? 
-    cov,mmd = approximation_cov,approximation_mmd
+    cov,mmd = self.approximation_cov,self.approximation_mmd
+
     if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(m=m,landmarks_method='kmeans',verbose=verbose)
+        self.compute_nystrom_landmarks(verbose=verbose)
     
     if any([ny in [cov,mmd] for ny in ['nystrom1','nystrom2','nystrom3']]):
         if not self.has_landmarks:
-            self.compute_nystrom_landmarks(m=m,landmarks_method=landmarks_method,verbose=verbose)
+            self.compute_nystrom_landmarks(verbose=verbose)
         if "anchors" not in self.spev[sample]:
-            self.compute_nystrom_anchors(r=r,sample=sample,verbose=verbose,anchors_basis=anchors_basis)
+            self.compute_nystrom_anchors(sample=sample,verbose=verbose)
         
-    if cov not in self.spev[sample]:
-        self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose,anchors_basis=anchors_basis)
+    # if cov not in self.spev[sample]:
+    self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
 #
-def kfdat(self,t=None,approximation_cov='standard',approximation_mmd='standard',
-            m=None,r=None,landmarks_method='random',
-            name=None,verbose=0,anchors_basis=None):
-            
-    cov,mmd = approximation_cov,approximation_mmd
+def kfdat(self,t=None,name=None,pval=True,verbose=0):
+    cov,mmd = self.approximation_cov,self.approximation_mmd
     name = name if name is not None else f'{cov}{mmd}' 
     if name in self.df_kfdat :
         if verbose : 
             print(f'kfdat {name} already computed')
     else:
-        self.initialize_kfdat(approximation_cov=cov,approximation_mmd=mmd,sample='xy',
-                            m=m,r=r,landmarks_method=landmarks_method,
-                                    verbose=verbose,anchors_basis=anchors_basis)            
-        self.compute_kfdat(t=t,approximation_cov=cov,approximation_mmd=mmd,name=name,verbose=verbose,anchors_basis=anchors_basis)
+        self.initialize_kfdat(sample='xy',verbose=verbose)            
+        self.compute_kfdat(t=t,name=name,verbose=verbose)
+        if pval:
+            self.compute_pval(t=t)
+
+
 
 def initialize_mmd(self,approximation='standard',shared_anchors=True,m=None,
-                            r=None,landmarks_method='random',verbose=0,anchors_basis=None):
+                            r=None,landmark_method='random',verbose=0,anchors_basis=None):
 
     """
     Calculs preliminaires pour lancer le MMD.
     approximation: determine les calculs a faire en amont du calcul du mmd
                 full : aucun calcul en amont puisque la Gram et m seront calcules dans mmd
                 nystrom : 
-                        si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmarks_method
+                        si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmark_method
                         si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille r pour les deux echantillons
                         si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille r//2
                                     attention : le parametre r est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
                 quantization : m sont determines comme les centroides de l'algo kmeans 
     shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
     m : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
-    landmarks_method : dans ['random','kmeans'] methode de choix des landmarks
+    landmark_method : dans ['random','kmeans'] methode de choix des landmarks
     verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
     """
         # verbose -1 au lieu de verbose ? 
 
     if approximation == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(m=m,landmarks_method='kmeans',verbose=verbose)
+        self.compute_nystrom_landmarks(m=m,landmark_method='kmeans',verbose=verbose)
     
     if approximation == 'nystrom':
         if not self.has_landmarks:
-                self.compute_nystrom_landmarks(m=m,landmarks_method=landmarks_method,verbose=verbose)
+                self.compute_nystrom_landmarks(m=m,landmark_method=landmark_method,verbose=verbose)
         
         if shared_anchors:
             if "anchors" not in self.spev['xy']:
@@ -366,7 +339,7 @@ def initialize_mmd(self,approximation='standard',shared_anchors=True,m=None,
                     self.compute_nystrom_anchors(r=r//2,sample=xy,verbose=verbose,anchors_basis=anchors_basis)
 #
 def mmd(self,approximation='standard',shared_anchors=True,m=None,
-                            r=None,landmarks_method='random',name=None,unbiaised=False,verbose=0):
+                            r=None,landmark_method='random',name=None,unbiaised=False,verbose=0):
     """
     appelle la fonction initialize mmd puis la fonction compute_mmd si le mmd n'a pas deja ete calcule. 
     """
@@ -380,7 +353,7 @@ def mmd(self,approximation='standard',shared_anchors=True,m=None,
             print(f'mmd {name} already computed')
     else:
         self.initialize_mmd(approximation=approximation,shared_anchors=shared_anchors,
-                m=m,r=r,landmarks_method=landmarks_method,verbose=verbose)
+                m=m,r=r,landmark_method=landmark_method,verbose=verbose)
         self.compute_mmd(approximation=approximation,shared_anchors=shared_anchors,
                         name=name,unbiaised=unbiaised,verbose=0)
 

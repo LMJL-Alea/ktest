@@ -2,7 +2,10 @@ from .utils import ordered_eigsy
 import numpy as np
 import torch
 
-def compute_nystrom_anchors(self,sample='xy',r=None,verbose=0,anchors_basis=None):
+import apt.kmeans 
+from kmeans_pytorch import kmeans
+
+def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
     """
     Determines the nystrom anchors using 
     Stores the results as a list of eigenvalues and the 
@@ -13,31 +16,32 @@ def compute_nystrom_anchors(self,sample='xy',r=None,verbose=0,anchors_basis=None
     r:      <= m (= by default). Number of anchors to determine in total (proportionnaly according to the data)
     """
     
-    assert(anchors_basis is not None)
+    assert(self.anchors_basis is not None)
     
     self.verbosity(function_name='compute_nystrom_anchors',
-                    dict_of_variables={'r':r},
+                    dict_of_variables={'r':self.r},
                     start=True,
                     verbose = verbose)
 
-    if r is None:
-        print("r not specified, by default, r = m" )
-
     if sample == 'xy':
-        self.r = self.m if r is None else r
+        if self.r is None:
+            print("r not specified, by default, r = m" )
+        self.r = self.m if self.r is None else self.r
+        anchors_basis = self.anchors_basis
         assert(self.r <= self.m)
         
-    elif sample =='x':
-        self.nxanchors = self.nxlandmarks if r is None else r
-        assert(self.nxanchors <= self.nxlandmarks)
-    elif sample =='y':
-        self.nyanchors = self.nylandmarks if r is None else r
-        assert(self.nyanchors <= self.nylandmarks)
+    # a réfléchir dans le cas de 1 groupe 
+    # elif sample =='x':
+    #     self.nxanchors = self.nxlandmarks if r is None else r
+    #     assert(self.nxanchors <= self.nxlandmarks)
+    # elif sample =='y':
+    #     self.nyanchors = self.nylandmarks if r is None else r
+    #     assert(self.nyanchors <= self.nylandmarks)
 
     r = self.r if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
     
     Km = self.compute_gram(sample=sample,landmarks=True)
-    P = self.compute_centering_matrix(sample=sample,landmarks=True,anchors_basis=anchors_basis)
+    P = self.compute_centering_matrix(sample=sample,landmarks=True)
     sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.chain_matmul(P,Km,P))        
 
     if 'anchors' in self.spev[sample]:
@@ -50,7 +54,7 @@ def compute_nystrom_anchors(self,sample='xy',r=None,verbose=0,anchors_basis=None
                     start=False,
                     verbose = verbose)
 
-def compute_nystrom_landmarks(self,m=None,landmarks_method=None,verbose=0):
+def compute_nystrom_landmarks(self,verbose=0):
     # anciennement compute_nystrom_anchors(self,r,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
     
     """
@@ -61,11 +65,11 @@ def compute_nystrom_landmarks(self,m=None,landmarks_method=None,verbose=0):
     Parameters
     ----------
     m:    (1/10 * n if None)  number of landmarks in total (proportionnaly sampled according to the data)
-    landmarks_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
+    landmark_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
     """
 
     self.verbosity(function_name='compute_nystrom_landmarks',
-                    dict_of_variables={'m':m,'landmarks_method':landmarks_method},
+                    dict_of_variables={'m':self.m,'landmark_method':self.landmark_method},
                     start=True,
                     verbose = verbose)
         
@@ -73,21 +77,20 @@ def compute_nystrom_landmarks(self,m=None,landmarks_method=None,verbose=0):
     n1,n2 = self.n1,self.n2 
     xratio,yratio = n1/(n1 + n2), n2/(n1 +n2)
 
-    if m is None:
+    if self.m is None:
         print("m not specified, by default, m = (n1+n2)//10")
-        m = (n1 + n2)//10
+        self.m = (n1 + n2)//10
 
-    if landmarks_method is None:
-        print("landmarks_method not specified, by default, landmarks_method='random'")
-        landmarks_method = 'random'
+    if self.landmark_method is None:
+        print("landmark_method not specified, by default, landmark_method='random'")
+        self.landmark_method = 'random'
     
-    self.m = m
-    self.nxlandmarks=np.int(np.floor(xratio * m)) 
-    self.nylandmarks=np.int(np.floor(yratio * m))
+    self.nxlandmarks=np.int(np.floor(xratio * self.m)) 
+    self.nylandmarks=np.int(np.floor(yratio * self.m))
 
     
 
-    if landmarks_method == 'kmeans':
+    if self.landmark_method == 'kmeans':
         # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
         # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
         self.xassignations,self.xlandmarks = kmeans(X=x, num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
@@ -97,7 +100,7 @@ def compute_nystrom_landmarks(self,m=None,landmarks_method=None,verbose=0):
         self.quantization_with_landmarks_possible = True
         
 
-    elif landmarks_method == 'random':
+    elif self.landmark_method == 'random':
         self.xlandmarks = x[np.random.choice(x.shape[0], size=self.nxlandmarks, replace=False)]
         self.ylandmarks = y[np.random.choice(y.shape[0], size=self.nylandmarks, replace=False)]
         
@@ -107,7 +110,7 @@ def compute_nystrom_landmarks(self,m=None,landmarks_method=None,verbose=0):
     self.has_landmarks= True
 
     self.verbosity(function_name='compute_nystrom_landmarks',
-                    dict_of_variables={'m':m,'landmarks_method':landmarks_method},
+                    dict_of_variables={'m':self.m,'landmark_method':self.landmark_method},
                     start=False,
                     verbose = verbose)
 

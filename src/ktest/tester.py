@@ -12,6 +12,7 @@ from scipy.linalg import svd
 from numpy.random import permutation
 from sklearn.model_selection import train_test_split
 
+
 # CCIPL 
 # from kernels import gauss_kernel_mediane
 # Local 
@@ -100,7 +101,10 @@ class Tester:
 
     from .statistics import \
         compute_kfdat,\
+        compute_pval,\
+        correct_BenjaminiHochberg_pval,\
         compute_pkm,\
+        compute_epk,\
         initialize_kfdat,\
         kfdat,\
         kpca,\
@@ -121,6 +125,10 @@ class Tester:
 
     from .visualizations import \
         plot_kfdat,\
+        init_plot_kfdat,\
+        init_plot_pvalue,\
+        plot_pvalue,\
+        plot_kfdat_contrib,\
         plot_spectrum,\
         density_proj,\
         scatter_proj,\
@@ -132,16 +140,12 @@ class Tester:
 
     from .initializations import \
         init_data,\
+        init_model,\
+        init_data_from_dataframe,\
         verbosity
 
 
-    def __init__(self,
-        x:Union[np.array,torch.tensor]=None,
-        y:Union[np.array,torch.tensor]=None,
-        kernel:Callable[[torch.Tensor,torch.Tensor],torch.Tensor]=None, 
-        x_index:List = None,
-        y_index:List = None,
-        variables:List = None):
+    def __init__(self):
         """\
         Parameters
         ----------
@@ -155,11 +159,15 @@ class Tester:
         :obj:`Tester`
         """
         self.has_data = False   
+        self.has_model = False
         self.has_landmarks = False
         self.quantization_with_landmarks_possible = False
         
         # attributs initialisés 
+        self.dict_data = {}
+        # self.dict_model = {}
         self.df_kfdat = pd.DataFrame()
+        self.df_pval = pd.DataFrame()
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
@@ -171,8 +179,8 @@ class Tester:
         # for verbosity 
         self.start_times = {}
 
-        if x is not None and y is not None:
-            self.init_data(x=x,y=y,kernel=kernel,x_index=x_index,y_index=y_index,variables=variables)
+        # if x is not None and y is not None:
+        #     self.init_data(x=x,y=y,kernel=kernel,x_index=x_index,y_index=y_index,variables=variables)
        
 
     def __str__(self):
@@ -309,144 +317,6 @@ class Tester:
                 name_ +=f'ny{nystrom}{nystrom_method}na{r}'
         return(name_)
     
-
-
-        # def proj_kfda(self,trunc=None,nystrom=False,r=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        #     which_dict={'proj_kfda':path if save else ''}
-        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,r=r,nystrom_method=nystrom_method,name=name,main=main,
-        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
-
-        # def proj_kpca(self,trunc=None,nystrom=False,r=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        #     which_dict={'proj_kpca':path if save else ''}
-        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,r=r,nystrom_method=nystrom_method,name=name,main=main,
-        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose)
-
-        # def correlations(self,trunc=None,corr_which='proj_kfda',nystrom=False,r=None,nystrom_method='kmeans',name=None,main=False,obs_to_ignore=None,save=False,path=None,verbose=0):
-        #     which_dict={'corr':path if save else ''}
-        #     self.test(trunc=trunc,which_dict=which_dict,nystrom=nystrom,r=r,nystrom_method=nystrom_method,name=name,main=main,
-        #     obs_to_ignore=obs_to_ignore,save=save,verbose=verbose,corr_which=corr_which,corr_prefix_col='')
-
-
-
-        # def test(self,trunc=None,which_dict=['kfdat','proj_kfda','proj_kpca','corr','mmd'],
-        #          nystrom=False,r=None,nystrom_method='kmeans',
-        #          name=None,main=False,corr_which='proj_kfda',corr_prefix_col='',obs_to_ignore=None,mmd_unbiaised=False,save=False,verbose=0):
-
-        #     # for output,path in which.items()
-        #     name_ = "main" if not hasattr(self,'main_name') and name is None else \
-        #             self.name_generator(trunc=trunc,nystrom=nystrom,nystrom_method=nystrom_method,r=r,
-        #             obs_to_ignore=obs_to_ignore) if name is None else \
-        #             name
-
-
-        #     if main or not hasattr(self,'main_name'):
-        #         self.main_name = name_
-            
-        #     if verbose >0:
-            #     none = 'None'
-            #     datastr = f'n1:{self.n1} n2:{self.n2} trunc:{none if trunc is None else len(trunc)}'
-            #     datastr += f'\nname:{name}\n' 
-            #     inwhich = ' and '.join(which_dict.keys()) if len(which_dict)>1 else list(which_dict.keys())[0]
-            #     ny=''
-            #     if nystrom:
-            #         ny += f' nystrom:{nystrom} {nystrom_method} r={r}' 
-            #         if split_data:
-            #             ny+=f' split{test_size}' 
-    
-            #     print(f'{datastr}Compute {inwhich} {ny}') #  of {self.n1} and {self.n2} points{ny} ')
-            # if verbose >1:
-            #     print(f"trunc:{len(trunc)} \n which:{which_dict} nystrom:{nystrom} r:{r} nystrom_method:{nystrom_method} split:{split_data} test_size:{test_size}\n")
-            #     print(f"main:{main} corr:{corr_which} mmd_unbiaised:{mmd_unbiaised} seva:{save}")
-            
-            # loaded = []    
-            # if save:
-            #     if 'kfdat' in which_dict and os.path.isfile(which_dict['kfdat']):
-            #         loaded_kfdat = pd.read_csv(which_dict['kfdat'],header=0,index_col=0)
-            #         if len(loaded_kfdat.columns)==1 and name is not None:
-            #             c= loaded_kfdat.columns[0]
-            #             self.df_kfdat[name] = loaded_kfdat[c]
-            #         else:
-            #             for c in loaded_kfdat.columns:
-            #                 if c not in self.df_kfdat.columns:
-            #                     self.df_kfdat[c] = loaded_kfdat[c]
-            #         loaded += ['kfdat']
-
-            #     if 'proj_kfda' in which_dict and os.path.isfile(which_dict['proj_kfda']):
-            #         self.df_proj_kfda[name_] = pd.read_csv(which_dict['proj_kfda'],header=0,index_col=0)
-            #         loaded += ['proj_kfda']
-
-            #     if 'proj_kpca' in which_dict and os.path.isfile(which_dict['proj_kpca']):
-            #         self.df_proj_kpca[name_] = pd.read_csv(which_dict['proj_kpca'],header=0,index_col=0)
-            #         loaded += ['proj_kpca']
-                
-            #     if 'corr' in which_dict and os.path.isfile(which_dict['corr']):
-            #         self.corr[name_] =pd.read_csv(which_dict['corr'],header=0,index_col=0)
-            #         loaded += ['corr']
-
-                # if 'mmd' in which_dict and os.path.isfile(which_dict['mmd']):
-                #     self.mmd[name_] =pd.read_csv(which_dict['mmd'],header=0,index_col=0)
-                #     loaded += ['mmd']
-
-
-            #     if verbose >0:
-            #         print('loaded:',loaded)
-
-            # if len(loaded) < len(which_dict):
-                
-            #     missing = [k for k in which_dict.keys() if k not in loaded]
-            #     # try:
-
-                
-            #     self.ignore_obs(obs_to_ignore=obs_to_ignore)
-                
-            #     if any([m in ['kfdat','proj_kfda','proj_kpca'] for m in missing]):
-            #         if nystrom:
-            #             self.nystrom_method = nystrom_method
-            #             self.compute_nystrom_anchors(r=r,nystrom_method=nystrom_method,verbose=verbose,center_anchors=center_anchors) # max_iter=1000,
-
-            #         if 'kfdat' in missing and nystrom==3 and not hasattr(self,'sp'):
-            #             self.diagonalize_bicentered_gram(nystrom=False,verbose=verbose)
-            #         else:
-            #             self.diagonalize_bicentered_gram(nystrom,verbose=verbose)
-
-            #     if 'kfdat' in which_dict and 'kfdat' not in loaded:
-            #         self.compute_kfdat(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)  
-            #         loaded += ['kfdat']
-            #         if save and obs_to_ignore is None:
-            #             self.df_kfdat.to_csv(which_dict['kfdat'],index=True)    
-        
-            #     if 'proj_kfda' in which_dict and 'proj_kfda' not in loaded:
-            #         self.compute_proj_kfda(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-            #         loaded += ['proj_kfda']
-            #         if save and obs_to_ignore is None:
-            #             self.df_proj_kfda[name_].to_csv(which_dict['proj_kfda'],index=True)
-
-            #     if 'proj_kpca' in which_dict and 'proj_kpca' not in loaded:
-            #         self.compute_proj_kpca(trunc=trunc,nystrom=nystrom,name=name_,verbose=verbose)    
-            #         loaded += ['proj_kpca']
-            #         if save and obs_to_ignore is None:
-            #             self.df_proj_kpca[name_].to_csv(which_dict['proj_kpca'],index=True)
-                
-            #     if 'corr' in which_dict and 'corr' not in loaded:
-            #         self.compute_corr_proj_var(trunc=trunc,nystrom=nystrom,which=corr_which,name_corr=name_,prefix_col=corr_prefix_col,verbose=verbose)
-            #         loaded += ['corr']
-            #         if save and obs_to_ignore is None:
-            #             self.corr[name_].to_csv(which_dict['corr'],index=True)
-                
-            #     if 'mmd' in which_dict and 'mmd' not in loaded:
-            #         self.compute_mmd(unbiaised=mmd_unbiaised,nystrom=nystrom,name=name_,verbose=verbose)
-            #         loaded += ['mmd']
-            #         if save and obs_to_ignore is None:
-            #             self.corr[name_].to_csv(which_dict['mmd'],index=True)
-                
-            #     if verbose>0:
-            #         print('computed:',missing)
-            #     if obs_to_ignore is not None:
-            #         self.unignore_obs()
-            
-                # except:
-                #     print('No computed')        
-
     def ignore_obs(self,obs_to_ignore=None,reinitialize_ignored_obs=False):
         
         if self.ignored_obs is None or reinitialize_ignored_obs:

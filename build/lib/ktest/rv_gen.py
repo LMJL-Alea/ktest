@@ -39,12 +39,15 @@ def mvn_pf(p=P, d=D, nobs=N, sig=S, seed=1, noise=True,spectrum='isotropic', **k
 
 
 
-def mixture_gaussienne(means,covs,weights,nobs,seed):
+def mixture_gaussienne(means,covs,weights,nobs,seed,return_assignations=False):
     np.random.seed(seed=seed)
     assignations = np.random.multinomial(nobs,weights)
     x = np.concatenate([np.random.multivariate_normal(mean,cov,assignation) \
                         for mean,cov,assignation in zip(means,covs,assignations)],axis=0)
-    return(x)
+    if return_assignations:
+        return(x,assignations)
+    else:
+        return(x)
 
 def mixture_gaussienne_sparse(means,covs,weights,nobs,seed,d):
     xp = mixture_gaussienne(means,covs,weights,nobs,seed)
@@ -66,7 +69,7 @@ def gen_couple(key = {}):
      'data_seed':1999}
     """
     
-    ref_generators = {'gaussienne.multivariee': mvn_pf}
+    ref_generators = {'gaussienne.multivariee': mvn_pf,}
     generator = ref_generators[key['data_type']] if 'data_type' in key else mvn_pf
     
     arg = {arg_name: key[arg_key] if arg_key in key else default \

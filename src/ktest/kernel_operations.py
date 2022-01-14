@@ -65,7 +65,7 @@ def compute_kmn(self,sample='xy'):
     else:
         return(kz1x if sample =='x' else kz2y)
 
-def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False,anchors_basis=None):
+def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False):
     """
     Computes the bicentering Gram matrix Pn. 
     Let I1,I2 the identity matrix of size n1 and n2 (or nxanchors and nyanchors if nystrom).
@@ -83,17 +83,18 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
 
 
     if landmarks:
-        if anchors_basis == 'K':
+        
+        if self.anchors_basis == 'K':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
             Im = torch.eye(m, dtype=torch.float64)
             return(Im)
-        if anchors_basis == 'S':
+        if self.anchors_basis == 'S':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
             Im = torch.eye(m, dtype=torch.float64)
             Jm = torch.ones(m, m, dtype=torch.float64)
             Pm = Im - 1/m * Jm
             return(Pm)
-        if anchors_basis == 'W':
+        if self.anchors_basis == 'W':
             assert(sample=='xy')
             m1,m2 = self.nxlandmarks, self.nylandmarks
             Im1,Im2 = torch.eye(m1, dtype=torch.float64),torch.eye(m2, dtype=torch.float64)
@@ -136,7 +137,7 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
     else:
         return(Pn1 if sample=='x' else Pn2)  
 
-def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0,anchors_basis=None):
+def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
     """ 
     Computes the bicentered Gram matrix which shares its spectrom with the 
     within covariance operator. 
@@ -166,14 +167,15 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0,an
         n2 = self.n2
         n+=n2
     if 'nystrom' in approximation:
-        m = self.r if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors
+        r = self.r if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors
+        anchors_basis = self.anchors_basis
     if approximation == 'quantization':
         if self.quantization_with_landmarks_possible:
             Kmm = self.compute_gram(sample=sample,landmarks=True)
             A = self.compute_quantization_weights(sample=sample,power=.5)
             Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
         else:
-            print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmarks_method='kmeans'")
+            print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmark_method='kmeans'")
 
 
     elif approximation == 'nystrom1':
@@ -182,8 +184,8 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0,an
             Kmn = self.compute_kmn(sample=sample)
             Lp_inv = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-1))
             Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-            Pm = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            Kw = 1/(n*m**2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
+            Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Kw = 1/(n*r*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
             # Kw = 1/(n) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
             
         else:
@@ -195,7 +197,7 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0,an
             Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-(1/2)))
             Up = self.spev[sample]['anchors'][anchors_basis]['ev']
             Pm = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
-            Kw = 1/(n*m**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+            Kw = 1/(n*r**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
             # Kw = 1/(n) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
             # else:
             #     Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Kmn,P,Kmn.T,Up,Lp_inv_12)
@@ -215,7 +217,7 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0,an
 
     return Kw
 
-def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=0,anchors_basis=None):
+def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=0):
     """
     Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
     Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
@@ -232,10 +234,10 @@ def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=
             start=True,
             verbose = verbose)
     
-    Kw = self.compute_centered_gram(approximation=approximation,sample=sample,verbose=verbose,anchors_basis=anchors_basis)
+    Kw = self.compute_centered_gram(approximation=approximation,sample=sample,verbose=verbose)
     
     sp,ev = ordered_eigsy(Kw)
-    suffix_nystrom = anchors_basis if 'nystrom' in approximation else ''
+    suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
     self.spev[sample][approximation+suffix_nystrom] = {'sp':sp,'ev':ev}
     
     self.verbosity(function_name='diagonalize_centered_gram',

@@ -2,7 +2,7 @@ import torch
 from torch import mv
 import pandas as pd
 
-def compute_proj_kfda(self,t=None,approximation_cov='standard',approximation_mmd='standard',name=None,verbose=0,anchors_basis=None):
+def compute_proj_kfda(self,t=None,name=None,verbose=0):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
     Projections of the embeddings of the observation onto the discriminant axis
@@ -13,88 +13,41 @@ def compute_proj_kfda(self,t=None,approximation_cov='standard',approximation_mmd
     Stores the result as a column in the dataframe df_proj_kfda
     """
 
+    cov,mmd = self.approximation_cov,self.approximation_mmd
+    anchors_basis = self.anchors_basis
+    
+    name = name if name is not None else f'{cov}{mmd}' 
 
-    name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
+    suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
+    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+    
     if name in self.df_proj_kfda :
         if verbose : 
             print('Proj on discriminant axis Already computed')
     else:
-
-        sp,ev = self.spev['xy'][approximation_cov]['sp'],self.spev['xy'][approximation_cov]['ev']
         tmax = 200
-        t = tmax if (t is None and len(sp)+1>tmax) else len(sp)+1 if (t is None and len(sp)+1<=tmax) else t
+        t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
         trunc = range(1,t+1) 
         self.verbosity(function_name='compute_proj_kfda',
                 dict_of_variables={
                 't':t,
-                'approximation_cov':approximation_cov,
-                'approximation_mmd':approximation_mmd,
+                'approximation_cov':cov,
+                'approximation_mmd':mmd,
                 'name':name},
                 start=True,
                 verbose = verbose)
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        pkm=self.compute_pkm()
+        epk=self.compute_epk(t)
         n1,n2 = (self.n1,self.n2) 
         n = n1+n2
 
-        m = self.compute_omega(quantization=(approximation_mmd=='quantization'))
-        Pbi = self.compute_centering_matrix(sample='xy',quantization=(approximation_cov=='quantization'))
+        if cov == 'standard' or 'nystrom' in cov:
+            proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*epk).cumsum(axis=1).numpy()
+        if cov == 'quantization':
+            proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*epk).cumsum(axis=1).numpy()
 
-        if 'nystrom' in [approximation_mmd,approximation_cov]:
-            Up = self.spev['xy']['anchors'][anchors_basis]['ev']
-            Lp_inv = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
-
-        if not (approximation_mmd == approximation_cov == 'standard'):
-            Kmn = self.compute_kmn()
-        if approximation_cov == 'standard':
-            K = self.compute_gram()
-
-        if approximation_cov == 'standard':
-            if approximation_mmd == 'standard':
-                pkm = mv(Pbi,mv(K,m))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
-                
-            elif approximation_mmd == 'nystrom':
-                pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
-
-            elif approximation_mmd == 'quantization':
-                pkm = mv(Pbi,mv(Kmn.T,m))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*torch.chain_matmul(ev.T[:t],Pbi,K).T).cumsum(axis=1).numpy()
-                
-        if approximation_cov == 'nystrom':
-            if approximation_mmd == 'standard':
-                pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-
-            elif approximation_mmd == 'nystrom':
-                pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m))))))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-
-            elif approximation_mmd == 'quantization':
-                Kmm = self.compute_gram(landmarks=True)
-                pkuLukm = mv(Pbi,mv(Kmn.T,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmm,m))))))
-                proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkuLukm)*torch.chain_matmul(ev.T[:t],Pbi,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-
-        if approximation_cov == 'quantization':
-            A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-            if approximation_mmd == 'standard':
-                apkm = mv(A_12,mv(Pbi,mv(Kmn,m)))
-                # pas de n ici
-                proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
-
-            elif approximation_mmd == 'nystrom':
-                Kmm = self.compute_gram(landmarks=True)
-                apkuLukm = mv(A_12,mv(Pbi,mv(Kmm,mv(Up,mv(Lp_inv,mv(Up.T,mv(Kmn,m)))))))
-                # pas de n ici
-                proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkuLukm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
-
-            elif approximation_mmd == 'quantization':
-                Kmm = self.compute_gram(landmarks=True)
-                apkm = mv(A_12,mv(Pbi,mv(Kmm,m)))
-                proj = (sp[:t]**(-3/2)*mv(ev.T[:t],apkm)*torch.chain_matmul(ev.T[:t],A_12,Pbi,Kmn).T).cumsum(axis=1).numpy()
-
-        name = name if name is not None else f'{approximation_cov}{approximation_mmd}' 
         if name in self.df_proj_kfda:
             print(f"écrasement de {name} dans df_proj_kfda")
         self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
@@ -103,8 +56,8 @@ def compute_proj_kfda(self,t=None,approximation_cov='standard',approximation_mmd
         self.verbosity(function_name='compute_proj_kfda',
                                 dict_of_variables={
                 't':t,
-                'approximation_cov':approximation_cov,
-                'approximation_mmd':approximation_mmd,
+                'approximation_cov':cov,
+                'approximation_mmd':mmd,
                 'name':name},
                 start=False,
                 verbose = verbose)
@@ -226,9 +179,6 @@ def init_df_proj(self,which,name=None):
         if nproj >1:
             if name is not None and name not in names:
                 print(f'{name} not found in {names}')
-            # if name is None and self.main_name not in names:
-            #     print("the default name {self.main_name} is not in {names} so you need to specify 'name' argument")
-            # if name is None and self.main_name in names:
                 df_proj = dict_df_proj[self.main_name]
             else: 
                 df_proj = dict_df_proj[name]

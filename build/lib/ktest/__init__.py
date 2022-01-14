@@ -17,7 +17,10 @@ from .nystrom_operations import \
 
 from .statistics import \
     compute_kfdat,\
+    compute_pval,\
+    correct_BenjaminiHochberg_pval,\
     compute_pkm,\
+    compute_epk,\
     initialize_kfdat,\
     kfdat,\
     kpca,\
@@ -37,6 +40,10 @@ from .correlation_operations import \
 
 from .visualizations import \
     plot_kfdat,\
+    init_plot_kfdat,\
+    init_plot_pvalue,\
+    plot_pvalue,\
+    plot_kfdat_contrib,\
     plot_spectrum,\
     density_proj,\
     scatter_proj,\
@@ -48,4 +55,6 @@ from .visualizations import \
 
 from .initializations import \
     init_data,\
+    init_model,\
+    init_data_from_dataframe,\
     verbosity
