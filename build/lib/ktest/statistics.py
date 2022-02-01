@@ -112,7 +112,6 @@ def compute_pkm(self):
             pkm = mv(Pbi,mv(A,mv(Kz,omega)))
     return(pkm)
 
-
 def compute_epk(self,t):
     """
     epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
@@ -147,7 +146,6 @@ def compute_epk(self,t):
         epk = torch.chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
     
     return(epk)
-
 #
 def compute_kfdat(self,t=None,name=None,verbose=0,):
     # je n'ai plus besoin de trunc, seulement d'un t max 
@@ -203,7 +201,6 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
             start=False,
             verbose = verbose)
 
-
 def compute_pval(self,t=None):
     """
     Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
@@ -221,56 +218,61 @@ def compute_pval(self,t=None):
         pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
     self.df_pval = pd.DataFrame(pvals).T 
 
-def correct_BenjaminiHochberg_pval(self,t=None,columns=None):
+def correct_BenjaminiHochberg_pval_of_dfcolumn(df,t):
+    df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)
+    df['pvalc'] = df.apply(lambda x: len(df) * x['pval']/x['rank'],axis=1) # correction
+    df['rankc'] = df['pvalc'].rank() # calcul du nouvel ordre
+    corrected_pvals = []
+    # correction des pval qui auraient changé d'ordre
+    l = []
+    if not df['rankc'].equals(df['rank']):
+        first_rank = df['rank'].sort_values().values[0] # égal à 1 sauf si égalité 
+        pvalc_prec = df.loc[df['rank']==first_rank,'pvalc'].iat[0]
+        df['rank'] = df['rank'].fillna(10000)
+        for rank in df['rank'].sort_values().values[1:]: # le 1 est déjà dans rank prec et on prend le dernier 
+            # if t >=8:
+            #     print(rank,end=' ')
+            pvalc = df.loc[df['rank']==rank,'pvalc'].iat[0]
+            if pvalc_prec >= 1 : 
+                pvalue = 1 # l += [1]
+            elif pvalc_prec > pvalc :
+                pvalue = pvalc # l += [pvalc]
+            elif pvalc_prec <= pvalc:
+                pvalue = pvalc_prec # l+= [pvalc_prec]
+            else: 
+                print('error pval correction',f'rank{rank} pvalc{pvalc} pvalcprec{pvalc_prec}')
+                print(df.loc[df['rank']==rank].index)
+            pvalc_prec = pvalc
+            l += [pvalue]
+        # dernier terme 
+        pvalue = 1 if pvalc >1 else pvalc
+        l += [pvalue]
+#             corrected_pvals[t] = pd.Series(l,index=ranks)#df['rank'].sort_values().index)
+    if len(l)>0: 
+        return(pd.Series(l,index=df['rank'].sort_values().index))
+    else: 
+        return(pd.Series(df['pvalc'].values,index=df['rank'].sort_values().index))
+
+def correct_BenjaminiHochberg_pval_of_dataframe(df_pval,t=20):
+    """
+    Benjamini Hochberg correction of a dataframe containing the p-values where the rows are the truncations.    
+    """
+    trunc = range(1,t+1)
+    corrected_pvals = []
+    for t in trunc:
+        # print(t)
+        corrected_pvals += [correct_BenjaminiHochberg_pval_of_dfcolumn(df_pval.T[t],t=t)]   
+    return(pd.concat(corrected_pvals,axis=1).T)
+
+def correct_BenjaminiHochberg_pval(self,t=20):
     """
     Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
     This is to use when the different tests correspond to multiple testing. 
     The results are stored in self.df_BH_corrected_pval 
     The pvalues are adjusted for each truncation lower or equal to t. 
     """
-    if columns is None: 
-        columns = self.df_pval.columns
-    if t is None:
-        t=5
-    trunc = range(1,t+1)
-    corrected_pvals = []
     
-    
-    for t in trunc:
-        
-        df = pd.concat([self.df_pval.T[t],self.df_pval.T[t].rank()],keys=['pval','rank'],axis=1)
-        df['pvalc'] = df.apply(lambda x: len(df) * x['pval']/x['rank'],axis=1) # correction
-        df['rankc'] = df['pvalc'].rank() # calcul du nouvel ordre
-        
-        # correction des pval qui auraient changé d'ordre
-        l = []
-        if not df['rankc'].equals(df['rank']):
-            first_rank = df['rank'].sort_values().values[0] # égal à 1 sauf si égalité 
-            pvalc_prec = df.loc[df['rank']==first_rank,'pvalc'].iat[0]
-            for rank in df['rank'].sort_values().values[1:]: # le 1 est déjà dans rank prec et on prend le dernier 
-                pvalc = df.loc[df['rank']==rank,'pvalc'].iat[0]
-                if pvalc_prec >= 1 : 
-                    pvalue = 1 # l += [1]
-                elif pvalc_prec > pvalc :
-                    pvalue = pvalc # l += [pvalc]
-                elif pvalc_prec <= pvalc:
-                    pvalue = pvalc_prec # l+= [pvalc_prec]
-                else: 
-                    print('error pval correction')
-                pvalc_prec = pvalc
-                l += [pvalue]
-            # dernier terme 
-            pvalue = 1 if pvalc >1 else pvalc
-            l += [pvalue]
-    #             corrected_pvals[t] = pd.Series(l,index=ranks)#df['rank'].sort_values().index)
-        if len(l)>0:
-            corrected_pvals += [pd.Series(l,index=df['rank'].sort_values().index)]
-        else:
-            corrected_pvals +=  [pd.Series(df['pvalc'].values,index=df['rank'].sort_values().index)]
-        
-    #     print(pd.concat(corrected_pvals,axis=1).T)
-    self.df_pval_BH_corrected = pd.concat(corrected_pvals,axis=1).T
-
+    self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
 def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
     # verbose -1 au lieu de verbose ? 
@@ -302,8 +304,7 @@ def kfdat(self,t=None,name=None,pval=True,verbose=0):
 
 
 
-def initialize_mmd(self,approximation='standard',shared_anchors=True,m=None,
-                            r=None,landmark_method='random',verbose=0,anchors_basis=None):
+def initialize_mmd(self,shared_anchors=True,verbose=0,anchors_basis=None):
 
     """
     Calculs preliminaires pour lancer le MMD.
@@ -322,59 +323,63 @@ def initialize_mmd(self,approximation='standard',shared_anchors=True,m=None,
     """
         # verbose -1 au lieu de verbose ? 
 
-    if approximation == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(m=m,landmark_method='kmeans',verbose=verbose)
+    approx = self.approximation_mmd
+    anchors_basis = self.anchors_basis
+
+    if approx == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
+        self.compute_nystrom_landmarks(verbose=verbose)
     
-    if approximation == 'nystrom':
+    if approx == 'nystrom':
         if not self.has_landmarks:
-                self.compute_nystrom_landmarks(m=m,landmark_method=landmark_method,verbose=verbose)
+                self.compute_nystrom_landmarks(verbose=verbose)
         
         if shared_anchors:
             if "anchors" not in self.spev['xy']:
-                self.compute_nystrom_anchors(r=r,sample='xy',verbose=verbose,anchors_basis=anchors_basis)
+                self.compute_nystrom_anchors(sample='xy',verbose=verbose,anchors_basis=anchors_basis)
         else:
             for xy in 'xy':
                 if 'anchors' not in self.spev[xy]:
                     assert(r is not None,"r not specified")
-                    self.compute_nystrom_anchors(r=r//2,sample=xy,verbose=verbose,anchors_basis=anchors_basis)
+                    self.compute_nystrom_anchors(sample=xy,verbose=verbose,anchors_basis=anchors_basis)
 #
-def mmd(self,approximation='standard',shared_anchors=True,m=None,
-                            r=None,landmark_method='random',name=None,unbiaised=False,verbose=0):
+def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):
     """
     appelle la fonction initialize mmd puis la fonction compute_mmd si le mmd n'a pas deja ete calcule. 
     """
+    approx = self.approximation_mmd
+    
     if name is None:
-        name=f'{approximation}'
-        if approximation == 'nystrom':
+        name=f'{approx}'
+        if approx == 'nystrom':
             name += 'shared' if shared_anchors else 'diff'
     
     if name in self.dict_mmd :
         if verbose : 
             print(f'mmd {name} already computed')
     else:
-        self.initialize_mmd(approximation=approximation,shared_anchors=shared_anchors,
-                m=m,r=r,landmark_method=landmark_method,verbose=verbose)
-        self.compute_mmd(approximation=approximation,shared_anchors=shared_anchors,
+        self.initialize_mmd(shared_anchors=shared_anchors,verbose=verbose)
+        self.compute_mmd(shared_anchors=shared_anchors,
                         name=name,unbiaised=unbiaised,verbose=0)
 
-def compute_mmd(self,unbiaised=False,approximation='standard',shared_anchors=True,name=None,verbose=0,anchors_basis=None):
+def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anchors_basis=None):
     
+    approx = self.approximation_mmd
     self.verbosity(function_name='compute_mmd',
             dict_of_variables={'unbiaised':unbiaised,
-                                'approximation':approximation,
+                                'approximation':approx,
                                 'shared_anchors':shared_anchors,
                                 'name':name},
             start=True,
             verbose = verbose)
 
-    if approximation == 'standard':
+    if approx == 'standard':
         m = self.compute_omega(sample='xy',quantization=False)
         K = self.compute_gram()
         if unbiaised:
             K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
         mmd = torch.dot(mv(K,m),m)**2
     
-    if approximation == 'nystrom' and shared_anchors:
+    if approx == 'nystrom' and shared_anchors:
         m = self.compute_omega(sample='xy',quantization=False)
         Up = self.spev['xy']['anchors'][anchors_basis][anchors_basis]['ev']
         Lp_inv2 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
@@ -383,7 +388,7 @@ def compute_mmd(self,unbiaised=False,approximation='standard',shared_anchors=Tru
         psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
         mmd = torch.dot(psi_m,psi_m)**2
     
-    if approximation == 'nystrom' and not shared_anchors:
+    if approx == 'nystrom' and not shared_anchors:
         
         mx = self.compute_omega(sample='x',quantization=False)
         my = self.compute_omega(sample='y',quantization=False)
@@ -408,22 +413,22 @@ def compute_mmd(self,unbiaised=False,approximation='standard',shared_anchors=Tru
             mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
         mmd = torch.dot(psix_mx,psix_mx)**2 + torch.dot(psiy_my,psiy_my)**2 - 2*torch.dot(psix_mx,Cpsiy_my)
     
-    if approximation == 'quantization':
+    if approx == 'quantization':
         mq = self.compute_omega(sample='xy',quantization=True)
         Km = self.compute_gram(sample='xy',landmarks=True)
         mmd = torch.dot(mv(Km,mq),mq)**2
 
 
     if name is None:
-        name=f'{approximation}'
-        if approximation == 'nystrom':
+        name=f'{approx}'
+        if approx == 'nystrom':
             name += 'shared' if shared_anchors else 'diff'
     
     self.dict_mmd[name] = mmd.item()
     
     self.verbosity(function_name='compute_mmd',
             dict_of_variables={'unbiaised':unbiaised,
-                                'approximation':approximation,
+                                'approximation':approx,
                                 'shared_anchors':shared_anchors,
                                 'name':name},
             start=False,

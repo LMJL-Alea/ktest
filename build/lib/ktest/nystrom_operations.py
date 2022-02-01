@@ -14,6 +14,8 @@ def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
     anchors_basis in ['K','S','W']
     ----------
     r:      <= m (= by default). Number of anchors to determine in total (proportionnaly according to the data)
+    
+    # le anchor basis est encore en param car je n'ai pas réfléchi à la version pour 1 groupe
     """
     
     assert(self.anchors_basis is not None)
