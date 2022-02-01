@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from ktest.kernels import gauss_kernel_mediane
+from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel
 # from ktest._testdata import TestData
 from time import time
 
@@ -32,7 +32,14 @@ def init_data(self,
         x_index:List = None,
         y_index:List = None,
         variables:List = None,
-        kernel:Callable[[torch.Tensor,torch.Tensor],torch.Tensor]=None):
+        kernel:str='gauss_median'):
+    """
+    kernel : default 'gauss_median' for the gaussian kernel with median bandwidth
+            'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
+            'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
+            'linear' for the linear kernel
+            for a designed kernel, this parameter can be a function. 
+    """
     # Tester works with torch tensor objects 
     self.x = torch.from_numpy(x).double() if (isinstance(x, np.ndarray)) else x
     self.y = torch.from_numpy(y).double() if (isinstance(y, np.ndarray)) else y
@@ -57,13 +64,25 @@ def init_data(self,
     self.ymask = self.y_index.isin(self.y_index)
     self.imask = self.index.isin(self.index)
     self.ignored_obs = None
-    if kernel is None:
-        self.kernel,self.mediane = gauss_kernel_mediane(x,y,return_mediane=True)        
+
+    if type(kernel) == str:
+        kernel_params = kernel.split(sep='_')
+        self.kernel_name = kernel
+        if kernel_params[0] == 'gauss':
+            if len(kernel_params)==2 and kernel_params[1]=='median':
+                self.kernel,self.kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True)
+            elif len(kernel_params)==2 and kernel_params[1]!='median':
+                self.kernel_bandwidth = float(kernel_params[1])
+                self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
+            elif len(kernel_params)==3 and kernel_params[1]=='median':
+                self.kernel_bandwidth = float(kernel_params[2])*mediane(x,y)
+                self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
+        if kernel_params[0] == 'linear':
+            self.kernel = linear_kernel
     else:
         self.kernel = kernel
-        
-    # if self.df_kfdat.empty:
-    #     self.df_kfdat = pd.DataFrame(index= list(range(1,self.n1+self.n2)))
+        self.kernel_name = 'specified by user'
+
     self.has_data = True        
 
 def init_model(self,approximation_cov='standard',approximation_mmd='standard',

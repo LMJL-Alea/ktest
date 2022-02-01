@@ -10,9 +10,9 @@ def distances(x, y=None):
     If Y=None, then this computes the distance between X and itself
     """
     if (isinstance(x, np.ndarray)):
-        x = torch.from_numpy(x)
+        x = torch.from_numpy(x).type(torch.double)
     if (isinstance(y, np.ndarray)):
-        y = torch.from_numpy(y)
+        y = torch.from_numpy(y).type(torch.double)
     
     assert(x.ndim == 2)
 
@@ -31,9 +31,9 @@ def mediane(x, y=None):
     Computes the median 
     """
     if (isinstance(x, np.ndarray)):
-        x = torch.from_numpy(x)
+        x = torch.from_numpy(x).type(torch.double)
     if (isinstance(y, np.ndarray)):
-        y = torch.from_numpy(y)
+        y = torch.from_numpy(y).type(torch.double)
     
     dxx = distances(x)
     if y == None:
