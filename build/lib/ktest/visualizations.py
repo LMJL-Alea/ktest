@@ -90,6 +90,7 @@ def plot_kfdat(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,ti
         return(fig,ax)
 
 def plot_pvalue(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo',contrib=False,label_asymp=False,asymp_arg=None,legend=True,log=False):
+    # on a pas le choix avec BH pour l'instant 
     # try:
         if columns is None:
             columns = self.df_kfdat.columns
