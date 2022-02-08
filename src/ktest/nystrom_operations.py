@@ -45,6 +45,15 @@ def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
     Km = self.compute_gram(sample=sample,landmarks=True)
     P = self.compute_centering_matrix(sample=sample,landmarks=True)
     sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.chain_matmul(P,Km,P))        
+    # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
+    if any(sp_anchors<0):
+        # ajout suite aux simu univariées ou le spectre était parfois négatif, ce qui provoquait des abérations quand on l'inversait. La solution que j'ai choisie est de tronquer le spectre uniquement aux valeurs positives et considérer les autres comme nulles. 
+        if verbose>0:
+            print(f'due to a numerical aberation, the number of anchors is reduced from {self.r} to {sum(sp_anchors>0)}')
+        r = sum(sp_anchors>0)
+        self.r = r.item()
+
+    # print(f'In compute nystrom anchors:\n\t Km\n{Km}\n\t P\n{P} \n\t sp_anchors\n{sp_anchors}\n\t ev_anchors\n{ev_anchors}')
 
     if 'anchors' in self.spev[sample]:
         self.spev[sample]['anchors'][anchors_basis] = {'sp':sp_anchors[:r],'ev':ev_anchors[:,:r]}

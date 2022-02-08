@@ -66,10 +66,15 @@ def compute_pkm(self):
     
     if cov == 'nystrom3' and cov_anchors == 'shared':
         Lz12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
+        # Lz12 = torch.nan_to_num(Lz12)
         Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
             pkm = 1/r * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
+            # print(f'in compute pkm: \n\t\
+            #      Lz12{Lz12}\n Uz{Uz}\n Kzx{Kzx}')
 
         elif mmd == 'quantization': # pas à jour 
             # il faut ajouter Pi ici . 
@@ -136,14 +141,17 @@ def compute_epk(self,t):
     if cov == 'standard':
         Kx = self.compute_gram()
         epk = torch.chain_matmul(ev.T[:t],Pbi,Kx).T
+        # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
     if 'nystrom' in cov:
         Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
         Lz = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
         r = self.r
         epk = 1/r*torch.chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
+        # epk = 1/r*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx]).T
     if cov == 'quantization':
         A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
         epk = torch.chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
+        # epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
     
     return(epk)
 #
@@ -187,7 +195,11 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
     n1,n2 = (self.n1,self.n2) 
     n = n1+n2
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
-    kfda = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy()
+    kfda = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).cumsum(axis=0)
+    kfda = torch.nan_to_num(kfda).numpy()
+    
+    
+    # print('\n\nstat compute kfdat\n\n''sp',sp,'kfda',kfda)
     name = name if name is not None else f'{cov}{mmd}{suffix_nystrom}' 
     if name in self.df_kfdat:
         print(f"écrasement de {name} dans df_kfdat")
@@ -277,7 +289,6 @@ def correct_BenjaminiHochberg_pval(self,t=20):
 def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
     # verbose -1 au lieu de verbose ? 
     cov,mmd = self.approximation_cov,self.approximation_mmd
-
     if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
         self.compute_nystrom_landmarks(verbose=verbose)
     
@@ -286,7 +297,7 @@ def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
             self.compute_nystrom_landmarks(verbose=verbose)
         if "anchors" not in self.spev[sample]:
             self.compute_nystrom_anchors(sample=sample,verbose=verbose)
-        
+    
     # if cov not in self.spev[sample]:
     self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
 #

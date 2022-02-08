@@ -83,18 +83,17 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
 
 
     if landmarks:
-        
-        if self.anchors_basis == 'K':
+        if self.anchors_basis.lower() == 'k':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
             Im = torch.eye(m, dtype=torch.float64)
             return(Im)
-        if self.anchors_basis == 'S':
+        elif self.anchors_basis.lower() == 's':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
             Im = torch.eye(m, dtype=torch.float64)
             Jm = torch.ones(m, m, dtype=torch.float64)
             Pm = Im - 1/m * Jm
             return(Pm)
-        if self.anchors_basis == 'W':
+        elif self.anchors_basis.lower() == 'w':
             assert(sample=='xy')
             m1,m2 = self.nxlandmarks, self.nylandmarks
             Im1,Im2 = torch.eye(m1, dtype=torch.float64),torch.eye(m2, dtype=torch.float64)
@@ -103,7 +102,8 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
             z12 = torch.zeros(m1, m2, dtype=torch.float64)
             z21 = torch.zeros(m2, m1, dtype=torch.float64)
             return(torch.cat((torch.cat((Pm1, z12), dim=1), torch.cat((z21, Pm2), dim=1)), dim=0)) 
-            
+        else:
+            print('invalid anchor basis')  
 
     if 'x' in sample:
         n1 = self.nxlandmarks if quantization else self.n1 
@@ -174,6 +174,7 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
             Kmm = self.compute_gram(sample=sample,landmarks=True)
             A = self.compute_quantization_weights(sample=sample,power=.5)
             Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
+            # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
         else:
             print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmark_method='kmeans'")
 
@@ -186,7 +187,8 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
             Up = self.spev[sample]['anchors'][anchors_basis]['ev']
             Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
             Kw = 1/(n*r*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
-            # Kw = 1/(n) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
+            # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
+            # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
             
         else:
             print("nystrom impossible, you need compute landmarks and/or anchors")
@@ -195,12 +197,30 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
         if self.has_landmarks and "anchors" in self.spev[sample]:
             Kmn = self.compute_kmn(sample=sample)
             Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-(1/2)))
+            # ici j'ai choisi de mettre les nan à zéro, ça change quelque chose ? 
+            # print('sp',self.spev[sample]['anchors'][anchors_basis]['sp'])
+            # print('inverse spectrum',self.spev[sample]['anchors'][anchors_basis]['sp']**-(1/2))
+            Lp_inv_12 = torch.nan_to_num(Lp_inv_12)
             Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-            Pm = self.compute_centering_matrix(sample='xy',landmarks=True,anchors_basis=anchors_basis)
+            Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+            # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
             Kw = 1/(n*r**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+            # Kw = 1/(n*r**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])            
+            
+            
+            # print(f'In compute centered gram with approximation{approximation}:\
+            # \n\t Kmn\n{Kmn}\n\t Lp_inv_12\n{Lp_inv_12} \n\t Up\n{Up}\n\t \n\tKw\n{Kw}')
+
+            
+            # print('Kmn',Kmn,
+            #       'Lp_inv_12',Lp_inv_12,
+            #       'Up',Up,
+            #       'Pm',Pm,
+            #       'Kw',Kw,)
             # Kw = 1/(n) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+            # Kw = 1/(n) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])            
             # else:
-            #     Kw = 1/n * torch.chain_matmul(Lp_inv_12,Up.T,Kmn,P,Kmn.T,Up,Lp_inv_12)
+            #     Kw = 1/n * torch.linalg.multi_dot([Lp_inv_12,Up.T,Kmn,P,Kmn.T,Up,Lp_inv_12])
 
         else:
             print("nystrom new version impossible, you need compute landmarks and/or anchors")
@@ -209,6 +229,7 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
     elif approximation == 'standard':
         K = self.compute_gram(landmarks=False,sample=sample)
         Kw = 1/n * torch.chain_matmul(P,K,P)
+        # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
     self.verbosity(function_name='compute_centered_gram',
             dict_of_variables={'approximation':approximation,'sample':sample},
@@ -237,6 +258,7 @@ def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=
     Kw = self.compute_centered_gram(approximation=approximation,sample=sample,verbose=verbose)
     
     sp,ev = ordered_eigsy(Kw)
+    # print('Kw',Kw,'sp',sp,'ev',ev)
     suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
     self.spev[sample][approximation+suffix_nystrom] = {'sp':sp,'ev':ev}
     
