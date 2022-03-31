@@ -7,11 +7,13 @@ src/ktest/__init__.py
 src/ktest/_kfdat.py
 src/ktest/_testdata.py
 src/ktest/correlation_operations.py
+src/ktest/functions.py
 src/ktest/initializations.py
 src/ktest/kernel_operations.py
 src/ktest/kernels.py
 src/ktest/nystrom_operations.py
 src/ktest/projection_operations.py
+src/ktest/residuals.py
 src/ktest/rv_gen.py
 src/ktest/scutils.py
 src/ktest/statistics.py

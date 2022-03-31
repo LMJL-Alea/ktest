@@ -16,6 +16,7 @@ from .nystrom_operations import \
     reinitialize_anchors
 
 from .statistics import \
+    get_trunc,\
     compute_kfdat,\
     compute_pval,\
     correct_BenjaminiHochberg_pval,\
@@ -50,11 +51,27 @@ from .visualizations import \
     init_axes_projs,\
     density_projs,\
     scatter_projs,\
+    set_color_for_scatter,\
     find_cells_from_proj,\
     plot_correlation_proj_var
 
 from .initializations import \
     init_data,\
     init_model,\
+    init_kernel,\
+    init_xy,\
+    init_index_xy,\
+    init_variables,\
+    init_masks,\
+    init_metadata,\
     init_data_from_dataframe,\
     verbosity
+
+
+from .residuals import \
+    compute_discriminant_axis_qh,\
+    project_on_discriminant_axis,\
+    compute_proj_on_discriminant_orthogonal,\
+    compute_residual_covariance,\
+    diagonalize_residual_covariance,\
+    proj_residus
