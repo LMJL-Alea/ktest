@@ -9,6 +9,8 @@ from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
 
 
+
+
 def init_testdata(self,x,y,x_index=None,y_index=None,variables=None,kernel=None,name=None):
     if name is None:
         name = 'data'+len(self.dict_data)
@@ -16,15 +18,76 @@ def init_testdata(self,x,y,x_index=None,y_index=None,variables=None,kernel=None,
         print(f"{name} overwritten")
     self.dict_data[name] = TestData(x,y,x_index,y_index,variables,kernel)
 
+def init_xy(self,x,y):
+    # Tester works with torch tensor objects 
+
+    for xy,sxy in zip([x,y],'xy'):
+        token = True
+        if isinstance(xy,pd.Series):
+            xy = torch.from_numpy(xy.to_numpy().reshape(-1,1)).double()
+        if isinstance(xy,pd.DataFrame):
+            xy = torch.from_numpy(xy.to_numpy()).double()
+        elif isinstance(xy, np.ndarray):
+            xy = torch.from_numpy(xy).double()
+        elif isinstance(xy,torch.Tensor):
+            xy = xy
+        else : 
+            token = False
+            print(f'unknown data type {type(xy)}')
+        if token:
+            if sxy == 'x':
+                self.x = xy
+                self.n1_initial = xy.shape[0]
+                self.n1 = xy.shape[0]
+            if sxy == 'y':
+                self.y = xy
+                self.n2_initial = xy.shape[0]
+                self.n2 = xy.shape[0]
+    
+         
+def init_index_xy(self,x_index,y_index):
+    # generates range index if no index
+    self.x_index=pd.Index(range(1,self.n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
+    self.y_index=pd.Index(range(self.n1,self.n1+self.n2)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
+    assert(len(self.x_index) == self.n1)
+    assert(len(self.y_index) == self.n2)
+    self.index = self.x_index.append(self.y_index)
+
+def init_variables(self,variables):
+    self.variables = range(self.x.shape[1]) if variables is None else variables
 
 
-def init_data_from_dataframe(self,dfx,dfy,kernel=None):
-    x = dfx.to_numpy()
-    y = dfy.to_numpy()
-    x_index = dfx.index
-    y_index = dfy.index
-    variables = dfx.columns
-    self.init_data(x,y,x_index,y_index,variables,kernel)
+def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,):
+    if isinstance(dfx,pd.Series):
+        dfx = dfx.to_frame(name='univariate')
+        dfy = dfy.to_frame(name='univariate')
+
+    self.init_xy(dfx,dfy)
+    self.init_index_xy(dfx.index,dfy.index)
+    
+    self.init_variables(dfx.columns)
+    self.init_kernel(kernel)
+    self.init_metadata(dfx_meta,dfy_meta) 
+    self.init_masks()
+   
+def init_masks(self):
+    # j'ai créé les masks au tout début du package mais je ne les utilise jamais je sais pas si c'est vraiment pertinent.
+    # C'était censé m'aider à détecter des outliers facilement et a refaire tourner le test une fois qu'ils sont supprimés. 
+
+    self.xmask = self.x_index.isin(self.x_index)
+    self.ymask = self.y_index.isin(self.y_index)
+    self.imask = self.index.isin(self.index)
+    self.ignored_obs = None
+    
+def init_metadata(self,dfx_meta=None,dfy_meta=None):
+    # j'appelle mes metadata obsx et obsy pour être cohérent avec les fichiers anndata de scanpy 
+    if dfx_meta is not None :
+        dfx_meta['sample'] = ['x']*len(dfx_meta)
+        dfy_meta['sample'] = ['y']*len(dfy_meta)
+        self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
+    # self.obsx = dfx_meta
+    # self.obsy = dfy_meta
+
 
 def init_data(self,
         x:Union[np.array,torch.tensor]=None,
@@ -32,7 +95,9 @@ def init_data(self,
         x_index:List = None,
         y_index:List = None,
         variables:List = None,
-        kernel:str='gauss_median'):
+        kernel:str='gauss_median',
+        dfx_meta:pd.DataFrame = None,
+        dfy_meta:pd.DataFrame = None):
     """
     kernel : default 'gauss_median' for the gaussian kernel with median bandwidth
             'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
@@ -40,31 +105,21 @@ def init_data(self,
             'linear' for the linear kernel
             for a designed kernel, this parameter can be a function. 
     """
-    # Tester works with torch tensor objects 
-    self.x = torch.from_numpy(x).double() if (isinstance(x, np.ndarray)) else x
-    self.y = torch.from_numpy(y).double() if (isinstance(y, np.ndarray)) else y
+    # remplacer xy_index par xy_meta
 
-    self.n1_initial = x.shape[0]
-    self.n2_initial = y.shape[0]
-    
-    self.n1 = x.shape[0]
-    self.n2 = y.shape[0]
 
-    # generates range index if no index
-    self.x_index=pd.Index(range(1,self.n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
-    self.y_index=pd.Index(range(self.n1,self.n1+self.n2)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
-    
-    assert(len(self.x_index) == self.n1)
-    assert(len(self.y_index) == self.n2)
+    self.init_xy(x,y)
+    self.init_index_xy(x_index,y_index) 
+    self.init_variables(variables)
+    self.init_kernel(kernel)
+    self.init_masks()
+    self.init_metadata(dfx_meta,dfy_meta)
 
-    self.index = self.x_index.append(self.y_index) 
-    self.variables = range(x.shape[1]) if variables is None else variables
+    self.has_data = True        
 
-    self.xmask = self.x_index.isin(self.x_index)
-    self.ymask = self.y_index.isin(self.y_index)
-    self.imask = self.index.isin(self.index)
-    self.ignored_obs = None
-
+def init_kernel(self,kernel):
+    x = self.x
+    y = self.y
     if type(kernel) == str:
         kernel_params = kernel.split(sep='_')
         self.kernel_name = kernel
@@ -83,7 +138,6 @@ def init_data(self,
         self.kernel = kernel
         self.kernel_name = 'specified by user'
 
-    self.has_data = True        
 
 def init_model(self,approximation_cov='standard',approximation_mmd='standard',
                 m=None,r=None,landmark_method='random',anchors_basis='W'):
