@@ -199,39 +199,87 @@ def density_proj(self,ax,projection,which='proj_kfda',name=None,orientation='ver
     ax.set_xlabel(f't={projection}',fontsize=20)    
     ax.legend()
 #       
-def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,name=None,highlight=None,color=None,sample='xy',labels='CT'):
+
+# cette fonction peut servir a afficher plein de figures usuelles, que je dois définir et nommer pour créer une fonction par figure usuelle
+
+def set_color_for_scatter(self,color):
+    # pas de couleur
+    if color is None:
+        color_ = {'x':'xkcd:cerulean',
+                'y':'xkcd:light orange'}
+    # couleur de variable
+    if  isinstance(color,str):
+        color_ = {'title':'color'}
+        if color in list(self.variables):
+            x,y = self.get_xy()
+            color_ = {'x':x[:,self.variables.get_loc(color)], 
+                    'y':y[:,self.variables.get_loc(color)]}
+        elif color in list(self.obs.columns):
+            if self.obs[color].dtype == 'category':
+                color_ = {pop:self.obs[self.obs[color]==pop].index for pop in self.obs[color].cat.categories}
+            else:
+                color_ = {'x':self.obs.loc[self.obs['sample']=='x'][color],
+                        'y':self.obs.loc[self.obs['sample']=='y'][color]}
+    # assert('x' in color)
+        else:
+            color_=color
+            print(f'{color} not found in obs and variables')
+
+    if isinstance(color_,dict) and 'x' in color_ and len(color_['x'])>1:
+        color_['mx'] = 'xkcd:cerulean'
+        color_['my'] = 'xkcd:light orange'
+
+    return(color_)
+    
+def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,highlight=None,color=None,sample='xy',labels='CT'):
 
     p1,p2 = projection
     yproj = xproj if yproj is None else yproj
-        
-    df_abscisse = self.init_df_proj(xproj,name)
-    df_ordonnee = self.init_df_proj(yproj,name)
+    if xproj == yproj and yname is None:
+        yname = xname
+    df_abscisse = self.init_df_proj(xproj,xname)
+    df_ordonnee = self.init_df_proj(yproj,yname)
+    color = self.set_color_for_scatter(color)
     
     for xy,l in zip(sample,labels):
+        
         df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
         df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
         m = 'x' if xy =='x' else '+'
         if len(df_abscisse_xy)>0 and len(df_ordonnee_xy)>0 :
-            if color is None or color in list(self.variables): # list vraiment utile ? 
-                c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
-                if color in list(self.variables):
-                    x,y = self.get_xy()
-                    c = x[:,self.variables.get_loc(color)] if xy=='x' else y[:,self.variables.get_loc(color)]   
-                x_ = df_abscisse_xy[f'{p1}']
-                y_ = df_ordonnee_xy[f'{p2}']
-
-                ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
+            if xy in color :
+                
+                x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
+                y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
+                # ax.scatter(x_,y_,c=c,s=30,label=,alpha=.8,marker =m)
+                ax.scatter(x_,y_,s=30,c=color[xy],label=f'{l}({len(x_)})', alpha=.8,marker =m)
             else:
-                if xy in color: # a complexifier si besoin (nystrom ou mask) 
-                    x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
-                    ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
                     if len(x_)>0:
                         ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
+            
 
+            # if color is None or (isinstance(color,str) and color in list(self.variables)): # list vraiment utile ? 
+                # c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
+                # if color in list(self.variables):
+                #     x,y = self.get_xy()
+                #     c = x[:,self.variables.get_loc(color)] if xy=='x' else y[:,self.variables.get_loc(color)]   
+            
+                # x_ = df_abscisse_xy[f'{p1}']
+                # y_ = df_ordonnee_xy[f'{p2}']
+
+                # ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
+            
+            # else:
+            #     if xy in color: # a complexifier si besoin (nystrom ou mask) 
+            #         x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
+            #         y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
+            #         ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
+
+
+            
     
     for xy,l in zip(sample,labels):
 
@@ -243,15 +291,26 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,name=None,highl
             if highlight is not None:
                 x_ = df_abscisse_xy[f'{p1}']
                 y_ = df_ordonnee_xy[f'{p2}']
-                c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
-                ax.scatter(x_[x_.index.isin(highlight)],y_[y_.index.isin(highlight)],c=c,s=100,marker='*',edgecolor='black',linewidths=1)
+                ax.scatter(x_[x_.index.isin(highlight)],y_[y_.index.isin(highlight)],c=color[xy],s=100,marker='*',edgecolor='black',linewidths=1)
+            if xy in color:
+                mx_ = x_.mean()
+                my_ = y_.mean()
+                c = color[f'm{xy}'] if f'm{xy}' in color else color[xy]
+                ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,c=c)
+            else:
+                for pop,ipop in color.items():
+                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
+                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                    if len(x_)>0:
+                        mx_ = x_.mean()
+                        my_ = y_.mean()
+                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200)
 
-            mx_ = x_.mean()
-            my_ = y_.mean()
-            ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200)
-
-    if color in list(self.variables) :
-        ax.set_title(color,fontsize=20)
+            
+            
+    
+    if 'title' in color :
+        ax.set_title(color['title'],fontsize=20)
 
         
     xlabel = xproj if xproj in self.variables else xproj.split(sep='_')[1]+f': t={p1}'
@@ -274,7 +333,7 @@ def init_axes_projs(self,fig,axes,projections,sample,suptitle,kfda,kfda_ylim,t,k
         self.plot_kfdat(fig=fig,ax = axes[0],ylim=kfda_ylim,t = t,title=kfda_title)
         axes = axes[1:]
     if spectrum:
-        self.plot_spectrum(axes[0],t=t,title='spectrum',sample=sample,label=spectrum_label)
+        self.plot_spectrum(fig=fig,ax=axes[0],t=t,title='spectrum',sample=sample,label=spectrum_label)
         axes = axes[1:]
     return(fig,axes)
 
@@ -288,7 +347,7 @@ def density_projs(self,fig=None,axes=None,which='proj_kfda',sample='xy',name=Non
     fig.tight_layout()
     return(fig,axes)
 
-def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',sample='xy',yproj=None,name=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
+def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',sample='xy',yproj=None,xname=None,yname=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
                     highlight=None,color=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',labels='CT'):
     to_iterate = projections if iterate_over == 'projections' else color
     fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,sample=sample,suptitle=suptitle,kfda=kfda,
@@ -297,9 +356,9 @@ def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',sample='xy',yproj=No
         axes = [axes]
     for ax,obj in zip(axes,to_iterate):
         if iterate_over == 'projections':
-            self.scatter_proj(ax,obj,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=color,labels=labels,sample=sample)
+            self.scatter_proj(ax,obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,labels=labels,sample=sample)
         elif iterate_over == 'color':
-            self.scatter_proj(ax,projections,xproj=xproj,yproj=yproj,name=name,highlight=highlight,color=obj,labels=labels,sample=sample)
+            self.scatter_proj(ax,projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,labels=labels,sample=sample)
     fig.tight_layout()
     return(fig,axes)
 
