@@ -1,5 +1,5 @@
 import torch
-from torch import mv
+from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
 
 def compute_gram(self,sample='xy',landmarks=False): 
@@ -35,13 +35,13 @@ def compute_omega(self,sample='xy',quantization=False):
         if quantization:
             return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
         else:
-            m_mu1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
-            m_mu2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+            m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
+            m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 
             return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
     elif sample=='x':
-        return(1/n1 * torch.ones(n1, dtype=torch.float64))
+        return(1/n1 * ones(n1, dtype=torch.float64))
     elif sample=='y':
-        return(1/n2 * torch.ones(n2, dtype=torch.float64))
+        return(1/n2 * ones(n2, dtype=torch.float64))
 
 def compute_kmn(self,sample='xy'):
     """
@@ -60,8 +60,8 @@ def compute_kmn(self,sample='xy'):
     if sample =='xy':
         kz2x = kernel(z2,x)
         kz1y = kernel(z1,y)
-        return(torch.cat((torch.cat((kz1x, kz1y), dim=1),
-                        torch.cat((kz2x, kz2y), dim=1)), dim=0))
+        return(cat((cat((kz1x, kz1y), dim=1),
+                        cat((kz2x, kz2y), dim=1)), dim=0))
     else:
         return(kz1x if sample =='x' else kz2y)
 
@@ -85,30 +85,30 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
     if landmarks:
         if self.anchors_basis.lower() == 'k':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
-            Im = torch.eye(m, dtype=torch.float64)
+            Im = eye(m, dtype=torch.float64)
             return(Im)
         elif self.anchors_basis.lower() == 's':
             m = self.nxlandmarks if sample=='x' else self.nylandmarks if sample=='y' else self.m
-            Im = torch.eye(m, dtype=torch.float64)
-            Jm = torch.ones(m, m, dtype=torch.float64)
+            Im = eye(m, dtype=torch.float64)
+            Jm = ones(m, m, dtype=torch.float64)
             Pm = Im - 1/m * Jm
             return(Pm)
         elif self.anchors_basis.lower() == 'w':
             assert(sample=='xy')
             m1,m2 = self.nxlandmarks, self.nylandmarks
-            Im1,Im2 = torch.eye(m1, dtype=torch.float64),torch.eye(m2, dtype=torch.float64)
-            Jm1,Jm2 = torch.ones(m1, m1, dtype=torch.float64),torch.ones(m2, m2, dtype=torch.float64)
+            Im1,Im2 = eye(m1, dtype=torch.float64),eye(m2, dtype=torch.float64)
+            Jm1,Jm2 = ones(m1, m1, dtype=torch.float64),ones(m2, m2, dtype=torch.float64)
             Pm1,Pm2 = Im1 - 1/m1 * Jm1, Im2 - 1/m2 * Jm2
-            z12 = torch.zeros(m1, m2, dtype=torch.float64)
-            z21 = torch.zeros(m2, m1, dtype=torch.float64)
-            return(torch.cat((torch.cat((Pm1, z12), dim=1), torch.cat((z21, Pm2), dim=1)), dim=0)) 
+            z12 = zeros(m1, m2, dtype=torch.float64)
+            z21 = zeros(m2, m1, dtype=torch.float64)
+            return(cat((cat((Pm1, z12), dim=1), cat((z21, Pm2), dim=1)), dim=0)) 
         else:
             print('invalid anchor basis')  
 
     if 'x' in sample:
         n1 = self.nxlandmarks if quantization else self.n1 
-        In1 = torch.eye(n1, dtype=torch.float64)
-        Jn1 = torch.ones(n1, n1, dtype=torch.float64)
+        In1 = eye(n1, dtype=torch.float64)
+        Jn1 = ones(n1, n1, dtype=torch.float64)
         if quantization: 
             a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
             Pn1 = (In1 - 1/self.n2 * torch.ger(a1,a1))
@@ -119,8 +119,8 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
 
     if 'y' in sample:
         n2 = self.nylandmarks if quantization else self.n2
-        In2 = torch.eye(n2, dtype=torch.float64)
-        Jn2 = torch.ones(n2, n2, dtype=torch.float64)
+        In2 = eye(n2, dtype=torch.float64)
+        Jn2 = ones(n2, n2, dtype=torch.float64)
         if quantization: 
             a2 = self.compute_quantization_weights(sample='y',power=.5,diag=False)
             Pn2 = (In2 - 1/self.n2 * torch.ger(a2,a2))
@@ -130,9 +130,9 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
             Pn2 = In2 - 1/n2 * Jn2
 
     if sample == 'xy':
-        z12 = torch.zeros(n1, n2, dtype=torch.float64)
-        z21 = torch.zeros(n2, n1, dtype=torch.float64)
-        return(torch.cat((torch.cat((Pn1, z12), dim=1), torch.cat(
+        z12 = zeros(n1, n2, dtype=torch.float64)
+        z21 = zeros(n2, n1, dtype=torch.float64)
+        return(cat((cat((Pn1, z12), dim=1), cat(
         (z21, Pn2), dim=1)), dim=0))  # bloc diagonal
     else:
         return(Pn1 if sample=='x' else Pn2)  
@@ -197,26 +197,14 @@ def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
         if self.has_landmarks and "anchors" in self.spev[sample]:
             Kmn = self.compute_kmn(sample=sample)
             Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-(1/2)))
-            # ici j'ai choisi de mettre les nan à zéro, ça change quelque chose ? 
-            # print('sp',self.spev[sample]['anchors'][anchors_basis]['sp'])
-            # print('inverse spectrum',self.spev[sample]['anchors'][anchors_basis]['sp']**-(1/2))
-            Lp_inv_12 = torch.nan_to_num(Lp_inv_12)
+            # on est pas censé avoir de nan, il y en avait quand les ancres donnaient des spectres négatifs à cause des abérations numérique en univarié 
+            # assert(not any(torch.isnan(Lp_inv_12)))
             Up = self.spev[sample]['anchors'][anchors_basis]['ev']
             Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
             # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
             Kw = 1/(n*r**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
             # Kw = 1/(n*r**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])            
             
-            
-            # print(f'In compute centered gram with approximation{approximation}:\
-            # \n\t Kmn\n{Kmn}\n\t Lp_inv_12\n{Lp_inv_12} \n\t Up\n{Up}\n\t \n\tKw\n{Kw}')
-
-            
-            # print('Kmn',Kmn,
-            #       'Lp_inv_12',Lp_inv_12,
-            #       'Up',Up,
-            #       'Pm',Pm,
-            #       'Kw',Kw,)
             # Kw = 1/(n) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
             # Kw = 1/(n) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])            
             # else:
