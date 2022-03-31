@@ -106,7 +106,7 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
 
 
     if name in self.df_proj_kpca:
-        print(f"écrasement de {name} dans df_proj_kfda")
+        print(f"écrasement de {name} dans df_proj_kpca")
     
     index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
     self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
@@ -164,7 +164,9 @@ def init_df_proj(self,which,name=None):
     
     proj_options = {'proj_kfda':self.df_proj_kfda,
                'proj_kpca':self.df_proj_kpca,
-               'proj_mmd':self.df_proj_mmd,}
+               'proj_mmd':self.df_proj_mmd,
+               'proj_residuals':self.df_proj_residuals # faire en sorte d'ajouter ça
+               }
     if which in proj_options:
         dict_df_proj = proj_options[which]
         nproj = len(dict_df_proj)
