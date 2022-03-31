@@ -1,8 +1,14 @@
 import torch
 import pandas as pd
-from torch import mv
+from torch import mv,diag,chain_matmul,dot
 from scipy.stats import chi2
 
+
+def get_trunc(self,sample='xy',ratio=.05):
+    suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
+    sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
+    spp = sp/torch.sum(sp)
+    return(len(spp[spp>=ratio]))
 
 def compute_pkm(self):
     """
@@ -22,7 +28,7 @@ def compute_pkm(self):
 
     if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3','nystrom']]):
         Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lz = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
         
     if not (mmd == cov) or mmd == 'nystrom':
         Kzx = self.compute_kmn(sample='xy')
@@ -52,7 +58,7 @@ def compute_pkm(self):
             # pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
     
     if cov == 'nystrom2' and cov_anchors == 'shared':
-        Lz12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
             Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
@@ -65,9 +71,8 @@ def compute_pkm(self):
             # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
     
     if cov == 'nystrom3' and cov_anchors == 'shared':
-        Lz12 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
-        # Lz12 = torch.nan_to_num(Lz12)
         Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
 
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
@@ -91,9 +96,9 @@ def compute_pkm(self):
             Kz2x = self.kerne(z2,x)
             Kz2y = self.kerne(z2,y)
             Uz1 = self.spev['x']['anchors'][anchors_basis]['ev']
-            Lz1 = torch.diag(self.spev['x']['anchors'][anchors_basis]['sp']**-1)
+            Lz1 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-1)
             Uz2 = self.spev['y']['anchors'][anchors_basis]['ev']
-            Lz2 = torch.diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
+            Lz2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
             omega1 = self.compute_omega(sample='x',quantization=False)
             omega2 = self.compute_omega(sample='y',quantization=False)
             Pn1 = self.compute_centering_matrix(sample='x')
@@ -140,17 +145,27 @@ def compute_epk(self,t):
     
     if cov == 'standard':
         Kx = self.compute_gram()
-        epk = torch.chain_matmul(ev.T[:t],Pbi,Kx).T
+        epk = chain_matmul(ev.T[:t],Pbi,Kx).T
         # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
-    if 'nystrom' in cov:
+    if cov == 'nystrom3':
+        m = self.m
         Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lz = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        # print(f'm:{m} evt:{ev.T[:t].shape} Lz12{Lz12.shape} Uz{Uz.shape} Kzx{Kzx.shape}')
+        
+        epk = 1/m**(1/2) * chain_matmul(ev.T[:t],Lz12,Uz.T,Kzx).T
+
+    elif 'nystrom' in cov:
+        Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
+        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
         r = self.r
-        epk = 1/r*torch.chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
+        print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
+        epk = 1/r*chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
         # epk = 1/r*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx]).T
     if cov == 'quantization':
         A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-        epk = torch.chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
+        epk = chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
         # epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
     
     return(epk)
@@ -195,8 +210,7 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
     n1,n2 = (self.n1,self.n2) 
     n = n1+n2
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
-    kfda = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).cumsum(axis=0)
-    kfda = torch.nan_to_num(kfda).numpy()
+    kfda = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy()
     
     
     # print('\n\nstat compute kfdat\n\n''sp',sp,'kfda',kfda)
@@ -388,16 +402,16 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         K = self.compute_gram()
         if unbiaised:
             K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
-        mmd = torch.dot(mv(K,m),m)**2
+        mmd = dot(mv(K,m),m)**2
     
     if approx == 'nystrom' and shared_anchors:
         m = self.compute_omega(sample='xy',quantization=False)
         Up = self.spev['xy']['anchors'][anchors_basis][anchors_basis]['ev']
-        Lp_inv2 = torch.diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lp_inv2 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
         Kmn = self.compute_kmn(sample='xy')
         psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
-        mmd = torch.dot(psi_m,psi_m)**2
+        mmd = dot(psi_m,psi_m)**2
     
     if approx == 'nystrom' and not shared_anchors:
         
@@ -405,9 +419,9 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         my = self.compute_omega(sample='y',quantization=False)
         Upx = self.spev['x']['anchors'][anchors_basis]['ev']
         Upy = self.spev['y']['anchors'][anchors_basis]['ev']
-        Lpx_inv2 = torch.diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
-        Lpy_inv2 = torch.diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
-        Lpy_inv = torch.diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
+        Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lpy_inv2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
         Pmx = self.compute_centering_matrix(sample='x',landmarks=True)
         Pmy = self.compute_centering_matrix(sample='y',landmarks=True)
         Kmnx = self.compute_kmn(sample='x')
@@ -422,12 +436,12 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         psiy_my = mv(Lpy_inv2,mv(Upy.T,mv(Pmy,mv(Kmny,my))))
         Cpsiy_my = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmxmy,\
             mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
-        mmd = torch.dot(psix_mx,psix_mx)**2 + torch.dot(psiy_my,psiy_my)**2 - 2*torch.dot(psix_mx,Cpsiy_my)
+        mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
     
     if approx == 'quantization':
         mq = self.compute_omega(sample='xy',quantization=True)
         Km = self.compute_gram(sample='xy',landmarks=True)
-        mmd = torch.dot(mv(Km,mq),mq)**2
+        mmd = dot(mv(Km,mq),mq)**2
 
 
     if name is None:
