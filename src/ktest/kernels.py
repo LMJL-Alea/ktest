@@ -5,14 +5,18 @@
 import torch
 import numpy as np
 
+def torch_transformator(x):
+    if (isinstance(x, np.ndarray)):
+        x = torch.from_numpy(x).type(torch.double)
+    return(x)
+
+
 def distances(x, y=None):
     """
     If Y=None, then this computes the distance between X and itself
     """
-    if (isinstance(x, np.ndarray)):
-        x = torch.from_numpy(x).type(torch.double)
-    if (isinstance(y, np.ndarray)):
-        y = torch.from_numpy(y).type(torch.double)
+    x=torch_transformator(x)
+    y=torch_transformator(y)
     
     assert(x.ndim == 2)
 
@@ -30,10 +34,8 @@ def mediane(x, y=None):
     """
     Computes the median 
     """
-    if (isinstance(x, np.ndarray)):
-        x = torch.from_numpy(x).type(torch.double)
-    if (isinstance(y, np.ndarray)):
-        y = torch.from_numpy(y).type(torch.double)
+    x=torch_transformator(x)
+    y=torch_transformator(y)
     
     dxx = distances(x)
     if y == None:
@@ -46,7 +48,10 @@ def mediane(x, y=None):
     median = dtot.median()
     if median == 0:
         print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
-        return dtot.mean()
+        mean = dtot.mean()
+        if mean == 0 : 
+            print('warning: all your data are null')
+        return mean
     else:
         return dtot.median()
 
