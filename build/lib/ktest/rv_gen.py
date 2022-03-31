@@ -23,6 +23,8 @@ def mvn_pf(p=P, d=D, nobs=N, sig=S, seed=1, noise=True,spectrum='isotropic', **k
         cov = torch.diag(torch.tensor(list(range(1,p+1))))
     elif spectrum == 'decreasing_geometric':
         cov = torch.diag(torch.tensor([0.9**i for i in range(p)]))
+    elif spectrum == 'tuned':
+        cov = torch.diag(torch.tensor([sig]*p))
     xp = np.random.multivariate_normal(mu, cov, nobs)
     xd_p = np.zeros((nobs, d-p))
     xd = np.concatenate((xp, xd_p), axis=1)
@@ -72,6 +74,7 @@ def gen_couple(key = {}):
     ref_generators = {'gaussienne.multivariee': mvn_pf,}
     generator = ref_generators[key['data_type']] if 'data_type' in key else mvn_pf
     
+    # idée pour simplifier : créer un arg_default et changer les valeurs     pour les éléments dans key  
     arg = {arg_name: key[arg_key] if arg_key in key else default \
            for arg_name,arg_key,default in zip(['p','d','sig','noise','spectrum'],
         ['data_dimi','data_dimg','data_noise_sig','data_noise','data_spectrum'],
@@ -91,9 +94,44 @@ def gen_couple(key = {}):
     else:
         arg['nobs'] =  key['data_nobs'] if 'data_nobs' in key else N
         couple = {'x': generator(seed=seed, **arg),
-              'y': generator(seed=seed+1, **arg)}
+                'y': generator(seed=seed+1, **arg)}
 
     return couple
+
+# def gen_couple(p=P,d=D,sig=S,noise=False,spectrum='isotropic',seed = 1994,data_nobs=N,data_ynobs=None,type='gaussienne.multivariee'):
+#     """
+#     Generates a couple of sample for which H0 holds
+#     Example key : 
+#     {'data_type':'gaussienne.multivariee', #type of distribution
+#      'data_dimi':1, #intrinsic dimension
+#      'data_dimg':3, #global dimension
+#      'data_noise':False, #noise on 
+#      'spectrum':'isotropic',
+#      'data_nobs':102,
+#      'data_seed':1999}
+#     """
+    
+#     ref_generators = {'gaussienne.multivariee': mvn_pf,}
+#     generator = ref_generators[type] 
+    
+#     # idée pour simplifier : créer un arg_default et changer les valeurs     pour les éléments dans key  
+#     arg = {'p':p,'d':d,'sig':sig,'noise':noise,'spectrum':spectrum}    
+
+#     # échantillons de taille différente
+#     if 'data_ynobs' is not None:
+#         argx = arg.copy()
+#         argy = arg.copy()
+#         argx['nobs'] = data_nobs
+#         argy['nobs'] = data_ynobs
+#         couple = {'x': generator(seed=seed, **argx),
+#               'y': generator(seed=seed+1, **argy)}
+#     # les deux échantillons font la même taille
+#     else:
+#         arg['nobs'] =  data_nobs
+#         couple = {'x': generator(seed=seed, **arg),
+#                 'y': generator(seed=seed+1, **arg)}
+
+#     return couple
 
 #%% Transformation
 def shift(y,ndim_to_shift=1,shift_by=1):
@@ -244,6 +282,69 @@ def gen_couple_H1(key={}):
             # x,y = blobs(nobs,seed,version='Gretton2012b').values()
             
     return({'x':x,'y':y})
+
+# def gen_couple_H1(p=P,d=D,sig=S,noise=False,spectrum='isotropic',seed = 1994,data_nobs=N,data_ynobs=None,
+#             alternative = 'shift',alternative_param=1,alternative_ndim=1):
+#     """
+    
+    
+#     if alternative in ['GMD','GVD','Blobs'] : 
+#     Generates a toy dataset of two samples of observations with different distributions 
+#     for which the difference has already been used to assess the performances of a two sample test.
+#     Attention: the information contained in key may be ignored in order to fit exactly the distribution       
+#     """
+#     assert('alternative' in key)
+    
+#     if alternative in ['shift','rescale','rot_plane']:
+        
+#         x,y = gen_couple(p=p,d=d,sig=sig,noise=noise,spectrum=spectrum,seed=seed,data_nobs=data_nobs,data_ynobs=data_ynobs).values()
+#         # param = key['alternative_param']
+#         # if alternative in ['shift','rescale']:
+#             # ndim = key['alternative_ndim']
+
+#         if alternative == 'shift':
+#             y = shift(y,ndim_to_shift=alternative_ndim,shift_by=alternative_param)
+
+#         if alternative == 'rescale':
+#             y = rescale(y,ndim_to_rescale=alternative_ndim,coef=alternative_param)
+
+#         if alternative =='rot_plane':
+#             y = rot_plane(y,angle=alternative_param)
+    
+#     else:
+#         if alternative =='GMD':
+#             d = key['data_dimg']
+#             key['data_dimi'] = d
+#             key['data_type'] = 'gaussienne.multivariee'
+#             key['spectrum']  = 'isotropic'
+#             x,y = gen_couple(d=d,p=p,key).values()
+#             y = shift(y,ndim_to_shift=1,shift_by=1)
+        
+#         if alternative =='GVD':
+#             d = key['data_dimg']
+#             key['data_dimi'] = d
+#             key['data_type'] = 'gaussienne.multivariee'
+#             key['spectrum']  = 'isotropic'
+#             x,y = gen_couple(key).values()
+#             y =  rescale(y,ndim_to_rescale=1,coef=np.sqrt(2))
+            
+#         if alternative =='Gretton2012b1':
+#             d,nobs,seed = key['data_dimg'],key['data_nobs'],key['data_seed']
+#             x,y = Gretton2012b1(d,nobs,seed,mean_shift=.5).values()
+            
+#         if alternative =='BlobsJitkrittum2016':
+#             nobs,seed = key['data_nobs'],key['data_seed']
+#             x,y = blobs(nobs,seed,version='Jitkrittum2016').values()
+            
+#         if alternative =='BlobsChwialkowski2015':
+#             nobs,seed = key['data_nobs'],key['data_seed']
+#             x,y = blobs(nobs,seed,version='Chwialkowski2015').values()
+            
+#         if alternative =='BlobsGretton2012b':
+#             a=0
+#             # x,y = blobs(nobs,seed,version='Gretton2012b').values()
+            
+#     return({'x':x,'y':y})
         
 
 
