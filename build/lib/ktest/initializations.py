@@ -43,6 +43,7 @@ def init_xy(self,x,y):
                 self.y = xy
                 self.n2_initial = xy.shape[0]
                 self.n2 = xy.shape[0]
+            self.has_data = True
     
          
 def init_index_xy(self,x_index,y_index):
@@ -57,11 +58,12 @@ def init_variables(self,variables):
     self.variables = range(self.x.shape[1]) if variables is None else variables
 
 
-def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,):
+def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0):
     if isinstance(dfx,pd.Series):
         dfx = dfx.to_frame(name='univariate')
         dfy = dfy.to_frame(name='univariate')
-
+    
+    self.verbose = verbose
     self.init_xy(dfx,dfy)
     self.init_index_xy(dfx.index,dfy.index)
     
@@ -69,6 +71,14 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
     self.init_kernel(kernel)
     self.init_metadata(dfx_meta,dfy_meta) 
     self.init_masks()
+    self.set_center_by(center_by)
+    
+def set_center_by(self,center_by):
+    self.center_by = None
+    if center_by is not None and hasattr(self,'obs'):
+        # if center_by in self.obs:
+        self.center_by = center_by
+        
    
 def init_masks(self):
     # j'ai créé les masks au tout début du package mais je ne les utilise jamais je sais pas si c'est vraiment pertinent.
@@ -85,6 +95,7 @@ def init_metadata(self,dfx_meta=None,dfy_meta=None):
         dfx_meta['sample'] = ['x']*len(dfx_meta)
         dfy_meta['sample'] = ['y']*len(dfy_meta)
         self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
+        self.obs.index = self.index
     # self.obsx = dfx_meta
     # self.obsy = dfy_meta
 
@@ -97,7 +108,9 @@ def init_data(self,
         variables:List = None,
         kernel:str='gauss_median',
         dfx_meta:pd.DataFrame = None,
-        dfy_meta:pd.DataFrame = None):
+        dfy_meta:pd.DataFrame = None,
+        center_by:str = None,
+        verbose = 0):
     """
     kernel : default 'gauss_median' for the gaussian kernel with median bandwidth
             'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
@@ -107,30 +120,32 @@ def init_data(self,
     """
     # remplacer xy_index par xy_meta
 
-
+    self.verbose = verbose
     self.init_xy(x,y)
     self.init_index_xy(x_index,y_index) 
     self.init_variables(variables)
     self.init_kernel(kernel)
     self.init_masks()
     self.init_metadata(dfx_meta,dfy_meta)
-
+    self.set_center_by(center_by)
     self.has_data = True        
 
 def init_kernel(self,kernel):
     x = self.x
     y = self.y
+    verbose = self.verbose
+
     if type(kernel) == str:
         kernel_params = kernel.split(sep='_')
         self.kernel_name = kernel
         if kernel_params[0] == 'gauss':
             if len(kernel_params)==2 and kernel_params[1]=='median':
-                self.kernel,self.kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True)
+                self.kernel,self.kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True,verbose=verbose)
             elif len(kernel_params)==2 and kernel_params[1]!='median':
                 self.kernel_bandwidth = float(kernel_params[1])
                 self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
             elif len(kernel_params)==3 and kernel_params[1]=='median':
-                self.kernel_bandwidth = float(kernel_params[2])*mediane(x,y)
+                self.kernel_bandwidth = float(kernel_params[2])*mediane(x,y,verbose=verbose)
                 self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
         if kernel_params[0] == 'linear':
             self.kernel = linear_kernel
@@ -141,7 +156,14 @@ def init_kernel(self,kernel):
 
 def init_model(self,approximation_cov='standard',approximation_mmd='standard',
                 m=None,r=None,landmark_method='random',anchors_basis='W'):
+    """
+    It is not possible to use nystrom for small datasets (n<100)
+    """
 
+
+    n1,n2 = self.n1,self.n2
+    if "nystrom" in approximation_cov and (n1<100 or n2<100): 
+        self.approximation_cov = 'standard'
     self.approximation_cov = approximation_cov
     self.m = m
     self.r = r

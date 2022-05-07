@@ -2,6 +2,8 @@ from .utils import ordered_eigsy
 
 from .kernel_operations import \
     compute_gram, \
+    compute_centering_matrix_with_respect_to_some_effects, \
+    center_gram_matrix_with_respect_to_some_effects, \
     compute_omega, \
     compute_kmn, \
     compute_centered_gram, \
@@ -18,6 +20,7 @@ from .nystrom_operations import \
 from .statistics import \
     get_trunc,\
     compute_kfdat,\
+    get_explained_variance,\
     compute_pval,\
     correct_BenjaminiHochberg_pval,\
     compute_pkm,\
@@ -59,6 +62,7 @@ from .initializations import \
     init_data,\
     init_model,\
     init_kernel,\
+    set_center_by,\
     init_xy,\
     init_index_xy,\
     init_variables,\

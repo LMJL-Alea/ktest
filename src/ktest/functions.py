@@ -12,13 +12,7 @@ from joblib.externals.loky import set_loky_pickler
 
 
 def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
-    if isinstance(x,pd.DataFrame) or isinstance(x,pd.Series):
-        if len(x.shape)==1:
-            x = x.to_numpy().reshape(-1,1)
-            y = y.to_numpy().reshape(-1,1)
-        else:
-            x = x.to_numpy()
-            y = y.to_numpy()
+
     test = Tester()
     test.init_data(x,y,kernel=kernel)
     test.init_model(**params_model)
@@ -27,6 +21,7 @@ def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model=
         return(test.df_kfdat,test.df_pval)
     else:
         return(test.df_kfdat)
+    
 
 def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
     if isinstance(x,pd.DataFrame) or isinstance(x,pd.Series):
@@ -511,15 +506,25 @@ def get_color_from_color_col(color_col):
         color = None
     return(color)
 
-def get_cat_from_names(names):        
+def get_cat_from_names(names,dict_data):        
     cat = []
     for name in names: 
-        cat += [name.split(sep='_')[0]]
-        cat += [name.split(sep='_')[1]]
+        cat1 = name.split(sep='_')[0]
+        cat2 = name.split(sep='_')[1]
+
+        df1 = pd.concat([dict_data[c] for c in [c for c in cat1.split(sep=',')]],axis=0) if ',' in cat1 else dict_data[cat1]
+        df2 = pd.concat([dict_data[c] for c in [c for c in cat2.split(sep=',')]],axis=0) if ',' in cat2 else dict_data[cat2]
+
+        if len(df1)>10:
+            cat += [cat1]
+        if len(df2)>10:
+            cat += [cat2]
     return(list(set(cat)))
 
-def get_dist_matrix_from_dict_test_and_names(names,dict_tests):
-    cat = get_cat_from_names(names)
+
+
+def get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data):
+    cat = get_cat_from_names(names,dict_data)
     dist = {c:{} for c in cat}
     for name in names:
         cat1 = name.split(sep='_')[0]
@@ -532,13 +537,15 @@ def get_dist_matrix_from_dict_test_and_names(names,dict_tests):
             dist[cat2][cat1] = stat
     return(pd.DataFrame(dist).fillna(0).to_numpy())
 
-def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={}):
+def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={},center_by=None,free_memory=True):
     if name not in dict_tests:
         cat1 = name.split(sep='_')[0]
         cat2 = name.split(sep='_')[1]
 
         df1 = pd.concat([dict_data[c] for c in [c for c in cat1.split(sep=',')]],axis=0) if ',' in cat1 else dict_data[cat1]
         df2 = pd.concat([dict_data[c] for c in [c for c in cat2.split(sep=',')]],axis=0) if ',' in cat2 else dict_data[cat2]
+
+
 
         if dict_meta is not None:
             df1_meta = pd.concat([dict_meta[c] for c in [c for c in cat1.split(sep=',')]],axis=0) if ',' in cat1 else dict_meta[cat1]
@@ -549,28 +556,51 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
            
         colcat1 = []
         colcat2 = []
-        for cat,colcat in zip([cat1,cat2],[colcat1,colcat2]):
+        colsexe1 = []
+        colsexe2 = []
+        for cat,colcat,colsexe in zip([cat1,cat2],[colcat1,colcat2],[colsexe1,colsexe2]):
             for c in cat.split(sep=','):
                 colcat += [c]*len(dict_data[c])
+                colsexe += ['M' if c[0]=='M' else 'W']*len(dict_data[c])
+                
+                
         df1_meta['cat'] = colcat1
         df2_meta['cat'] = colcat2
+        df1_meta['sexe'] = colsexe1
+        df2_meta['sexe'] = colsexe2
         df1_meta['cat'] = df1_meta['cat'].astype('category')
         df2_meta['cat'] = df2_meta['cat'].astype('category')
+        df1_meta['sexe'] = df1_meta['sexe'].astype('category')
+        df2_meta['sexe'] = df2_meta['sexe'].astype('category')
         
         
-        if len(df1)>0 and len(df2)>0:
+        if len(df1)>10 and len(df2)>10:
             t0=time()
             print(name,len(df1),len(df2),end=' ')
             test = Tester()
-
-            test.init_data_from_dataframe(df1,df2,dfx_meta = df1_meta,dfy_meta=df2_meta)
+#             center_by = 'cat' if center_by_cat else None
+            test.init_data_from_dataframe(df1,df2,dfx_meta = df1_meta,dfy_meta=df2_meta,center_by=center_by)
+            test.obs['cat']=test.obs['cat'].astype('category')
+            test.obs['sexe']=test.obs['sexe'].astype('category')
             test.init_model(**params_model)
             test.kfdat(name=name)
-            test.compute_proj_kfda(t=20)
-            t=test.get_trunc()
+            t = test.t
+            
+                        
+            test.compute_proj_kfda(t=t+1)
+            
             kfda = test.df_kfdat[name][t]
+            test.compute_pval(t=t)
+            pval = test.df_pval[name][t]
+            if free_memory:
+                test.x = np.array(0)
+                test.y = np.array(0) 
+                del(test.spev['xy']['standard']['ev'])
+#                 test.spev = {'x':{},'y':{},'xy':{},'residuals':{}}
+            
             dict_tests[name] = test
-            print(f'{time()-t0:.3f} t={t} kfda={kfda}')
+            print(f'{time()-t0:.3f} t={t} kfda={kfda:.4f} pval={pval}')
+            
  
 def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,color_col=None):
 
@@ -579,7 +609,7 @@ def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,co
     infos = name.split(sep='_')[2] if len(name.split(sep='_'))>2 else ""
     fig,axes = plt.subplots(ncols=2,figsize=(12*2,6))
     test = dict_tests[name]
-    t = test.get_trunc()
+    t = test.t
     pval = test.df_pval.loc[t].values[0]
     test.density_projs(fig=fig,axes=axes[0],projections=[t],labels=[cat1,cat2],)
     color = get_color_from_color_col(color_col)
@@ -589,19 +619,20 @@ def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,co
     return(fig,axes)
 
 
-def plot_density_of_chosen_truncation_from_names(name,dict_tests,fig=None,ax=None,t=None):
+def plot_density_of_chosen_truncation_from_names(name,dict_tests,fig=None,ax=None,t=None,labels=None):
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,6))
     cat1 = name.split(sep='_')[0]
     cat2 = name.split(sep='_')[1]
     infos = name.split(sep='_')[2] if len(name.split(sep='_'))>2 else ""
     test = dict_tests[name]
-    trunc = test.get_trunc() if t is None else t
+    trunc = test.t if t is None else t
     pval = test.df_pval.loc[trunc].values[0]
-    test.density_projs(fig=fig,axes=ax,projections=[trunc],labels=[cat1,cat2],)
+    test.density_projs(fig=fig,axes=ax,projections=[trunc],labels=[cat1,cat2] if labels is None else labels,)
     fig.suptitle(f'{cat1} vs {cat2} {infos}: pval={pval:.5f}',fontsize=30,y=1.04)
     fig.tight_layout()
     return(fig,ax)
+
 
 def plot_scatter_of_chosen_truncation_from_names(name,dict_tests,color_col=None,fig=None,ax=None,t=None):
     if fig is None:
@@ -610,7 +641,7 @@ def plot_scatter_of_chosen_truncation_from_names(name,dict_tests,color_col=None,
     cat2 = name.split(sep='_')[1]
     infos = name.split(sep='_')[2] if len(name.split(sep='_'))>2 else ""
     test = dict_tests[name]
-    trunc = test.get_trunc() if t is None else t
+    trunc = test.t if t is None else t
     pval = test.df_pval.loc[trunc].values[0]
     color = get_color_from_color_col(color_col)
     test.scatter_projs(fig=fig,axes=ax,projections=[[trunc,1]],labels=[cat1,cat2],color=color)
@@ -636,13 +667,13 @@ def plot_density_of_univariate_data_from_name_and_dict_data(name,dict_data,fig=N
     fig.tight_layout()
     return(fig,ax)
 
-def plot_dendrogram_from_names(names,dict_tests,rotlab=0,ct=''):
-    cat = get_cat_from_names(names)
+def plot_dendrogram_from_names(names,dict_tests,dict_data,rotlab=0,ct=''):
+    cat = get_cat_from_names(names,dict_data)
     cat_plot = []
     for c in cat:
         cat_plot += [reduce_category(c,ct)]
 
-    dists = get_dist_matrix_from_dict_test_and_names(names,dict_tests)
+    dists = get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data)
 
 
     fig,ax = plt.subplots(figsize=(7,7))
@@ -651,11 +682,26 @@ def plot_dendrogram_from_names(names,dict_tests,rotlab=0,ct=''):
                orientation='top',
                 labels=cat_plot,
                 distance_sort='descending',
+        
                 show_leaf_counts=True)
     ax.set_title(ct,fontsize=20)
     ax.tick_params(axis='x', labelrotation=rotlab,labelsize=20 )
     return(fig,ax)
 
+def reduce_labels_and_add_ncells(cats,ct,dict_data):
+    cats_labels=[]
+    for cat in cats: 
+        if ',' in cat:
+            ncells = np.sum([len(dict_data[c]) for c in cat.split(sep=',') ])
+            rcats = []
+            for c in cat.split(sep=','):
+                rcats+=[reduce_category(c,ct)]
+            rcat = ','.join(rcats)
+        else:
+            ncells = len(dict_data[cat])
+            rcat =  reduce_category(cat,ct)
+        cats_labels+= [f'{rcat}({ncells})']
+    return cats_labels
 
 
 ####################### Residual of Discrimination
@@ -700,7 +746,7 @@ from scipy.cluster.hierarchy import dendrogram
 def get_kfda_from_name_and_dict_tests(name,dict_tests):
     if name in dict_tests:
         test = dict_tests[name]
-        t = test.get_trunc()
+        t = test.t
         kfda = test.df_kfdat[name][t]
     else:
         kfda = np.inf
@@ -776,7 +822,7 @@ def custom_linkage2(cats,dict_data,dict_tests,kernel='gauss_median',params_model
 #         print(f'x={x} id_x={id_x} catx={c1} \n y={y} id_y={id_y} caty={c2} \n kfda={kfda}')
         cats_ = update_cats_from_similarities(cats_,similarities,dict_tests)
         ordered_comparisons += [f'{c1}_{c2}' if c1<c2 else f'{c2}_{c1}']
-        similarities = kfda_similarity_of_datasets_from_cats(cats_,dict_data,dict_tests)
+        similarities = kfda_similarity_of_datasets_from_cats(cats_,dict_data,dict_tests,kernel=kernel,params_model=params_model)
 
         #         # my record the new node
         Z[k, 0] = min(x, y)
@@ -791,28 +837,27 @@ def custom_linkage2(cats,dict_data,dict_tests,kernel='gauss_median',params_model
 
 
 
-def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=None,ax=None):
+def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=None,ax=None,cats_labels=None,params_model={}):
     if fig is None:
         fig,ax = plt.subplots(figsize= (10,6))
+    if cats_labels==None:
+        cats_labels = cats
     
-    
-    linkage,comparisons = custom_linkage2(cats,dict_data,dict_tests)
+    linkage,comparisons = custom_linkage2(cats,dict_data,dict_tests,params_model = params_model)
     kfda_max = np.max(linkage[:,2])
-    cats_with_ncells = []
-    for cat in cats: 
-        if ',' in cat:
-            ncells = np.sum([len(dict_data[c]) for c in cat.split(sep=',') ])
-        else:
-            ncells = len(dict_data[cat])
-        cats_with_ncells+= [f'{cat}({ncells})']
-    d = dendrogram(linkage,labels=cats_with_ncells,ax=ax)
+#     cats_with_ncells = []
+#     for cat in cats: 
+#         if ',' in cat:
+#             ncells = np.sum([len(dict_data[c]) for c in cat.split(sep=',') ])
+#         else:
+#             ncells = len(dict_data[cat])
+#         cats_with_ncells+= [f'{cat}({ncells})']
+    d = dendrogram(linkage,labels=cats_labels,ax=ax)
 
     abscisses = d['icoord']
     ordinates = d['dcoord']
     
-    # ordered_cat = d['ivl']
-    
-    
+        
     icomp = 0
     for x,y in zip(abscisses,ordinates):
         
@@ -827,11 +872,14 @@ def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=No
     if y_max is not None:
         ax.set_ylim(0,y_max)
     ax.tick_params(axis='x', labelrotation=90,labelsize=20 )
-    return(d)
+#     return(d)
+
+    return(fig,ax)
+
 
 def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
     test = dict_tests[name]
-    t = test.get_trunc()
+    t = test.t
     pval = test.df_pval[name][t]
     kfda = test.df_kfdat[name][t]
     c = 'green' if pval >.05 else 'red'
@@ -839,5 +887,29 @@ def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
     ax.scatter(x,yaccept,s=500,c='red',alpha=.5,marker='_',)
     ax.scatter(x,y,s=300,c=c,edgecolor='black',alpha=1,linewidths=3,)
 
+
+### Comparaison M vs W 
+
+def get_name_MvsF(ct,data_type,cts,dict_data):
+    mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
+    name = ''
+    virgule = 0 
+    for m in mwi:
+        if 'M' in m:
+            for celltype in cts[ct]:
+                cat = f'{m}{celltype}{data_type}'
+                if cat in dict_data:
+                    name += f'{cat},'
+                    
+    name = name[:-1]
+    name += '_'
+    virgule = 0
+    for m in mwi:
+        if 'W' in m:
+            for celltype in cts[ct]:
+                cat = f'{m}{celltype}{data_type}'
+                if cat in dict_data:
+                    name += f'{cat},'
+    return(name[:-1])
 
 
