@@ -240,7 +240,7 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
     df_abscisse = self.init_df_proj(xproj,xname)
     df_ordonnee = self.init_df_proj(yproj,yname)
     color = self.set_color_for_scatter(color)
-    
+    pop_colors = {}
     for xy,l in zip(sample,labels):
         
         df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
@@ -254,12 +254,13 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
                 # ax.scatter(x_,y_,c=c,s=30,label=,alpha=.8,marker =m)
                 ax.scatter(x_,y_,s=30,c=color[xy],label=f'{l}({len(x_)})', alpha=.8,marker =m)
             else:
+                
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
                     if len(x_)>0:
                         ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
-            
+                        pop_colors[pop] = ax._children[-1]._facecolors[0]
 
             # if color is None or (isinstance(color,str) and color in list(self.variables)): # list vraiment utile ? 
                 # c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
@@ -302,9 +303,10 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
                     if len(x_)>0:
+                        c = pop_colors[pop]
                         mx_ = x_.mean()
                         my_ = y_.mean()
-                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200)
+                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,facecolor=c)
 
             
             
@@ -325,7 +327,7 @@ def init_axes_projs(self,fig,axes,projections,sample,suptitle,kfda,kfda_ylim,t,k
         rows=1;cols=len(projections) + kfda + spectrum
         fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
     if suptitle is not None:
-        fig.suptitle(suptitle,fontsize=50)
+        fig.suptitle(suptitle,fontsize=50,y=1.04)
     if kfda:
         
         #params a ajouter si besoin ? 

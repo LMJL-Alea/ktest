@@ -30,7 +30,7 @@ def distances(x, y=None):
             2)  # [sq_dists]_ij=||x_j - y_i \\^2
     return sq_dists
 
-def mediane(x, y=None):
+def mediane(x, y=None,verbose=0):
     """
     Computes the median 
     """
@@ -46,11 +46,12 @@ def mediane(x, y=None):
     dtot = torch.cat((torch.cat((dxx,dxy),dim=1),
                       torch.cat((dyx,dyy),dim=1)),dim=0)
     median = dtot.median()
-    if median == 0:
-        print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+    if median == 0: 
+        if verbose>0 :
+            print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
         mean = dtot.mean()
         if mean == 0 : 
-            print('warning: all your data are null')
+            print('warning: all your dataset is null')
         return mean
     else:
         return dtot.median()
@@ -69,8 +70,8 @@ def gauss_kernel(x, y, sigma=1):
     K = torch.exp(-d / (2 * sigma**2))  # Gram matrix
     return K
 
-def gauss_kernel_mediane(x,y,return_mediane=False):
-    m = mediane(x, y)
+def gauss_kernel_mediane(x,y,return_mediane=False,verbose=0):
+    m = mediane(x, y,verbose=verbose)
     if return_mediane:
         return ( lambda x, y: gauss_kernel(x,y,m), m.item() )
     else: 

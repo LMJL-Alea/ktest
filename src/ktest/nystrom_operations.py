@@ -27,7 +27,8 @@ def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
 
     if sample == 'xy':
         if self.r is None:
-            print("r not specified, by default, r = m" )
+            if verbose > 0:
+                print("r not specified, by default, r = m" )
         self.r = self.m if self.r is None else self.r
         anchors_basis = self.anchors_basis
         assert(self.r <= self.m)
@@ -89,11 +90,13 @@ def compute_nystrom_landmarks(self,verbose=0):
     xratio,yratio = n1/(n1 + n2), n2/(n1 +n2)
 
     if self.m is None:
-        print("m not specified, by default, m = (n1+n2)//10")
+        if verbose >0:
+            print("m not specified, by default, m = (n1+n2)//10")
         self.m = (n1 + n2)//10
 
     if self.landmark_method is None:
-        print("landmark_method not specified, by default, landmark_method='random'")
+        if verbose >0:
+            print("landmark_method not specified, by default, landmark_method='random'")
         self.landmark_method = 'random'
     
     self.nxlandmarks=np.int(np.floor(xratio * self.m)) 

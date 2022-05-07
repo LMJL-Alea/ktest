@@ -78,37 +78,40 @@ def compute_residual_covariance(self,t=None,center = 'W'):
 def diagonalize_residual_covariance(self,t=None,center='W'):
     if t is None:
         t=self.get_trunc()
-    
     approximation = 'standard' # pour l'instant 
     suffix_nystrom = '' # pour l'instant 
-    K_epsilon = compute_residual_covariance(self,t,center=center)
-    P_epsilon = compute_proj_on_discriminant_orthogonal(self,t)
-    n = self.n1+self.n2
+    
+    name = f'{approximation}{suffix_nystrom}{center.lower()}{t}'   
+    if name not in self.spev['residuals']:
+        K_epsilon = compute_residual_covariance(self,t,center=center)
+        P_epsilon = compute_proj_on_discriminant_orthogonal(self,t)
+        n = self.n1+self.n2
 
-    # modifier centering matrix pour prendre cette diff en compte 
-    if center.lower() == 't':
-        In = eye(n, dtype=float64)
-        Jn = ones(n, n, dtype=float64)
-        P = In - 1/n * Jn
-    elif center.lower() =='w':
-        P = self.compute_centering_matrix()
-        
-    sp,ev = ordered_eigsy(K_epsilon)
-    # print('Kw',Kw,'sp',sp,'ev',ev)
-#     suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
-    if 'residus' not in self.spev:
-        self.spev['residuals'] = {}
-    L_12 = diag(sp**-(1/2))
-    self.spev['residuals'][f'{approximation}{suffix_nystrom}{center.lower()}{t}'] = {'sp':sp,'ev':1/sqrt(n)* chain_matmul(P_epsilon,P,ev,L_12)}
+        # modifier centering matrix pour prendre cette diff en compte 
+        if center.lower() == 't':
+            In = eye(n, dtype=float64)
+            Jn = ones(n, n, dtype=float64)
+            P = In - 1/n * Jn
+        elif center.lower() =='w':
+            P = self.compute_centering_matrix()
+            
+        sp,ev = ordered_eigsy(K_epsilon)
+        # print('Kw',Kw,'sp',sp,'ev',ev)
+    #     suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
+        if 'residus' not in self.spev:
+            self.spev['residuals'] = {}
+        L_12 = diag(sp**-(1/2))
+        self.spev['residuals'][name] = {'sp':sp,'ev':1/sqrt(n)* chain_matmul(P_epsilon,P,ev,L_12)}
 
 def proj_residus(self,t = None,ndirections=10,center='w'):
     if t is None:
         t = self.get_trunc()
     name_residus = f'standard{center.lower()}{t}'
-    K = self.compute_gram()
-    epsilon = self.spev['residuals'][name_residus]['ev'][:,:ndirections]
-    proj_residus = matmul(K,epsilon)
-    # if not hasattr(self,'df_proj_residus'):
-    #     self.df_proj_residus = {}
-    self.df_proj_residuals[name_residus] = pd.DataFrame(proj_residus,index= self.index[self.imask],columns=[str(i) for i in range(1,ndirections+1)])
-    self.df_proj_residuals[name_residus]['sample'] =['x']*self.n1 + ['y']*self.n2
+    if name_residus not in self.df_proj_residuals:
+        K = self.compute_gram()
+        epsilon = self.spev['residuals'][name_residus]['ev'][:,:ndirections]
+        proj_residus = matmul(K,epsilon)
+        # if not hasattr(self,'df_proj_residus'):
+        #     self.df_proj_residus = {}
+        self.df_proj_residuals[name_residus] = pd.DataFrame(proj_residus,index= self.index[self.imask],columns=[str(i) for i in range(1,ndirections+1)])
+        self.df_proj_residuals[name_residus]['sample'] =['x']*self.n1 + ['y']*self.n2

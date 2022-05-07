@@ -86,6 +86,8 @@ class Tester:
 
     from .kernel_operations import \
         compute_gram,\
+        compute_centering_matrix_with_respect_to_some_effects,\
+        center_gram_matrix_with_respect_to_some_effects,\
         compute_omega,\
         compute_kmn,\
         compute_centered_gram,\
@@ -101,6 +103,7 @@ class Tester:
 
     from .statistics import \
         get_trunc,\
+        get_explained_variance,\
         compute_kfdat,\
         compute_pval,\
         correct_BenjaminiHochberg_pval,\
@@ -143,6 +146,7 @@ class Tester:
     from .initializations import \
         init_data,\
         init_kernel,\
+        set_center_by,\
         init_xy,\
         init_index_xy,\
         init_variables,\
@@ -189,7 +193,7 @@ class Tester:
         self.df_proj_residuals = {}
         self.corr = {}     
         self.dict_mmd = {}
-        self.spev = {'x':{},'y':{},'xy':{}} # dict containing every result of diagonalization
+        self.spev = {'x':{},'y':{},'xy':{},'residuals':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
@@ -202,41 +206,38 @@ class Tester:
     def __str__(self):
         if self.has_data:
             s = f"View of Tester object with n1 = {self.n1}, n2 = {self.n2}\n"
-            
+            s += f"x ({self.x.shape}), y ({self.y.shape})\n"                       
         else: 
-            s = "View of Tester object with no data"  
-
-        s += "kfdat : "
-        if not self.df_kfdat.empty:
-            for c in self.df_kfdat.columns:
-                s += f"'{c}' "
-        s += '\n'
-
-        s += 'proj kfdat : '
-        if  len(self.df_proj_kfda)>0:
-            for c in self.df_proj_kfda.keys():
-                s += f"'{c}'"
-        s += '\n'    
-
-        s += 'proj kpcaw : '
-        if  len(self.df_proj_kpca)>0:
-            for c in self.df_proj_kpca.keys():
-                s += f"'{c}'"
-        s += '\n'    
-
-        s += 'correlations : '
-        if  len(self.corr)>0:
-            for c in self.corr.keys():
-                s += f"'{c}'"
-        s += '\n'   
-
-
-        s += 'mmd : '
-        if  len(self.corr)>0:
-            for c in self.corr.keys():
-                s += f"'{c}'"
-        s += '\n'    
-
+            s = "View of Tester object with no data\n"  
+        cov = self.approximation_cov
+        mmd = self.approximation_mmd
+        ny = 'nystrom' in cov or 'nystrom' in mmd
+        s += f"Model: {cov},{mmd}"
+        if ny : 
+            anchors_basis = self.anchors_basis
+            m=self.m
+            r=self.r
+            s += f',{anchors_basis},m={m},r={r}'
+        s+= '\n'
+        
+        s += f"df_kfdat ({self.df_kfdat.shape})\n"
+        s += f"df_pval ({self.df_pval.shape})\n"
+        s += f"df_proj_kfda ({len(self.df_proj_kfda)})\n"
+        s += f"df_proj_kpca ({len(self.df_proj_kpca)})\n"
+        s += f"df_proj_mmd ({len(self.df_proj_mmd)})\n"
+        s += f"df_proj_residuals ({len(self.df_proj_residuals)})\n"
+        s += f"corr ({len(self.corr)})\n"
+        s += f"corr ({len(self.corr)})\n"
+        s += f"dict_mmd ({len(self.dict_mmd)})\n\n"
+        
+        kx = self.spev['x'].keys()
+        ky = self.spev['y'].keys()
+        kxy = self.spev['xy'].keys()
+        kr = self.spev['residuals'].keys()
+        s+=f"spev['x']:({kx})\n"
+        s+=f"spev['y']:({ky})\n"
+        s+=f"spev['xy']:({kxy})\n"
+        s+=f"spev['residuals']:({kr})\n"
 
         return(s) 
 

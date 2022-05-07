@@ -5,10 +5,20 @@ from scipy.stats import chi2
 
 
 def get_trunc(self,sample='xy',ratio=.05):
+    # suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
+    # sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
+    # avec ce code je ne prennais pas 95% de la variance comme je l'ai cru au départ.
+    # spp = sp/torch.sum(sp)
+    # return(len(spp[spp>=ratio]))
+    spp = self.get_explained_variance(sample)
+    t = len(spp[spp<(1-ratio)])
+    return(t if t >0 else 1 )
+
+def get_explained_variance(self,sample='xy'):
     suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
     sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
-    spp = sp/torch.sum(sp)
-    return(len(spp[spp>=ratio]))
+    spp = (sp/torch.sum(sp)).cumsum(0)
+    return(spp)
 
 def compute_pkm(self):
     """
@@ -303,6 +313,9 @@ def correct_BenjaminiHochberg_pval(self,t=20):
 def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
     # verbose -1 au lieu de verbose ? 
     cov,mmd = self.approximation_cov,self.approximation_mmd
+    
+    # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
+
     if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
         self.compute_nystrom_landmarks(verbose=verbose)
     
@@ -324,8 +337,10 @@ def kfdat(self,t=None,name=None,pval=True,verbose=0):
     else:
         self.initialize_kfdat(sample='xy',verbose=verbose)            
         self.compute_kfdat(t=t,name=name,verbose=verbose)
+        self.t = self.get_trunc()
         if pval:
-            self.compute_pval(t=t)
+            self.compute_pval(t=self.t)
+        self.kfda_stat = self.df_kfdat[name][self.t]
 
 
 
@@ -364,7 +379,7 @@ def initialize_mmd(self,shared_anchors=True,verbose=0,anchors_basis=None):
         else:
             for xy in 'xy':
                 if 'anchors' not in self.spev[xy]:
-                    assert(r is not None,"r not specified")
+                    assert(self.r is not None,"r not specified")
                     self.compute_nystrom_anchors(sample=xy,verbose=verbose,anchors_basis=anchors_basis)
 #
 def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):

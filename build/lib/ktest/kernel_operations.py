@@ -1,6 +1,122 @@
 import torch
+import numpy as np
 from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
+
+
+
+def compute_Jn_by_n(n):
+    return(1/n*torch.ones(n,n,dtype = torch.float64))
+
+def compute_diag_Jn_by_n(effectifs):
+    cumul_effectifs = np.cumsum([0]+effectifs)
+    L = len(effectifs)
+    n = np.sum(effectifs)
+    diag_Jn_by_n = torch.cat([
+                    torch.cat([
+                        torch.zeros(nprec,nell,dtype = torch.float64),
+                        compute_Jn_by_n(nell),
+                        torch.zeros(n-nprec-nell,nell)],dim=0) for nell,nprec in zip(effectifs,cumul_effectifs)],
+                    dim=1)
+    return(diag_Jn_by_n)
+
+def compute_effectifs(s):
+    """
+    s is a  pandas.Series
+    """
+    categories  = s.unique()
+    effectifs   = [len(s.loc[s == c]) for c in categories]
+    return(effectifs)
+ 
+    
+def permute_matrix_to_respect_index_order(M,col):    
+    # Pw a été calculé en supposant que les catégories étaient rangées dans l'ordre, 
+    # si ça n'est pas le cas il faut permuter les lignes et les colonnes de Pw
+
+    effectifs = compute_effectifs(col)
+    categories = col.unique()
+    
+    
+    permutation         = np.array([0]*len(M))
+    cum_effectifs       = np.cumsum([0]+effectifs)
+    
+    for i,c in enumerate(categories):
+        li = [col.index.get_loc(i) for i in col.loc[col==c].index]
+        permutation[li] = range(cum_effectifs[i],cum_effectifs[i+1])
+    return(M[permutation,:][:,permutation])    
+
+  
+
+def compute_centering_matrix_with_respect_to_some_effects(self):
+
+    n = len(self.obs)
+    Pw = torch.eye(n,dtype = torch.float64)
+
+    if self.center_by[0] == '#':
+        for center_by in self.center_by[1:].split(sep='_'):
+            
+            operation,effect = center_by[0],center_by[1:]
+            col              = self.obs[effect].astype('category')
+            effectifs        = compute_effectifs(col)
+            diag_Jn          = compute_diag_Jn_by_n(effectifs)
+            diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)
+            if operation == '-':
+                Pw -= diag_Jn
+            elif operation == '+':
+                Pw += diag_Jn
+
+    else:
+        effect           = self.center_by
+        col              = self.obs[effect].astype('category')
+        effectifs        = compute_effectifs(col)
+        diag_Jn          = compute_diag_Jn_by_n(effectifs)
+        diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)
+        
+        Pw -= diag_Jn
+
+    return Pw    
+
+
+
+# def compute_Pw(effectifs):
+#     cumul_effectifs = np.cumsum([0]+effectifs)
+#     L = len(effectifs)
+#     n = np.sum(effectifs)
+
+#     In = torch.eye(n,dtype = torch.float64)
+#     diagJnells = torch.cat([
+#                     torch.cat([
+#                         torch.zeros(nprec,nell,dtype = torch.float64),
+#                         1/nell*torch.ones(nell,nell,dtype = torch.float64),
+#                         torch.zeros(n-nprec-nell,nell)],dim=0) for nell,nprec in zip(effectifs,cumul_effectifs)],
+#                     dim=1)
+#     Pw = In - diagJnells
+#     return(Pw)
+
+# def compute_centering_matrix_by(self):
+#     assert(self.center_by in self.obs)
+
+#     center_by   = self.center_by
+#     col         = self.obs[center_by].astype('category')
+#     categories  = col.unique()
+#     effectifs   = [len(col.loc[col == c]) for c in categories]
+#     Pw          = compute_Pw(effectifs)
+
+#     # Pw a été calculé en supposant que les catégories étaient rangées dans l'ordre, si ça n'est pas le cas il faut permuter les lignes et les colonnes de Pw
+#     permutation = np.array([0]*len(Pw))
+#     cum_effectifs       = np.cumsum([0]+effectifs)
+#     for i,c in enumerate(categories):
+#         li = [col.index.get_loc(i) for i in col.loc[col==c].index]
+#         permutation[li] = range(cum_effectifs[i],cum_effectifs[i+1])
+#     return(Pw[permutation,:][:,permutation])    
+
+def center_gram_matrix_with_respect_to_some_effects(self,K):
+    if self.center_by is None:
+        return(K)
+    else:
+        P = compute_centering_matrix_with_respect_to_some_effects(self)
+        return(torch.chain_matmul(P,K,P))
+        # retutn(torch.linalg.multi_dot([P,K,P]))
 
 def compute_gram(self,sample='xy',landmarks=False): 
     """
@@ -8,13 +124,18 @@ def compute_gram(self,sample='xy',landmarks=False):
     This function is called everytime the Gram matrix is needed but I could had an option to keep it in memory in case of a kernel function 
     that makes it difficult to compute
 
+    If we want a gram matrix centered by some categorical variable, this variable should have a 
+    column in self.obs and this columns should by categorical. 
+    and the attribute self.center_by should have the name of the column.
+    Then the gram matrix given by this function is centered according to this categorical variable. 
+
     Returns
     -------
     torch.Tensor of size (nxanchors+nyanchors)**2 if nystrom else (n1+n2)**2
     """
 
     kernel = self.kernel
-    
+   
     x,y = self.get_xy(landmarks=landmarks)
     
     if 'x' in sample:
@@ -24,10 +145,14 @@ def compute_gram(self,sample='xy',landmarks=False):
 
     if sample == 'xy':
         kxy = kernel(x, y)
-        return(torch.cat((torch.cat((kxx, kxy), dim=1),
-                        torch.cat((kxy.t(), kyy), dim=1)), dim=0))
+        K = torch.cat((torch.cat((kxx, kxy), dim=1),
+                        torch.cat((kxy.t(), kyy), dim=1)), dim=0)
+        K = self.center_gram_matrix_with_respect_to_some_effects(K)
+
+        return(K)
     else:
         return(kxx if sample =='x' else kyy)
+
 
 def compute_omega(self,sample='xy',quantization=False):
     n1,n2 = (self.n1,self.n2)
@@ -136,6 +261,12 @@ def compute_centering_matrix(self,sample='xy',quantization=False,landmarks=False
         (z21, Pn2), dim=1)), dim=0))  # bloc diagonal
     else:
         return(Pn1 if sample=='x' else Pn2)  
+
+
+
+        
+
+
 
 def compute_centered_gram(self,approximation='standard',sample='xy',verbose=0):
     """ 
