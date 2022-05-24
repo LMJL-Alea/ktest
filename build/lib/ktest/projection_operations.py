@@ -5,12 +5,16 @@ import pandas as pd
 def compute_proj_kfda(self,t=None,name=None,verbose=0):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
-    Projections of the embeddings of the observation onto the discriminant axis
-    9 methods : 
-    approximation_cov in ['standard','nystrom','quantization']
-    approximation_mmd in ['standard','nystrom','quantization']
+    Computes the vector of projection of the embeddings on the discriminant axis corresponding 
+    to the KFDA statistic with a truncation parameter equal to t and stores the results as a column 
+    of the attribute `df_proj_kfda`. 
     
-    Stores the result as a column in the dataframe df_proj_kfda
+    The projection is given by the formula :
+
+            h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K   
+
+    More details in the description of the method compute_kfdat(). 
+
     """
 
     cov,mmd = self.approximation_cov,self.approximation_mmd
@@ -20,7 +24,7 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
 
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
     sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
-    
+     
     if name in self.df_proj_kfda :
         if verbose : 
             print('Proj on discriminant axis Already computed')
@@ -39,14 +43,15 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         pkm=self.compute_pkm()
-        epk=self.compute_epk(t)
+        upk=self.compute_upk(t)
         n1,n2 = (self.n1,self.n2) 
         n = n1+n2
 
-        if cov == 'standard' or 'nystrom' in cov:
-            proj = (n**-1*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*epk).cumsum(axis=1).numpy()
+        if cov == 'standard' or 'nystrom' in cov: 
+            proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
+            # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
         if cov == 'quantization':
-            proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*epk).cumsum(axis=1).numpy()
+            proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
 
         if name in self.df_proj_kfda:
             print(f"écrasement de {name} dans df_proj_kfda")
@@ -67,59 +72,85 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
     """ 
     
     """
-    name = name if name is not None else f'{approximation_cov}{sample}' 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    quantization = approximation_cov =='quantization'
-    sp,ev = self.spev[sample][approximation_cov]['sp'],self.spev[sample][approximation_cov]['ev']
-    P = self.compute_centering_matrix(sample=sample,quantization=quantization)    
-    n1,n2 = (self.n1,self.n2) 
-    n = (n1*('x' in sample)+n2*('y' in sample))
     
-
-    tmax = 200
-
-    t = tmax if (t is None and len(sp)+1>tmax) else len(sp) if (t is None and len(sp)+1<=tmax) else t
-    trunc = range(1,t+1) 
-
-    self.verbosity(function_name='compute_proj_kpca',
-            dict_of_variables={
-            't':t,
-            'approximation_cov':approximation_cov,
-            'sample':sample,
-            'name':name},
-            start=True,
-            verbose = verbose)
-
-
-    if approximation_cov =='quantization':
-        Kmn = self.compute_kmn(sample=sample)
-        A_12 = self.compute_quantization_weights(sample=sample,power=1/2)                
-        proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
-    elif approximation_cov == 'nystrom':
-        Kmn = self.compute_kmn(sample=sample)
-        Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-        Lp_inv = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**-1)
-        proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-    elif approximation_cov == 'standard':
-        K = self.compute_gram(sample=sample)
-        proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
-
-
-    if name in self.df_proj_kpca:
-        print(f"écrasement de {name} dans df_proj_kpca")
+    cov,mmd = self.approximation_cov,self.approximation_mmd
+    anchors_basis = self.anchors_basis
     
-    index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
-    self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
-    self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
-            
-    self.verbosity(function_name='compute_proj_kpca',
-                            dict_of_variables={
-            't':t,
-            'approximation_cov':approximation_cov,
-            'sample':sample,
-            'name':name},
-            start=False,
-            verbose = verbose)
+    name = name if name is not None else f'{cov}{mmd}{sample}' 
+    # name = name if name is not None else f'{cov}{mmd}' 
+
+    suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
+    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # quantization = approximation_cov =='quantization'
+    # sp,ev = self.spev[sample][approximation_cov]['sp'],self.spev[sample][approximation_cov]['ev']
+    # P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization)    
+    # n1,n2 = (self.n1,self.n2) 
+    # n = (n1*('x' in sample)+n2*('y' in sample))
+    
+    if name in self.df_proj_kpca :
+        if verbose : 
+            print('Proj on variable directions Already computed')
+    else:
+        self.verbosity(function_name='compute_proj_kpca',
+                dict_of_variables={
+                't':t,
+                # 'approximation_cov':approximation_cov,
+                'sample':sample,
+                'name':name},
+                start=True,
+                verbose = verbose)
+
+        tmax = 200
+        t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
+        trunc = range(1,t+1) 
+
+
+        # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        pkm=self.compute_pkm()
+        upk=self.compute_upk(t)
+        n1,n2 = (self.n1,self.n2) 
+        n = n1+n2
+
+        if cov == 'standard' or 'nystrom' in cov: 
+            proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
+            # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
+        if cov == 'quantization':
+            proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).numpy()
+
+
+
+        if name in self.df_proj_kpca:
+            print(f"écrasement de {name} dans df_proj_kpca")
+        
+        index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
+        self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
+        self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
+                
+        self.verbosity(function_name='compute_proj_kpca',
+                                dict_of_variables={
+                't':t,
+                'approximation_cov':approximation_cov,
+                'sample':sample,
+                'name':name},
+                start=False,
+                verbose = verbose)
+
+    # if approximation_cov =='quantization':
+    #     Kmn = self.compute_kmn(sample=sample)
+    #     A_12 = self.compute_quantization_weights(sample=sample,power=1/2)                
+    #     proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
+    # elif approximation_cov == 'nystrom':
+    #     Kmn = self.compute_kmn(sample=sample)
+    #     Up = self.spev[sample]['anchors'][anchors_basis]['ev']
+    #     Lp_inv = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**-1)
+    #     proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
+    # elif approximation_cov == 'standard':
+    #     K = self.compute_gram(sample=sample)
+    #     proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
+
+
 
 def compute_proj_mmd(self,approximation='standard',name=None,verbose=0):
     name = name if name is not None else f'{approximation}' 

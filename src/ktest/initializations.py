@@ -21,6 +21,30 @@ from typing import Optional,Callable,Union,List
 
 
 def init_xy(self,x,y):
+    '''
+    This function initializes the attributes `x` and `y` of the Tester object 
+    which contain the two datasets in torch.tensors format.
+
+
+    Parameters
+    ----------
+        x : pandas.Series (univariate testing), pandas.DataFrame, numpy.ndarray or torch.Tensor
+        The dataset corresponding to the first sample 
+
+        y : pandas.Series (univariate testing), pandas.DataFrame, numpy.ndarray or torch.Tensor
+        The dataset corresponding to the second sample
+
+    Attributes Initialized
+    ---------- ----------- 
+        x : torch.Tensor, the first dataset
+        y : torch.Tensor, the second dataset 
+        n1_initial : int, the original size of `x`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
+        n2_initial : int, the original size of `y`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
+        n1 : int, size of `x`
+        n2 : int, size of `y` 
+        has_data : boolean, True if the Tester object has data (deprecated ?)
+
+    '''
     # Tester works with torch tensor objects 
 
     for xy,sxy in zip([x,y],'xy'):
@@ -46,9 +70,34 @@ def init_xy(self,x,y):
                 self.n2_initial = xy.shape[0]
                 self.n2 = xy.shape[0]
             self.has_data = True
-    
+
          
-def init_index_xy(self,x_index,y_index):
+def init_index_xy(self,x_index = None,y_index = None):
+    '''
+    This function initializes the attributes of the data indexes 
+    `x_index` and `y_index` of `x` and `y` of the Tester object. 
+
+
+    Parameters
+    ----------
+        x_index (default : None): None, list or pandas.Series
+            if x_index is None, the index is a list of numbers from 1 to n1
+            else, the list or pandas.Series should contain the ordered list 
+            of index corresponding to the observations of x
+
+        y_index (default : None): None, list or pandas.Series
+            if y_index is None, the index is a list of numbers from n1+1 to n1+n2
+            else, the list or pandas.Series should contain the ordered list 
+            of index corresponding to the observations of y
+
+    Attributes Initialized
+    ---------- ----------- 
+        
+        x_index : pandas.Index, the indexes of the first dataset `x` 
+        y_index : pandas.Index, the indexes of the second dataset `y`
+        index : pandas.Index, the concatenation of `x_index` and `y_index`
+
+    '''
     # generates range index if no index
     self.x_index=pd.Index(range(1,self.n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
     self.y_index=pd.Index(range(self.n1,self.n1+self.n2)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
@@ -56,11 +105,92 @@ def init_index_xy(self,x_index,y_index):
     assert(len(self.y_index) == self.n2)
     self.index = self.x_index.append(self.y_index)
 
-def init_variables(self,variables):
+def init_variables(self,variables = None):
+    '''
+    Initializes the variables names in the attribute `variables`. 
+    
+    Parameters
+    ----------
+        variables (default : None) : None, list or pandas.Series
+        An iterable containing the variable names,
+        if None, the attribute variables is a list of numbers from 0 to the number of variables -1. 
+
+    Attributes Initialized
+    ---------- ----------- 
+        variables : the list of variable names
+
+    '''
     self.variables = range(self.x.shape[1]) if variables is None else variables
 
 
 def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0):
+    '''
+    This function initializes all the information concerning the data of the Tester object.
+
+    Parameters
+    ----------
+        dfx : pandas.Series (univariate testing) or pandas.DataFrame (univariate or multivariate testing)
+            the columns correspond to the variables 
+            the index correspond to the data indexes
+            the dataframe contain the data
+            dfx and dfy should have the same column names.    
+            if pandas.Series, the variable name is set to 'univariate'
+            
+        dfy : pandas.Series (univariate testing) or pandas.DataFrame (univariate or multivariate testing)
+            the columns correspond to the variables 
+            the index correspond to the data indexes
+            the dataframe contain the data        
+            dfx and dfy should have the same column names.     
+            if pandas.Series, the variable name is set to 'univariate'
+
+        kernel : str or function (default : 'gauss_median') 
+            if kernel is a string, it have to correspond to the following synthax :
+                'gauss_median' for the gaussian kernel with median bandwidth
+                'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
+                'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
+                'linear' for the linear kernel
+            if kernel is a function, 
+                it should take two torch.tensors as input and return a torch.tensor contaning
+                 the kernel evaluations between the lines (observations) of the two inputs. 
+
+        dfx_meta (default = None): pandas.DataFrame,
+            A dataframe containing meta information on the first dataset. 
+
+        dfy_meta (default = None): pandas.DataFrame,
+            A dataframe containing meta information on the second dataset. 
+
+        center_by (default = None) : str, 
+            either a column of self.obs or a combination of columns with the following syntax
+            - starts with '#' to specify that it is a combination of effects
+            - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
+            - the effects are separated by a '_'
+            exemple : '#-celltype_+patient'
+
+
+
+    Attributes Initialized
+    ---------- ----------- 
+        x : torch.Tensor, the first dataset
+        y : torch.Tensor, the second dataset 
+        n1_initial : int, the original size of `x`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
+        n2_initial : int, the original size of `y`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
+        n1 : int, size of `x`
+        n2 : int, size of `y` 
+        has_data : boolean, True if the Tester object has data (deprecated ?)
+        x_index : pandas.Index, the indexes of the first dataset `x` 
+        y_index : pandas.Index, the indexes of the second dataset `y`
+        index : pandas.Index, the concatenation of `x_index` and `y_index`
+        variables : the list of variable names
+        center_by : str,
+            is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
+        obs : pandas.DataFrame, 
+            Its index correspond to the attribute `index`
+            It is the concatenation of dfx_meta and dfy_meta, 
+            It contains at least one column 'sample' equal to 'x' if the observation comes from the 
+            firs dataset and 'y' otherwise. 
+        kernel : the kernel function to be used to compute Gram matrices. 
+
+    '''
     if isinstance(dfx,pd.Series):
         dfx = dfx.to_frame(name='univariate')
         dfy = dfy.to_frame(name='univariate')
@@ -75,14 +205,42 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
     self.init_masks()
     self.set_center_by(center_by)
     
-def set_center_by(self,center_by):
+def set_center_by(self,center_by=None):
+    '''
+    Initializes the attribute `center_by` which allow to automatically center the data with respect 
+    to a stratification of the datasets informed in the meta information dataframe `obs`. 
+    This centering is independant from the centering applied to the data to compute statistic-related centerings. 
+    
+    Parameters
+    ----------
+        center_by (default = None) : str, 
+            either a column of self.obs or a combination of columns with the following syntax
+            - starts with '#' to specify that it is a combination of effects
+            - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
+            - the effects are separated by a '_'
+            exemple : '#-celltype_+patient'
+
+    Attributes Initialized
+    ---------- ----------- 
+        center_by : str,
+            is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
+
+    '''
     self.center_by = None
     if center_by is not None and hasattr(self,'obs'):
-        # if center_by in self.obs:
         self.center_by = center_by
         
    
 def init_masks(self):
+    '''
+
+    
+    Parameters
+    ----------
+
+    Attributes Initialized
+    ---------- ----------- 
+    '''
     # j'ai créé les masks au tout début du package mais je ne les utilise jamais je sais pas si c'est vraiment pertinent.
     # C'était censé m'aider à détecter des outliers facilement et a refaire tourner le test une fois qu'ils sont supprimés. 
 
@@ -92,14 +250,34 @@ def init_masks(self):
     self.ignored_obs = None
     
 def init_metadata(self,dfx_meta=None,dfy_meta=None):
-    # j'appelle mes metadata obsx et obsy pour être cohérent avec les fichiers anndata de scanpy 
+    '''
+    This function initializes the attribute `obs` containing metainformation on the data. 
+
+    Parameters
+    ----------
+        dfx_meta (default = None): pandas.DataFrame,
+            A dataframe containing meta information on the first dataset. 
+
+        dfy_meta (default = None): pandas.DataFrame,
+            A dataframe containing meta information on the second dataset. 
+            
+
+    Attributes Initialized
+    ---------- ----------- 
+        obs : pandas.DataFrame, 
+            Its index correspond to the attribute `index`
+            It is the concatenation of dfx_meta and dfy_meta, 
+            It contains at least one column 'sample' equal to 'x' if the observation comes from the 
+            firs dataset and 'y' otherwise. 
+
+    '''
+        
     if dfx_meta is not None :
         dfx_meta['sample'] = ['x']*len(dfx_meta)
         dfy_meta['sample'] = ['y']*len(dfy_meta)
         self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
         self.obs.index = self.index
-    # self.obsx = dfx_meta
-    # self.obsy = dfy_meta
+
 
 
 def init_data(self,
@@ -113,13 +291,26 @@ def init_data(self,
         dfy_meta:pd.DataFrame = None,
         center_by:str = None,
         verbose = 0):
-    """
-    kernel : default 'gauss_median' for the gaussian kernel with median bandwidth
-            'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
-            'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
-            'linear' for the linear kernel
-            for a designed kernel, this parameter can be a function. 
-    """
+    
+    '''
+    
+    Parameters
+    ----------
+
+        kernel : str or function (default : 'gauss_median') 
+            if kernel is a string, it have to correspond to the following synthax :
+                'gauss_median' for the gaussian kernel with median bandwidth
+                'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
+                'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
+                'linear' for the linear kernel
+            if kernel is a function, 
+                it should take two torch.tensors as input and return a torch.tensor contaning
+                 the kernel evaluations between the lines (observations) of the two inputs. 
+
+    Attributes Initialized
+    ---------- ----------- 
+
+    '''
     # remplacer xy_index par xy_meta
 
     self.verbose = verbose
@@ -133,6 +324,15 @@ def init_data(self,
     self.has_data = True        
 
 def init_kernel(self,kernel):
+    '''
+    
+    Parameters
+    ----------
+
+    Returns
+    ------- 
+    '''
+
     x = self.x
     y = self.y
     verbose = self.verbose
@@ -158,10 +358,17 @@ def init_kernel(self,kernel):
 
 def init_model(self,approximation_cov='standard',approximation_mmd='standard',
                 m=None,r=None,landmark_method='random',anchors_basis='W'):
-    """
-    It is not possible to use nystrom for small datasets (n<100)
-    """
+    '''
+    
+    Parameters
+    ----------
 
+    Returns
+    ------- 
+    It is not possible to use nystrom for small datasets (n<100)
+    '''
+
+    
 
     n1,n2 = self.n1,self.n2
     if "nystrom" in approximation_cov and (n1<100 or n2<100): 
@@ -173,26 +380,16 @@ def init_model(self,approximation_cov='standard',approximation_mmd='standard',
     self.anchors_basis = anchors_basis
     self.approximation_mmd = approximation_mmd
 
-
-# def init_model(self,approximation_cov='standard',approximation_mmd='standard',
-#                 m=None,r=None,landmark_method='random',anchors_basis='W',name=None):
-
-#     if name is None:
-#         name = 'model'+len(self.dict_model)
-#     if name in self.dict_model:
-#         print(f'{name} overwritten')
-#     self.dict_model[name] = {
-#                 'approximation_cov' : approximation_cov,
-#                 'm' : m,
-#                 'r' : r,
-#                 'landmark_method' : landmark_method,
-#                 'anchors_basis' : anchors_basis,
-#                 'approximation_mmd' : approximation_mmd,
-#                 }
-    
-
-
 def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):
+    '''
+    
+    Parameters
+    ----------
+
+    Returns
+    ------- 
+    '''
+    
     if verbose >0:
         end = ' ' if verbose == 1 else '\n'
         if start:  # pour verbose ==1 on start juste le chrono mais écris rien     
@@ -210,8 +407,3 @@ def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):
             start_time = self.start_times[function_name]
             print(f"Done {function_name} in  {time() - start_time:.2f}")
 
-# def get_nobs(self,):
-#     if hasattr(self,'n1'):
-#         return(self.n1,self.n2)
-#     else:
-#         return(self)

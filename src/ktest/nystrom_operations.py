@@ -2,7 +2,7 @@ from .utils import ordered_eigsy
 import numpy as np
 import torch
 
-import apt.kmeans 
+# import apt.kmeans 
 from kmeans_pytorch import kmeans
 
 def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
@@ -44,7 +44,7 @@ def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
     r = self.r if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
     
     Km = self.compute_gram(sample=sample,landmarks=True)
-    P = self.compute_centering_matrix(sample=sample,landmarks=True)
+    P = self.compute_covariance_centering_matrix(sample=sample,landmarks=True)
     sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.chain_matmul(P,Km,P))        
     # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
     if any(sp_anchors<0):
@@ -144,9 +144,6 @@ def compute_quantization_weights(self,power=1,sample='xy',diag=True):
             return(torch.cat(a1,a2))
         else:    
             return(a1 if sample =='x' else a2)
-#
-
-
 
 def reinitialize_landmarks(self):
     if self.quantization_with_landmarks_possible:

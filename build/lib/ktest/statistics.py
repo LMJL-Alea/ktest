@@ -4,27 +4,103 @@ from torch import mv,diag,chain_matmul,dot
 from scipy.stats import chi2
 
 
-def get_trunc(self,sample='xy',ratio=.05):
+def get_trunc(self):
+    '''
+    This function should select automatically the truncation parameter of the KFDA method corresponding to the 
+    number of eigenvectors of Sigma_W used to compute the discriminant axis. 
+
+    It stores the choosen truncation parameter in the attribute self.t
+
+    The different methods we tried so far are : 
+        - take only the eigenvectors that support more than a certain threshold of the variance individually (e.g. 5%)
+        - take enough eigenvectors to cumulate 95% of the variance. 
+        - take the first eigenvector
+    '''
+
+
     # suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
     # sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
     # avec ce code je ne prennais pas 95% de la variance comme je l'ai cru au départ.
+    # mais je prenais seulement les valeurs propres portant plus de 5% de variance
     # spp = sp/torch.sum(sp)
-    # return(len(spp[spp>=ratio]))
+    # t = len(spp[spp>=ratio])
+    # return(t if t >0 else 1 )
+    # le test issu de t tel qu'on porte 95% de la variance est trop sensible et prend des valeurs de troncature très grandes
+
+        # spp = self.get_explained_variance(sample)
+        # t = len(spp[spp<(1-ratio)])
+    self.t = 1
+
+def get_95variance_trunc(self,sample='xy'):
+    '''
+    This function returns the number of eigenvalues to take to support 95% of the variance of the covariance operator
+    of interest.
+
+    Parameters
+    ----------
+        sample : str,
+        if sample = 'x' : Focuses on the covariance operator of the first sample
+        if sample = 'y' : Focuses on the covariance operator of the second sample
+        if sample = 'xy' : Focuses on the within-group covariance operator 
+        
+    Returns
+    ------- 
+        t : int,
+        The number of composants needed to have 95% of the variance
+ 
+    ''' 
     spp = self.get_explained_variance(sample)
-    t = len(spp[spp<(1-ratio)])
-    return(t if t >0 else 1 )
+    t = len(spp[spp<(1-.05)])
+    return(t)
+
 
 def get_explained_variance(self,sample='xy'):
+    '''
+    This function returns a list of percentages of supported variance, the ith element contain the 
+    variance supported by the first i eigenvectors of the covariance operator of interest. 
+
+    Parameters
+    ----------
+        sample : str,
+        if sample = 'x' : Focuses on the covariance operator of the first sample
+        if sample = 'y' : Focuses on the covariance operator of the second sample
+        if sample = 'xy' : Focuses on the within-group covariance operator 
+                
+    Returns
+    ------- 
+        spp : torch.tensor,
+        the list of cumulated variances ordered in decreasing order.  
+
+    '''
+
+
     suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
     sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
     spp = (sp/torch.sum(sp)).cumsum(0)
     return(spp)
 
 def compute_pkm(self):
-    """
-    pkm is an alias for the product PKomega in the standard KFDA statistic. 
-    This functions computes the corresponding block with respect to the model parameters. 
-    """
+    '''
+
+    This function computes the term corresponding to the matrix-matrix-vector product PK omega
+    of the KFDA statistic.
+    
+    See the description of the method compute_kfdat() for a brief description of the computation 
+    of the KFDA statistic. 
+
+
+    Parameters
+    ----------
+        self : tester,
+        the model parameter attributes `approximation_cov`, `approximation_mmd` must be defined.
+        if the nystrom method is used, the attribute `anchor_basis` should be defined and the anchors must have been computed. 
+
+                
+    Returns
+    ------- 
+    pkm : torch.tensor 
+    Correspond to the product PK omega in the KFDA statistic. 
+    '''
     cov,mmd = self.approximation_cov,self.approximation_mmd
     anchors_basis = self.anchors_basis
     cov_anchors = 'shared' # pas terminé  
@@ -33,7 +109,7 @@ def compute_pkm(self):
         r = self.r
     
     omega = self.compute_omega(quantization=(mmd=='quantization'))
-    Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'))
     
 
     if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3','nystrom']]):
@@ -49,7 +125,7 @@ def compute_pkm(self):
             pkm = mv(Pbi,mv(Kx,omega))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -58,7 +134,7 @@ def compute_pkm(self):
 
     if cov == 'nystrom1' and cov_anchors == 'shared':
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -70,7 +146,7 @@ def compute_pkm(self):
     if cov == 'nystrom2' and cov_anchors == 'shared':
         Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
             pkm = 1/r**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
 
@@ -83,7 +159,7 @@ def compute_pkm(self):
     if cov == 'nystrom3' and cov_anchors == 'shared':
         Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
         # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
-        Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+        Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
 
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
             pkm = 1/r * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
@@ -111,8 +187,8 @@ def compute_pkm(self):
             Lz2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
             omega1 = self.compute_omega(sample='x',quantization=False)
             omega2 = self.compute_omega(sample='y',quantization=False)
-            Pn1 = self.compute_centering_matrix(sample='x')
-            Pn2 = self.compute_centering_matrix(sample='y')
+            Pn1 = self.compute_covariance_centering_matrix(sample='x')
+            Pn2 = self.compute_covariance_centering_matrix(sample='y')
             haut = mv(Lz1,mv(Uz1,mv(Kz1x,mv(Pn1,mv(Kz1x,mv(Uz1,mv(Lz1,mv(Uz1.T,mv(Kz1y,omega2) -mv(Kz1x,omega1)))))))))
             bas = mv(Lz2,mv(Uz2,mv(Kz2y,mv(Pn2,mv(Kz2y,mv(Uz2,mv(Lz2,mv(Uz2.T,mv(Kz2y,omega2) -mv(Kz2x,omega1)))))))))
             
@@ -123,7 +199,7 @@ def compute_pkm(self):
             pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_centering_matrix(sample='xy',landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
             Kz = self.compute_gram(landmarks=True)
             pkm = 1/r * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
@@ -132,7 +208,7 @@ def compute_pkm(self):
             pkm = mv(Pbi,mv(A,mv(Kz,omega)))
     return(pkm)
 
-def compute_epk(self,t):
+def compute_upk(self,t):
     """
     epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
     This functions computes the corresponding block with respect to the model parameters. 
@@ -148,7 +224,7 @@ def compute_epk(self,t):
     sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
     
 
-    Pbi = self.compute_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'))
       
     if not (cov == 'standard'):
         Kzx = self.compute_kmn(sample='xy')
@@ -189,6 +265,62 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
     approximation_mmd in ['standard','nystrom','quantization']
     
     Stores the result as a column in the dataframe df_kfdat
+
+
+    Here is a brief description of the computation of the statistic, for more details, refer to the article : 
+
+    Let k(·,·) denote the kernel function, K denote the Gram matrix of the two  samples 
+    and kx the vector of embeddings of the observations x1,...,xn1,y1,...,yn2 :
+    
+            kx = (k(x1,·), ... k(xn1,·),k(y1,·),...,k(yn2,·)) 
+    
+    Let Sw denote the within covariance operator and P denote the centering matrix such that 
+
+            Sw = 1/n (kx P)(kx P)^T
+    
+    Let Kw = 1/n (kx P)^T(kx P) denote the dual matrix of Sw and (li) (ui) denote its eigenvalues (shared with Sw) 
+    and eigenvectors. We have :
+
+            ui = 1/(lp * n)^{1/2} kx P up 
+
+    Let Swt denote the spectral truncation of Sw with t directions
+    such that 
+    
+            Swt = l1 (e1 (x) e1) + l2 (e2 (x) e2) + ... + lt (et (x) et) 
+                = \sum_{p=1:t} lp (ep (x) ep)
+    
+    where (li) and (ei) are the first t eigenvalues and eigenvectors of Sw ordered by decreasing eigenvalues,
+    and (x) stands for the tensor product. 
+
+    Let d = mu2 - mu1 denote the difference of the two kernel mean embeddings of the two samples 
+    of sizes n1 and n2 (with n = n1 + n2) and omega the weights vector such that 
+    
+            d = kx * omega 
+    
+    
+    The standard truncated KFDA statistic is given by :
+    
+            F   = n1*n2/n || Swt^{-1/2} d ||_H^2
+
+                = \sum_{p=1:t} n1*n2 / ( lp*n) <ep,d>^2 
+
+                = \sum_{p=1:t} n1*n2 / ( lp*n)^2 up^T PK omega
+
+
+    Projection
+    ----------
+
+    This statistic also defines a discriminant axis ht in the RKHS H. 
+    
+            ht  = n1*n2/n Swt^{-1/2} d 
+                
+                = \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] kx P up 
+
+    To project the dataset on this discriminant axis, we compute : 
+
+            h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K   
+
+    
     """
     
     cov,mmd = self.approximation_cov,self.approximation_mmd
@@ -237,7 +369,7 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
             start=False,
             verbose = verbose)
 
-def compute_pval(self,t=None):
+def compute_pval(self,t=None,name=None):
     """
     Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
     Attention, la présence de Nan augmente considérablement le temps de calcul. 
@@ -337,9 +469,10 @@ def kfdat(self,t=None,name=None,pval=True,verbose=0):
     else:
         self.initialize_kfdat(sample='xy',verbose=verbose)            
         self.compute_kfdat(t=t,name=name,verbose=verbose)
-        self.t = self.get_trunc()
+        self.get_trunc()
+        
         if pval:
-            self.compute_pval(t=self.t)
+            self.compute_pval()
         self.kfda_stat = self.df_kfdat[name][self.t]
 
 
@@ -423,7 +556,7 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         m = self.compute_omega(sample='xy',quantization=False)
         Up = self.spev['xy']['anchors'][anchors_basis][anchors_basis]['ev']
         Lp_inv2 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
-        Pm = self.compute_centering_matrix(sample='xy',landmarks=True)
+        Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
         Kmn = self.compute_kmn(sample='xy')
         psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
         mmd = dot(psi_m,psi_m)**2
@@ -437,8 +570,8 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
         Lpy_inv2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
         Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
-        Pmx = self.compute_centering_matrix(sample='x',landmarks=True)
-        Pmy = self.compute_centering_matrix(sample='y',landmarks=True)
+        Pmx = self.compute_covariance_centering_matrix(sample='x',landmarks=True)
+        Pmy = self.compute_covariance_centering_matrix(sample='y',landmarks=True)
         Kmnx = self.compute_kmn(sample='x')
         Kmny = self.compute_kmn(sample='y')
         

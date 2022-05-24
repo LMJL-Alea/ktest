@@ -85,14 +85,16 @@ class Tester:
 # pval = [chi2.sf(test0R.df_kfdat['0h vs 48hrev'][t],t) for t in trunc]
 
     from .kernel_operations import \
-        compute_gram,\
-        compute_centering_matrix_with_respect_to_some_effects,\
-        center_gram_matrix_with_respect_to_some_effects,\
-        compute_omega,\
-        compute_kmn,\
-        compute_centered_gram,\
-        compute_centering_matrix,\
-        diagonalize_centered_gram
+        compute_gram, \
+        center_gram_matrix_with_respect_to_some_effects, \
+        compute_kmn, \
+        diagonalize_centered_gram,\
+        compute_within_covariance_centered_gram
+
+    from .centering_operations import \
+        compute_centering_matrix_with_respect_to_some_effects, \
+        compute_omega, \
+        compute_covariance_centering_matrix
     
     from .nystrom_operations import \
         compute_nystrom_anchors,\
@@ -103,12 +105,13 @@ class Tester:
 
     from .statistics import \
         get_trunc,\
+        get_95variance_trunc,\
         get_explained_variance,\
         compute_kfdat,\
         compute_pval,\
         correct_BenjaminiHochberg_pval,\
         compute_pkm,\
-        compute_epk,\
+        compute_upk,\
         initialize_kfdat,\
         kfdat,\
         kpca,\
@@ -397,8 +400,8 @@ class Tester:
         kmn_test   = self.compute_kmn(test_data=True)
         kny   = self.compute_gram(landmarks=True)
         k     = self.compute_gram(landmarks=False,test_data=False)
-        Pbiny = self.compute_centering_matrix(sample='xy',quantization=True)
-        Pbi   = self.compute_centering_matrix(sample='xy',quantization=False,test_data=False)
+        Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
+        Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False,test_data=False)
         
         Vny  = self.evny[:m]
         V    = self.ev[:t] 
@@ -450,8 +453,8 @@ class Tester:
         m = mtot if m is None else m
         
         kmn   = self.compute_kmn()
-        Pbiny = self.compute_centering_matrix(sample='xy',quantization=True)
-        Pbi   = self.compute_centering_matrix(sample='xy',quantization=False)
+        Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
+        Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False)
         
         Vny  = self.evny[:m]
         V    = self.ev[:t] 
