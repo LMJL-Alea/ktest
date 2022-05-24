@@ -8,8 +8,8 @@ class Kfdat:
         compute_gram,\
         compute_omega,\
         compute_kmn,\
-        compute_centered_gram,\
-        compute_centering_matrix,\
+       compute_within_covariance_centered_gram,\
+        compute_covariance_centering_matrix,\
         diagonalize_centered_gram
     
 

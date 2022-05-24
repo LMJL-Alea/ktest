@@ -18,12 +18,12 @@ def compute_discriminant_axis_qh(self,t=None):
     '''
     
     if t is None:
-        t = self.get_trunc()
+        t = self.t
     
     n = self.n1+self.n2
     K = self.compute_gram()
     m = self.compute_omega(sample='xy',quantization=False)
-    P = self.compute_centering_matrix(sample='xy',quantization=False,landmarks=False)
+    P = self.compute_covariance_centering_matrix(sample='xy',quantization=False,landmarks=False)
     
     cov,mmd = self.approximation_cov,self.approximation_mmd
     suffix_nystrom = self.anchors_basis if 'nystrom' in cov else ''
@@ -66,7 +66,7 @@ def compute_residual_covariance(self,t=None,center = 'W'):
         Jn = ones(n, n, dtype=float64)
         P = In - 1/n * Jn
     elif center.lower() =='w':
-        P = self.compute_centering_matrix()
+        P = self.compute_covariance_centering_matrix()
     P_epsilon = compute_proj_on_discriminant_orthogonal(self,t)
     K = self.compute_gram()
     if center.lower() in 'tw':
@@ -77,7 +77,7 @@ def compute_residual_covariance(self,t=None,center = 'W'):
 
 def diagonalize_residual_covariance(self,t=None,center='W'):
     if t is None:
-        t=self.get_trunc()
+        t=self.t
     approximation = 'standard' # pour l'instant 
     suffix_nystrom = '' # pour l'instant 
     
@@ -93,7 +93,7 @@ def diagonalize_residual_covariance(self,t=None,center='W'):
             Jn = ones(n, n, dtype=float64)
             P = In - 1/n * Jn
         elif center.lower() =='w':
-            P = self.compute_centering_matrix()
+            P = self.compute_covariance_centering_matrix()
             
         sp,ev = ordered_eigsy(K_epsilon)
         # print('Kw',Kw,'sp',sp,'ev',ev)
@@ -105,7 +105,7 @@ def diagonalize_residual_covariance(self,t=None,center='W'):
 
 def proj_residus(self,t = None,ndirections=10,center='w'):
     if t is None:
-        t = self.get_trunc()
+        t = self.t
     name_residus = f'standard{center.lower()}{t}'
     if name_residus not in self.df_proj_residuals:
         K = self.compute_gram()

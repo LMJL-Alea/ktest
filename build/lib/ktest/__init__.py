@@ -2,13 +2,15 @@ from .utils import ordered_eigsy
 
 from .kernel_operations import \
     compute_gram, \
-    compute_centering_matrix_with_respect_to_some_effects, \
     center_gram_matrix_with_respect_to_some_effects, \
-    compute_omega, \
     compute_kmn, \
-    compute_centered_gram, \
-    compute_centering_matrix,\
-    diagonalize_centered_gram
+    diagonalize_centered_gram,\
+    compute_within_covariance_centered_gram
+
+from .centering_operations import \
+    compute_centering_matrix_with_respect_to_some_effects, \
+    compute_omega, \
+    compute_covariance_centering_matrix
 
 from .nystrom_operations import \
     compute_nystrom_anchors, \
@@ -19,12 +21,13 @@ from .nystrom_operations import \
 
 from .statistics import \
     get_trunc,\
+    get_95variance_trunc,\
     compute_kfdat,\
     get_explained_variance,\
     compute_pval,\
     correct_BenjaminiHochberg_pval,\
     compute_pkm,\
-    compute_epk,\
+    compute_upk,\
     initialize_kfdat,\
     kfdat,\
     kpca,\

@@ -5,9 +5,7 @@ Summary: Package implementing efficient kernel tests such as MMD or mKFDR
 Home-page: https://github.com/AnthoOzier/ktest
 Author: Anthony Ozier-Lafontaine
 Author-email: anthony.ozier-lafontaine@ec-nantes.fr
-License: UNKNOWN
 Project-URL: Bug Tracker, https://github.com/AnthoOzier/ktest/issues
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
@@ -18,5 +16,3 @@ License-File: LICENSE
 # ktest
 
 This package implements kernel tests 
-
-
