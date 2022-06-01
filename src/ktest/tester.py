@@ -178,13 +178,7 @@ class Tester:
 
     def __init__(self):
         """\
-        Parameters
-        ----------
-        x,y:                torch.Tensor or numpy.array of sizes n1 x p and n2 x p 
-        kernel:             kernel function to apply on (x,y)
-        x_index,y_index:    pd.Index or list of index to identify observations from x and y
-        variables:          pd.Index or list of index to identify variables from x and y
-        
+
         Returns
         -------
         :obj:`Tester`
@@ -328,13 +322,71 @@ class Tester:
     # def save_data():
     # def save_a_dataframe(self,path,which)
 
-    def get_xy(self,landmarks=False):
+    def get_xy(self,landmarks=False,outliers_in_obs=None):
         if landmarks: 
             x,y = self.xlandmarks,self.ylandmarks
         else:
-            x,y = self.x[self.xmask,:],self.y[self.ymask,:]
-        return(x,y)
-      
+            if outliers_in_obs is None:
+                return(self.x,self.y)
+            else:         
+                
+                df_outliers = self.obs[outliers_in_obs]
+                outliers    = df_outliers[df_outliers].index
+                
+                xmask       = ~self.x_index.isin(outliers)
+                ymask       = ~self.y_index.isin(outliers)
+                
+                return(self.x[xmask,:],self.y[ymask,:])
+
+    def get_index(self,sample='xy',landmarks=False,outliers_in_obs=None):
+        if outliers_in_obs is None:
+            return(self.index if sample =='xy' else self.x_index if sample =='x' else self.y_index)
+        else:
+            df_outliers = self.obs[outliers_in_obs]
+            outliers    = df_outliers[df_outliers].index
+            
+            if sample == 'xy':
+                return(self.index[~self.obs.index.isin(outliers)])
+            elif sample =='x':
+                return(self.x_index[~self.x_index.isin(outliers)])
+            elif sample =='y':
+                return(self.y_index[~self.y_index.isin(outliers)])
+            
+    def get_n1n2n(self,landmarks=False,outliers_in_obs=None):
+
+        if landmarks: 
+            n1 = len(self.xlandmarks)
+            n2 = len(self.ylandmarks)
+            return(n1,n2,n1+n2)
+        else:
+            if outliers_in_obs is None:
+                n1 = len(self.x)
+                n2 = len(self.y)
+                return(n1,n2,n1+n2)
+            else:         
+                
+                df_outliers = self.obs[outliers_in_obs]
+                outliers    = df_outliers[df_outliers].index
+                
+                xmask       = ~self.x_index.isin(outliers)
+                ymask       = ~self.y_index.isin(outliers)
+                
+                n1 = len(self.x[xmask,:])
+                n2 = len(self.y[ymask,:])
+                return(n1,n2,n1+n2)
+
+
+    def get_outliers(self,threshold,which='proj_kfda',dataframe_names='standardstandard',column='1',orientation='>'):
+        df = self.init_df_proj(which=which,name=dataframe_names)[column]
+        if orientation == '>':
+            outliers = df[df>threshold].index
+        if orientation == '<':
+            outliers = df[df<threshold].index
+        return(outliers)
+
+    def add_outliers_in_obs(self,outliers,name_outliers):
+        self.obs[name_outliers] = self.index.isin(outliers)
+
     # def name_generator(self,t=None,nystrom=0,nystrom_method='kmeans',r=None,obs_to_ignore=None):
         
     #     if obs_to_ignore is not None:
@@ -347,36 +399,39 @@ class Tester:
     #             name_ +=f'ny{nystrom}{nystrom_method}na{r}'
     #     return(name_)
     
-    def ignore_obs(self,obs_to_ignore=None,reinitialize_ignored_obs=False):
+
+
+
+    # def ignore_obs(self,obs_to_ignore=None,reinitialize_ignored_obs=False):
    
-        if self.ignored_obs is None or reinitialize_ignored_obs:
-            self.ignored_obs = obs_to_ignore
-        else:
-            self.ignored_obs.append(obs_to_ignore)
+    #     if self.ignored_obs is None or reinitialize_ignored_obs:
+    #         self.ignored_obs = obs_to_ignore
+    #     else:
+    #         self.ignored_obs.append(obs_to_ignore)
 
-        if obs_to_ignore is not None:
-            x,y = self.get_xy()
-            self.xmask = ~self.x_index.isin(obs_to_ignore)
-            self.ymask = ~self.y_index.isin(obs_to_ignore)
-            self.imask = ~self.index.isin(obs_to_ignore)
-            self.n1 = x.shape[0]
-            self.n2 = y.shape[0]
+    #     if obs_to_ignore is not None:
+    #         x,y = self.get_xy()
+    #         self.xmask = ~self.x_index.isin(obs_to_ignore)
+    #         self.ymask = ~self.y_index.isin(obs_to_ignore)
+    #         self.imask = ~self.index.isin(obs_to_ignore)
+    #         self.n1 = x.shape[0]
+    #         self.n2 = y.shape[0]
 
-    def unignore_obs(self):
+    # def unignore_obs(self):
         
-        self.xmask = [True]*len(self.x)
-        self.ymask = [True]*len(self.y)
-        self.imask = [True]*len(self.index)
-        self.n1 = self.x.shape[0]
-        self.n2 = self.y.shape[0]
+    #     self.xmask = [True]*len(self.x)
+    #     self.ymask = [True]*len(self.y)
+    #     self.imask = [True]*len(self.index)
+    #     self.n1 = self.x.shape[0]
+    #     self.n2 = self.y.shape[0]
     
-    def infer_nobs(self,which ='proj_kfda',name=None):
-        if not hasattr(self,'n1'):
-            if name is None:
-                name = self.get_names()[which][0]
-            df_proj= self.init_df_proj(which,name)
-            self.n1 =  df_proj[df_proj['sample']=='x'].shape[0]
-            self.n2 =  df_proj[df_proj['sample']=='y'].shape[0]
+    # def infer_nobs(self,which ='proj_kfda',name=None):
+    #     if not hasattr(self,'n1'):
+    #         if name is None:
+    #             name = self.get_names()[which][0]
+    #         df_proj= self.init_df_proj(which,name)
+    #         self.n1 =  df_proj[df_proj['sample']=='x'].shape[0]
+    #         self.n2 =  df_proj[df_proj['sample']=='y'].shape[0]
 #       
     def eval_nystrom_trace(self):
         """

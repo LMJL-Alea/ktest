@@ -86,13 +86,13 @@ def compute_nystrom_landmarks(self,verbose=0):
                     verbose = verbose)
         
     x,y = self.get_xy()
-    n1,n2 = self.n1,self.n2 
-    xratio,yratio = n1/(n1 + n2), n2/(n1 +n2)
+    n1,n2,n = self.get_n1n2n()
+    xratio,yratio = n1/n, n2/n
 
     if self.m is None:
         if verbose >0:
             print("m not specified, by default, m = (n1+n2)//10")
-        self.m = (n1 + n2)//10
+        self.m = n//10
 
     if self.landmark_method is None:
         if verbose >0:
@@ -105,8 +105,6 @@ def compute_nystrom_landmarks(self,verbose=0):
     
 
     if self.landmark_method == 'kmeans':
-        # self.xanchors,self.xassignations = apt.kmeans.spherical_kmeans(self.x[self.xmask,:], nxanchors, max_iter)
-        # self.yanchors,self.yassignations = apt.kmeans.spherical_kmeans(self.y[self.ymask,:], nyanchors, max_iter)
         self.xassignations,self.xlandmarks = kmeans(X=x, num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
         self.yassignations,self.ylandmarks = kmeans(X=y, num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
         self.xlandmarks = self.xlandmarks.double()

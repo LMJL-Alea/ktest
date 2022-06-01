@@ -355,8 +355,7 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     pkm = self.compute_pkm()
-    n1,n2 = (self.n1,self.n2) 
-    n = n1+n2
+    n1,n2,n = self.get_n1n2n()
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
     kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy()
     kfda = kfda_contributions.cumsum(axis=0)
@@ -422,8 +421,6 @@ def compute_pval(self,t=None):
 
     self.df_pval = pd.DataFrame(pvals).T 
     self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
-
-        
 
 def correct_BenjaminiHochberg_pval_of_dfcolumn(df,t):
     df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)
@@ -499,7 +496,7 @@ def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
     # if cov not in self.spev[sample]:
     self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
 #
-def kfdat(self,t=None,name=None,pval=True,verbose=0):
+def kfdat(self,t=None,name=None,verbose=0):
     cov,mmd = self.approximation_cov,self.approximation_mmd
     name = name if name is not None else f'{cov}{mmd}' 
     if name in self.df_kfdat :
@@ -509,9 +506,7 @@ def kfdat(self,t=None,name=None,pval=True,verbose=0):
         self.initialize_kfdat(sample='xy',verbose=verbose)            
         self.compute_kfdat(t=t,name=name,verbose=verbose)
         self.get_trunc()
-        
-        if pval:
-            self.compute_pval()
+        self.compute_pval()
         self.kfda_stat = self.df_kfdat[name][self.t]
 
 

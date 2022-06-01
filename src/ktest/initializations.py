@@ -63,11 +63,9 @@ def init_xy(self,x,y):
         if token:
             if sxy == 'x':
                 self.x = xy
-                self.n1_initial = xy.shape[0]
                 self.n1 = xy.shape[0]
             if sxy == 'y':
                 self.y = xy
-                self.n2_initial = xy.shape[0]
                 self.n2 = xy.shape[0]
             self.has_data = True
 
@@ -233,25 +231,7 @@ def set_center_by(self,center_by=None):
     if center_by is not None and hasattr(self,'obs'):
         self.center_by = center_by
         
-   
-def init_masks(self):
-    '''
 
-    
-    Parameters
-    ----------
-
-    Attributes Initialized
-    ---------- ----------- 
-    '''
-    # j'ai créé les masks au tout début du package mais je ne les utilise jamais je sais pas si c'est vraiment pertinent.
-    # C'était censé m'aider à détecter des outliers facilement et a refaire tourner le test une fois qu'ils sont supprimés. 
-
-    self.xmask = self.x_index.isin(self.x_index)
-    self.ymask = self.y_index.isin(self.y_index)
-    self.imask = self.index.isin(self.index)
-    self.ignored_obs = None
-    
 def init_metadata(self,dfx_meta=None,dfy_meta=None):
     '''
     This function initializes the attribute `obs` containing metainformation on the data. 

@@ -44,8 +44,7 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         pkm=self.compute_pkm()
         upk=self.compute_upk(t)
-        n1,n2 = (self.n1,self.n2) 
-        n = n1+n2
+        n1,n2,n = self.get_n1n2n()
 
         if cov == 'standard' or 'nystrom' in cov: 
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
@@ -55,7 +54,7 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
 
         if name in self.df_proj_kfda:
             print(f"écrasement de {name} dans df_proj_kfda")
-        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=[str(t) for t in trunc])
+        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.get_index(),columns=[str(t) for t in trunc])
         self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
         
         self.verbosity(function_name='compute_proj_kfda',
@@ -110,8 +109,7 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
         # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         pkm=self.compute_pkm()
         upk=self.compute_upk(t)
-        n1,n2 = (self.n1,self.n2) 
-        n = n1+n2
+        n1,n2,n = self.get_n1n2n()
 
         if cov == 'standard' or 'nystrom' in cov: 
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
@@ -124,7 +122,8 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
         if name in self.df_proj_kpca:
             print(f"écrasement de {name} dans df_proj_kpca")
         
-        index = self.index[self.imask] if sample=='xy' else self.x_index[self.xmask] if sample =='x' else self.y_index[self.ymask]
+
+        index = get_index(sample)
         self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
         self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
                 
@@ -166,8 +165,7 @@ def compute_proj_mmd(self,approximation='standard',name=None,verbose=0):
                 verbose = verbose)
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        n1,n2 = (self.n1,self.n2) 
-        n = n1+n2
+        n1,n2,n = self.get_n1n2n()
 
         m = self.compute_omega(quantization=(approximation=='quantization'))
         if approximation == 'standard':
@@ -177,7 +175,7 @@ def compute_proj_mmd(self,approximation='standard',name=None,verbose=0):
         proj = torch.matmul(K,m)
         if name in self.df_proj_mmd:
             print(f"écrasement de {name} dans df_proj_mmd")
-        self.df_proj_mmd[name] = pd.DataFrame(proj,index= self.index[self.imask],columns=['mmd'])
+        self.df_proj_mmd[name] = pd.DataFrame(proj,index=self.get_index(),columns=['mmd'])
         self.df_proj_mmd[name]['sample'] = ['x']*n1 + ['y']*n2
         
         self.verbosity(function_name='compute_proj_mmd',
@@ -218,49 +216,10 @@ def init_df_proj(self,which,name=None):
     elif which in self.variables:
         datax,datay = self.get_xy()
         loc_variable = self.variables.get_loc(which)
-        df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=self.index[self.imask],columns=[which])
+        df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=self.get_index(),columns=[which])
         df_proj['sample']=['x']*self.n1 + ['y']*self.n2
     else:
         print(f'{which} not recognized')
         
     return(df_proj)
-
-
-
-# def init_df_proj(self,which,name=None):
-#     # if name is None:
-#     #     name = self.main_name
-    
-#     proj_options = {'proj_kfda':self.df_proj_kfda,
-#                'proj_kpca':self.df_proj_kpca,
-#                'proj_mmd':self.df_proj_mmd,}
-#     if which in proj_options:
-#         dict_df_proj = proj_options[which]
-#         nproj = len(dict_df_proj)
-#         names = list(dict_df_proj.keys())
-#         if nproj == 0:
-#             print(f'{which} has not been computed yet')
-#         if nproj == 1:
-#             if name is not None and name != names[0]:
-#                 print(f'{name} not corresponding to {names[0]}')
-#             else:
-#                 df_proj = dict_df_proj[names[0]]
-#         if nproj >1:
-#             if name is not None and name not in names:
-#                 print(f'{name} not found in {names}')
-#             # if name is None and self.main_name not in names:
-#             #     print("the default name {self.main_name} is not in {names} so you need to specify 'name' argument")
-#             # if name is None and self.main_name in names:
-#                 df_proj = dict_df_proj[self.main_name]
-#             else: 
-#                 df_proj = dict_df_proj[name]
-#     elif which in self.variables:
-#         datax,datay = self.get_xy()
-#         loc_variable = self.variables.get_loc[which]
-#         df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=self.index[self.imask],columns=[which])
-#         df_proj['sample']=['x']*self.n1 + ['y']*self.n2
-#     else:
-#         print(f'{which} not recognized')
-        
-#     return(df_proj)
 

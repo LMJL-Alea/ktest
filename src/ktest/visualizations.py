@@ -133,8 +133,7 @@ def plot_kfdat_contrib(self,fig=None,ax=None,t=None,name=None):
     
     cov = self.approximation_cov    
     sp,ev = self.spev['xy'][cov]['sp'],self.spev['xy'][cov]['ev']
-    n1,n2 = self.n1, self.n2 
-    n = n1+n2 
+    n1,n2,n = self.get_n1n2n() 
     
     pkom = self.compute_pkm()
     om = self.compute_omega()

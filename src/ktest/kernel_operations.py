@@ -110,11 +110,10 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
     P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization).double()
     
     n=0
+    n1,n2,_ = self.get_n1n2n()
     if 'x' in sample:
-        n1 = self.n1 
         n+=n1     
     if 'y' in sample:
-        n2 = self.n2
         n+=n2
     if 'nystrom' in approximation:
         r = self.r if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors

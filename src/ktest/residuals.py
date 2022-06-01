@@ -20,7 +20,7 @@ def compute_discriminant_axis_qh(self,t=None):
     if t is None:
         t = self.t
     
-    n = self.n1+self.n2
+    n1,n2,n = self.get_n1n2n()
     K = self.compute_gram()
     m = self.compute_omega(sample='xy',quantization=False)
     P = self.compute_covariance_centering_matrix(sample='xy',quantization=False,landmarks=False)
@@ -51,7 +51,7 @@ def compute_proj_on_discriminant_orthogonal(self,t=None):
     Compute P_\epsilon which is such that kx P_\epsilon = \epsilon = kx - hh^tkx
      \epsilon is the residual of the observation, orthogonal to the discriminant axis.  
     '''
-    n = self.n1+self.n2
+    n1,n2,n = self.get_n1n2n()
     In = eye(n,dtype=float64)
     qh = compute_discriminant_axis_qh(self,t=t)
     K  = self.compute_gram()
@@ -60,7 +60,7 @@ def compute_proj_on_discriminant_orthogonal(self,t=None):
     return(P_epsilon)
 
 def compute_residual_covariance(self,t=None,center = 'W'):
-    n = self.n1+self.n2
+    n1,n2,n = self.get_n1n2n()
     if center.lower() == 't':
         In = eye(n, dtype=float64)
         Jn = ones(n, n, dtype=float64)
@@ -85,7 +85,7 @@ def diagonalize_residual_covariance(self,t=None,center='W'):
     if name not in self.spev['residuals']:
         K_epsilon = compute_residual_covariance(self,t,center=center)
         P_epsilon = compute_proj_on_discriminant_orthogonal(self,t)
-        n = self.n1+self.n2
+        n1,n2,n = self.get_n1n2n()
 
         # modifier centering matrix pour prendre cette diff en compte 
         if center.lower() == 't':
@@ -113,7 +113,7 @@ def proj_residus(self,t = None,ndirections=10,center='w'):
         proj_residus = matmul(K,epsilon)
         # if not hasattr(self,'df_proj_residus'):
         #     self.df_proj_residus = {}
-        self.df_proj_residuals[name_residus] = pd.DataFrame(proj_residus,index= self.index[self.imask],columns=[str(i) for i in range(1,ndirections+1)])
+        self.df_proj_residuals[name_residus] = pd.DataFrame(proj_residus,index= self.get_index(),columns=[str(i) for i in range(1,ndirections+1)])
         self.df_proj_residuals[name_residus]['sample'] =['x']*self.n1 + ['y']*self.n2
 
 def get_between_covariance_projection_error(self,trunc = None):
@@ -139,8 +139,7 @@ def get_between_covariance_projection_error(self,trunc = None):
     
     
     suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-    n1,n2 = self.n1,self.n2
-    n     = n1+n2
+    n1,n2,n = self.get_n1n2n()
     
         
     sp    = self.spev['xy'][self.approximation_cov+suffix_nystrom]['sp']
