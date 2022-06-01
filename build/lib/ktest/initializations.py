@@ -153,13 +153,13 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
                 it should take two torch.tensors as input and return a torch.tensor contaning
                  the kernel evaluations between the lines (observations) of the two inputs. 
 
-        dfx_meta (default = None): pandas.DataFrame,
+        dfx_meta (optional): pandas.DataFrame,
             A dataframe containing meta information on the first dataset. 
 
-        dfy_meta (default = None): pandas.DataFrame,
+        dfy_meta (optional): pandas.DataFrame,
             A dataframe containing meta information on the second dataset. 
 
-        center_by (default = None) : str, 
+        center_by (optional) : str, 
             either a column of self.obs or a combination of columns with the following syntax
             - starts with '#' to specify that it is a combination of effects
             - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
@@ -213,12 +213,15 @@ def set_center_by(self,center_by=None):
     
     Parameters
     ----------
-        center_by (default = None) : str, 
-            either a column of self.obs or a combination of columns with the following syntax
+        center_by (default = None) : None or str, 
+            if None, the attribute center_by is set to None 
+            and no centering will be done during the computations of the Gram matrix. 
+            else, either a column of self.obs or a combination of columns with the following syntax
             - starts with '#' to specify that it is a combination of effects
             - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
             - the effects are separated by a '_'
             exemple : '#-celltype_+patient'
+
 
     Attributes Initialized
     ---------- ----------- 

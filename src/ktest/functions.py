@@ -190,8 +190,73 @@ def get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data):
     return(pd.DataFrame(dist).fillna(0).to_numpy())
 
 def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={},center_by=None,free_memory=True):
+    '''
+    This function was specifically developped for the analysis of the CRCL data but it can be generalized. 
+    This function takes the parameter name to determine which datasets stored in dict_data to compare and store 
+    the resultant Tester object at the key name of the dictionnary dict_tests. 
+    
+    The syntax for name is the following: 
+    concatenated datasets are separated by a comma, 
+    compared datasets are separated by an underscore '_'. 
+    For example, if we have 'A','B' and 'C' in dict_data, 
+    To compare 'A' and 'B' versus 'C', the parameter name should be equal to 'A,B_C'. 
+        
+    
+    
+    Parameters
+    ----------
+        name : str,
+        Contains the information of the datasets on which we want to compute a statistic,
+        It is also the key in which the resulting tester object will be stored in dict_tests. 
+        The syntax for name is the following: 
+        concatenated datasets are separated by a comma, 
+        compared datasets are separated by an underscore '_'. 
+        For example, if we have 'A','B' and 'C' in dict_data, 
+        To compare 'A' and 'B' versus 'C', the parameter name should be equal to 'A,B_C'.
+        
+        dict_data : dict,
+        Contains the pandas.DataFrames of every single dataset of interest, 
+        each DataFrame is stored at a key caracterizing the dataset. 
+        These keys are refered as categories or cat. 
+        
+        dict_tests : dict,
+        The dictionnary to update by adding the tester object of the comparison defined by the parameter name. 
+        
+        dict_meta (optionnal) : dict,
+        Contains the pandas.DataFrames of the metadata of every single dataset of interest, 
+        each DataFrame is stored at a key caracterizing the dataset. 
+        These keys are refered as categories or cat. 
+        
+        params_model (optionnal): dict, 
+        Contains the information of which version of the statistic to compute,
+        e.g. how to use the nystrom method if needed. 
+        The keys to inform in params model are (should be simplified in the future):
+            'approximation_cov' in 'standard','nystrom1', 'nystrom2','nystrom3'
+            'approximation_mmd' in 'standard','nystrom1', 'nystrom2','nystrom3'
+            if nystrom is used in one of the two approximations : 
+                'm' (int): the number of landmarks
+                'r' (int): the number of anchors
+                'landmark_method' in 'random', 'kmeans'
+                'anchors_basis' in 'W','S','K'
+        
+        center_by (optionnal): str,
+        A parameter to correct some effects corresponding to the metadata. 
+        More information in the description of the function init_center_by of Tester
+        
+        free_memory (default = True): boolean,
+        If True, the data and the eigenvectors are not stored in the Tester object. 
+        This is usefull when many comparisons are done and stored in dict_tests to save place in the RAM. 
+        
+        
+        
+                
+    Returns
+    ------- 
+        A new Tester object is added in dict_tests at the key name. 
+    '''
+    
+    
     if name not in dict_tests:
-
         cat1 = name.split(sep='_')[0]
         cat2 = name.split(sep='_')[1]
 
@@ -233,7 +298,7 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
         df1_meta['patient'] = df1_meta['patient'].astype('category')
         df2_meta['patient'] = df2_meta['patient'].astype('category')
         
-        
+#         print(len(df1),len(df2))
         if len(df1)>10 and len(df2)>10:
             t0=time()
             print(name,len(df1),len(df2),end=' ')
@@ -261,7 +326,6 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
             
             dict_tests[name] = test
             print(f'{time()-t0:.3f} t={t} kfda={kfda:.4f} pval={pval}')
-            
  
 def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,color_col=None):
 
@@ -552,6 +616,37 @@ def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
 
 ### Comparaison M vs W 
 
+# def get_name_MvsF(ct,data_type,cts,dict_data):
+#     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
+#     name = ''
+#     for m in mwi:
+#         if 'M' in m:
+#             if ct in cts: 
+#                 for celltype in cts[ct]:
+#                     cat = f'{m}{celltype}{data_type}'
+#                     if cat in dict_data:
+#                         name += f'{cat},'
+#             else:
+#                 cat = f'{m}{ct}{data_type}'
+#                 if cat in dict_data:
+#                     name += f'{cat},'
+                
+
+#     name = name[:-1]
+#     name += '_'
+#     for m in mwi:
+#         if 'W' in m:
+#             if ct in cts: 
+#                 for celltype in cts[ct]:
+#                     cat = f'{m}{celltype}{data_type}'
+#                     if cat in dict_data:
+#                         name += f'{cat},'
+#             else:
+#                 cat = f'{m}{ct}{data_type}'
+#                 if cat in dict_data:
+#                     name += f'{cat},'
+#     return(name[:-1])
+
 def get_name_MvsF(ct,data_type,cts,dict_data):
     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
     name = ''
@@ -566,7 +661,6 @@ def get_name_MvsF(ct,data_type,cts,dict_data):
                 cat = f'{m}{ct}{data_type}'
                 if cat in dict_data:
                     name += f'{cat},'
-                
 
     name = name[:-1]
     name += '_'
@@ -581,185 +675,18 @@ def get_name_MvsF(ct,data_type,cts,dict_data):
                 cat = f'{m}{ct}{data_type}'
                 if cat in dict_data:
                     name += f'{cat},'
-    return(name[:-1])
-
+    
+    name = name[:-1]
+    if len(name.split(sep='_'))==2 and name[0]!='_':
+        return(name)
+    else: 
+        return('')
 
 ## plot 
-def plot_pval_with_respect_to_explained_variance(self,name,fig=None,ax=None):
-    if fig is None:
-        fig,ax = plt.subplots(figsize=(7,7))
-    
-    log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-    log10pval = log10pval[log10pval<10**10]
-    expvar = self.get_explained_variance()[:len(log10pval)]
-    
-    ax.scatter(expvar,log10pval,label=name)
-    ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
-    ax.set_ylabel('-log10pval',fontsize=30)
-    ax.set_xlabel('variance explained',fontsize=30)
-    ax.set_ylim(0,50)
-    ax.axhline(-np.log(0.05)/np.log(10),)
-    return(fig,ax)
-
-
-
 
 from torch import mv,dot,sqrt,abs,isnan
 
 
-def get_between_covariance_reconstruction_error(self):
-    
-    suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-    n1,n2 = self.n1,self.n2
-    n     = n1+n2
-    sp    = self.spev['xy'][self.approximation_cov+suffix_nystrom]['sp']
-    ev    = self.spev['xy'][self.approximation_cov+suffix_nystrom]['ev']
-    omega = test.compute_omega()
-    fv    = n**(-1/2)*sp**(-1/2)*ev
-    K     = self.compute_gram()
-    P     = self.compute_covariance_centering_matrix()
 
-    delta = sqrt(dot(omega,mv(K,omega))) # || mu2 - mu1 || = wKw
-    errorB = (1/delta * (mv(fv.T,mv(P,mv(K,omega)))**2).cumsum(0)**(1/2)) 
-    return errorB
-    
-    
-def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True):
-    if fig is None:
-        fig,ax = plt.subplots(figsize=(7,7))
-    
-    log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-    log10pval = np.array(log10pval[log10pval<10**10])
-    expvar = np.array(self.get_explained_variance()[:len(log10pval)])
-    
-    threshold = -np.log(0.05)/np.log(10)
-    ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
-    
-    expvar_acc = expvar[log10pval<=threshold]
-    log10pval_acc = log10pval[log10pval<=threshold]
 
-    expvar_rej = expvar[log10pval>threshold]
-    log10pval_rej = log10pval[log10pval>threshold]
-    
-    if scatter:
-        if len(expvar_acc)>0:
-            ax.scatter(expvar_acc,log10pval_acc,color='green')
-        if len(expvar_rej)>0:
-            ax.scatter(expvar_rej,log10pval_rej,color='red')
-        ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
-    else:
-        ax.plot(expvar_acc,log10pval_acc,lw=1,alpha=1)
-        ax.plot(expvar_rej,log10pval_rej,label=name,lw=1,alpha=1)
-
-    ax.set_ylabel('-log10pval',fontsize=30)
-    ax.set_xlabel(r'$\Sigma_W$ reconstruction',fontsize=30)
-    ax.set_ylim(0,20)
-    ax.set_xlim(-.05,1.05)
-    ax.axhline(-np.log(0.05)/np.log(10),)
-    return(fig,ax)
-
-    
-def plot_pval_with_respect_to_between_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True):
-    if fig is None:
-        fig,ax = plt.subplots(figsize=(7,7))
-    
-    log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-    log10pval = np.array(log10pval[log10pval<10**10])
-    error = np.array(get_between_covariance_reconstruction_error(self)[:len(log10pval)])
-    
-    threshold = -np.log(0.05)/np.log(10)
-    
-    error_acc = error[log10pval<=threshold]
-    log10pval_acc = log10pval[log10pval<=threshold]
-
-    error_rej = error[log10pval>threshold]
-    log10pval_rej = log10pval[log10pval>threshold]
-    
-    if scatter:
-        if len(error_acc)>0:
-            ax.scatter(error_acc,log10pval_acc,color='green')
-        if len(error_rej)>0:
-            ax.scatter(error_rej,log10pval_rej,color='red')
-        ax.plot(error,log10pval,label=name,lw=.8,alpha=.5)
-    else:
-        ax.plot(error_acc,log10pval_acc,lw=1,alpha=1)
-        ax.plot(error_rej,log10pval_rej,label=name,lw=1,alpha=1)
-
-    ax.set_ylabel('-log10pval',fontsize=30)
-    ax.set_xlabel(r'$\Sigma_B$ reconstruction ',fontsize=30)
-    ax.set_ylim(0,20)
-    ax.set_xlim(-.05,1.05)
-    ax.axhline(-np.log(0.05)/np.log(10),)
-    return(fig,ax)
-    
-    
-    
-def plot_relative_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
-    if fig is None:
-        fig,ax = plt.subplots(figsize=(7,7))
-    
-    log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-    log10pval = np.array(log10pval[log10pval<10**10])
-    errorB = np.array(get_between_covariance_reconstruction_error(self)[:len(log10pval)])
-    errorW = np.array(self.get_explained_variance()[:len(log10pval)])
-    threshold = -np.log(0.05)/np.log(10)
-
-    errorB_acc = errorB[log10pval<=threshold]
-    errorW_acc = errorW[log10pval<=threshold]
-    
-    errorB_rej = errorB[log10pval>threshold]
-    errorW_rej = errorW[log10pval>threshold]
-    
-    
-    if scatter:
-        if len(errorB_acc)>0:
-            ax.scatter(errorB_acc,errorW_acc,color='green')
-        if len(errorB_rej)>0:
-            ax.scatter(errorB_rej,errorW_rej,color='red')
-        ax.plot(errorB,errorW,label=name,lw=.8,alpha=.5)
-    else:
-        ax.plot(errorB,errorW,lw=1,alpha=1)
-
-    ax.set_ylabel(r'$\Sigma_W$ reconstruction ',fontsize=30)
-    ax.set_xlabel(r'$\Sigma_B$ reconstruction ',fontsize=30)
-    
-    
-    if not any(np.isnan(errorB)):
-        mini = np.min([np.min(errorB),np.min(errorW)])
-        h = (1 - mini)/20
-        ax.plot(np.arange(mini,1,h),np.arange(mini,1,h),c='xkcd:bluish purple',lw=.4,alpha=.2)
-        
-#     ax.set_ylim(0.99,1.005)
-#     ax.set_xlim(0.99,1.005)
-    return(fig,ax)
-    
-    
-def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
-    if fig is None:
-        fig,ax = plt.subplots(figsize=(7,7))
-    
-    log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-    log10pval = np.array(log10pval[log10pval<10**10])
-    errorB = np.array(get_between_covariance_reconstruction_error(self)[:len(log10pval)])
-    errorW = np.array(self.get_explained_variance()[:len(log10pval)])
-    threshold = -np.log(0.05)/np.log(10)
-
-    
-    errorB_acc = errorB[log10pval<=threshold]
-    errorW_acc = errorW[log10pval<=threshold]
-    
-    errorB_rej = errorB[log10pval>threshold]
-    errorW_rej = errorW[log10pval>threshold]
-    
-    
-    if scatter:
-        if len(errorB_acc)>0:
-            ax.scatter(np.arange(len(errorB_acc)),errorB_acc/errorW_acc,color='green')
-        if len(errorB_rej)>0:
-            ax.scatter(np.arange(len(errorB_rej)),errorB_rej/errorW_rej,color='red')
-        ax.plot(np.arange(len(errorB)),errorB/errorW,label=name,lw=.8,alpha=.5)
-    else:
-        ax.plot(errorB,errorW,lw=1,alpha=1)
-    ax.set_xlim(-1,10)
-    return(fig,ax)
-
+ 

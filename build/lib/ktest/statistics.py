@@ -53,7 +53,6 @@ def get_95variance_trunc(self,sample='xy'):
     t = len(spp[spp<(1-.05)])
     return(t)
 
-
 def get_explained_variance(self,sample='xy'):
     '''
     This function returns a list of percentages of supported variance, the ith element contain the 
@@ -332,11 +331,18 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
 
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
     sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
-    tmax = 2000
-    if t is None : 
-        t = tmax if (len(sp)>tmax) else len(sp)
-    else:
-        t = len(sp) if len(sp)<t else t 
+    
+    # j'avais mis un tmax mais je ne sais plus pourquoi 
+    # si je veux mettre un tmax, c'est plus pertinent de le mettre directement sur le spectre
+    # pareil pour le choix de t, donc a repenser  
+
+    # tmax = 2000 
+    # if t is None : 
+    #     t = tmax if (len(sp)>tmax) else len(sp)
+    # else:
+    #     t = len(sp) if len(sp)<t else t 
+    t = len(sp) if t is None else len(sp) if len(sp)<t else t 
+
     trunc = range(1,t+1)        
     self.verbosity(function_name='compute_kfdat',
             dict_of_variables={
@@ -352,14 +358,16 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
     n1,n2 = (self.n1,self.n2) 
     n = n1+n2
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
-    kfda = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).cumsum(axis=0).numpy()
+    kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy()
+    kfda = kfda_contributions.cumsum(axis=0)
     
     
     # print('\n\nstat compute kfdat\n\n''sp',sp,'kfda',kfda)
     name = name if name is not None else f'{cov}{mmd}{suffix_nystrom}' 
     if name in self.df_kfdat:
-        print(f"écrasement de {name} dans df_kfdat")
+        print(f"écrasement de {name} dans df_kfdat and df_kfdat_contributions")
     self.df_kfdat[name] = pd.Series(kfda,index=trunc)
+    self.df_kfdat_contributions[name] = pd.Series(kfda_contributions,index=trunc)
     self.verbosity(function_name='compute_kfdat',
                             dict_of_variables={
             't':t,
@@ -369,22 +377,53 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
             start=False,
             verbose = verbose)
 
-def compute_pval(self,t=None,name=None):
+def compute_kfdat_with_different_order(self,order='between'):
+    '''
+    Computes a truncated kfda statistic which is defined as the original truncated kfda statistic but 
+    the eigenvectors and eigenvalues of the within covariance operator are not ordered by decreasing eigenvalues. 
+    
+    Parameters
+    ----------
+        order : str, in 'between', ...? 
+        specify the rule to order the eigenvectors
+        so far there is only one choice but I want to add a second one which would 
+        be a compromize between the reconstruction of (\mu_2 - \mu_1) and the 
+        reconstruction of the within covariance operator. 
+    
+    Returns
+    -------
+        The attribute `df_kfdat` is updated with new columns corresponding to the new kfda statistic. 
+        Each new column is a column of the attribute `df_kfdat_contributions` with a '_between' at the end. 
+    '''
+    if order == 'between':
+        projection_error,ordered_truncations = self.get_ordered_spectrum_wrt_between_covariance_projection_error()
+        
+        kfda_contrib = self.df_kfdat_contributions
+        kfda_between = kfda_contrib.T[ordered_truncations.tolist()].T.cumsum()
+        kfda_between.index = range(1,len(ordered_truncations)+1)
+        for c in kfda_contrib.columns:
+            self.df_kfdat[f'{c}_between'] = kfda_between[c]
+
+def compute_pval(self,t=None):
     """
+    Computes the asymptotic pvalues of the kfda statistic. 
+    
     Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
     Attention, la présence de Nan augmente considérablement le temps de calcul. 
     """
     pvals = {}
-    if t is None:
-        t = min(100,len(self.df_kfdat))
-    else : 
-        t = min(t,len(self.df_kfdat))
+    pvals_contrib = {}
+    t = min(100,len(self.df_kfdat)) if t is None else min(t,len(self.df_kfdat))
     trunc=range(1,t+1)
 
-    # est-ce qu'on peut accelérer cette boucle avec une approche vectorielle ? 
     for t_ in trunc:
         pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
+        pvals_contrib[t_] = self.df_kfdat_contributions.T[t_].apply(lambda x: chi2.sf(x,1))
+
     self.df_pval = pd.DataFrame(pvals).T 
+    self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
+
+        
 
 def correct_BenjaminiHochberg_pval_of_dfcolumn(df,t):
     df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)

@@ -1,7 +1,7 @@
 
 
 # import torch
-from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,chain_matmul,float64
+from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,chain_matmul,float64,isnan,sort,cat,tensor
 from numpy import sqrt
 from .utils import ordered_eigsy
 import pandas as pd
@@ -115,3 +115,74 @@ def proj_residus(self,t = None,ndirections=10,center='w'):
         #     self.df_proj_residus = {}
         self.df_proj_residuals[name_residus] = pd.DataFrame(proj_residus,index= self.index[self.imask],columns=[str(i) for i in range(1,ndirections+1)])
         self.df_proj_residuals[name_residus]['sample'] =['x']*self.n1 + ['y']*self.n2
+
+def get_between_covariance_projection_error(self,trunc = None):
+    '''
+    Returns the projection error of the unique eigenvector (\mu_2- \mu_1) of the between covariance operator. 
+    The projection error is the percentage of the eigenvector obtained by projecting it 
+    onto the ordered eigenvectors (default is by decreasing eigenvalues) of the within covariance operator. 
+    
+    Parameters
+    ----------
+        self : Tester, 
+        Should contain the eigenvectors and eigenvalues of the within covariance operator in the attribute `spev`
+        
+        trunc (optionnal) : list,
+        The order of the eigenvectors to project (\mu_2 - \mu_1), 
+        By default, the eigenvectors are ordered by decreasing eigenvalues. 
+
+    Returns 
+    ------
+        projection_error : torch.Tensor
+        The projection error of (\mu_2- \mu_1) as a percentage. 
+    '''
+    
+    
+    suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
+    n1,n2 = self.n1,self.n2
+    n     = n1+n2
+    
+        
+    sp    = self.spev['xy'][self.approximation_cov+suffix_nystrom]['sp']
+    ev    = self.spev['xy'][self.approximation_cov+suffix_nystrom]['ev']
+
+    if trunc is not None:
+        sp = sp[trunc]
+        ev = ev[trunc]
+    
+    omega = self.compute_omega()
+    fv    = n**(-1/2)*sp**(-1/2)*ev
+    K     = self.compute_gram()
+    P     = self.compute_covariance_centering_matrix()
+
+    delta = sqrt(dot(omega,mv(K,omega))) # || mu2 - mu1 || = wKw
+    projection_error = (1/delta * (mv(fv.T,mv(P,mv(K,omega)))**2).cumsum(0)**(1/2)) 
+    return projection_error
+
+def get_ordered_spectrum_wrt_between_covariance_projection_error(self):
+    '''
+    Sorts the eigenvalues of the within covariance operator in order to 
+    have the best reconstruction of (\mu_2 - \mu1)
+    
+    Returns 
+    -------
+        sorted_projection_error : torch.Tensor,
+        The percentage of (\mu_2 - \mu1) captured by the eigenvector capturing the ith largest 
+        percentage of (\mu_2 - \mu1) is at the ith position. 
+        
+        ordered_truncation : torch.Tensor,
+        The position of the vector capturing the ith largest percentage of (\mu_2 - \mu1) in the list 
+        of eigenvectors of the within covariance operator ordered by decreasing eigenvalues. 
+    
+    '''
+    eB = self.get_between_covariance_projection_error()
+
+    eB = cat((tensor([0]),eB))
+    projection_error = eB[1:] - eB[:-1]
+    projection_error = projection_error[~isnan(projection_error)]
+    sorted_projection_error,ordered_truncations  = sort(projection_error,descending = True)
+    ordered_truncations += 1
+    
+    return(sorted_projection_error,ordered_truncations)
+    
+    

@@ -108,6 +108,7 @@ class Tester:
         get_95variance_trunc,\
         get_explained_variance,\
         compute_kfdat,\
+        compute_kfdat_with_different_order,\
         compute_pval,\
         correct_BenjaminiHochberg_pval,\
         compute_pkm,\
@@ -118,7 +119,7 @@ class Tester:
         initialize_mmd,\
         mmd,\
         compute_mmd
-
+        
 
     from .projection_operations import \
         compute_proj_kfda,\
@@ -144,7 +145,13 @@ class Tester:
         scatter_projs,\
         set_color_for_scatter,\
         find_cells_from_proj,\
-        plot_correlation_proj_var
+        plot_correlation_proj_var,\
+        plot_pval_with_respect_to_within_covariance_reconstruction_error,\
+        plot_pval_with_respect_to_between_covariance_reconstruction_error,\
+        plot_relative_reconstruction_errors,\
+        plot_ratio_reconstruction_errors,\
+        plot_within_covariance_reconstruction_error_with_respect_to_t,\
+        plot_between_covariance_reconstruction_error_with_respect_to_t
 
     from .initializations import \
         init_data,\
@@ -165,7 +172,9 @@ class Tester:
         compute_proj_on_discriminant_orthogonal,\
         compute_residual_covariance,\
         diagonalize_residual_covariance,\
-        proj_residus
+        proj_residus,\
+        get_between_covariance_projection_error,\
+        get_ordered_spectrum_wrt_between_covariance_projection_error
 
     def __init__(self):
         """\
@@ -189,6 +198,7 @@ class Tester:
         self.dict_data = {}
         # self.dict_model = {}
         self.df_kfdat = pd.DataFrame()
+        self.df_kfdat_contributions = pd.DataFrame()
         self.df_pval = pd.DataFrame()
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
