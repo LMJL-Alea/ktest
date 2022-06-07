@@ -200,7 +200,6 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
     self.init_variables(dfx.columns)
     self.init_kernel(kernel)
     self.init_metadata(dfx_meta,dfy_meta) 
-    self.init_masks()
     self.set_center_by(center_by)
     
 def set_center_by(self,center_by=None):
@@ -301,7 +300,6 @@ def init_data(self,
     self.init_index_xy(x_index,y_index) 
     self.init_variables(variables)
     self.init_kernel(kernel)
-    self.init_masks()
     self.init_metadata(dfx_meta,dfy_meta)
     self.set_center_by(center_by)
     self.has_data = True        

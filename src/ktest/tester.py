@@ -107,6 +107,7 @@ class Tester:
         get_trunc,\
         get_95variance_trunc,\
         get_explained_variance,\
+        get_trace,\
         compute_kfdat,\
         compute_kfdat_with_different_order,\
         compute_pval,\
@@ -151,7 +152,11 @@ class Tester:
         plot_relative_reconstruction_errors,\
         plot_ratio_reconstruction_errors,\
         plot_within_covariance_reconstruction_error_with_respect_to_t,\
-        plot_between_covariance_reconstruction_error_with_respect_to_t
+        plot_between_covariance_reconstruction_error_with_respect_to_t,\
+        plot_pval_and_errors,\
+        what_if_we_ignored_cells_by_condition,\
+        what_if_we_ignored_cells_by_outliers_list,\
+        prepare_vizualisation_without_outliers
 
     from .initializations import \
         init_data,\
@@ -160,7 +165,6 @@ class Tester:
         init_xy,\
         init_index_xy,\
         init_variables,\
-        init_masks,\
         init_metadata,\
         init_model,\
         init_data_from_dataframe,\
@@ -227,12 +231,13 @@ class Tester:
             s += f',{anchors_basis},m={m},r={r}'
         s+= '\n'
         
-        s += f"df_kfdat ({self.df_kfdat.shape})\n"
-        s += f"df_pval ({self.df_pval.shape})\n"
-        s += f"df_proj_kfda ({len(self.df_proj_kfda)})\n"
-        s += f"df_proj_kpca ({len(self.df_proj_kpca)})\n"
-        s += f"df_proj_mmd ({len(self.df_proj_mmd)})\n"
-        s += f"df_proj_residuals ({len(self.df_proj_residuals)})\n"
+        s += f"df_kfdat ({self.df_kfdat.columns})\n"
+        s += f"df_pval ({self.df_pval.columns})\n"
+        s += f"df_pval_contributions ({self.df_pval_contributions.columns})\n"
+        s += f"df_proj_kfda ({self.df_proj_kfda.keys()})\n"
+        s += f"df_proj_kpca ({self.df_proj_kpca.keys()})\n"
+        s += f"df_proj_mmd ({self.df_proj_mmd.keys()})\n"
+        s += f"df_proj_residuals ({self.df_proj_residuals.keys()})\n"
         s += f"corr ({len(self.corr)})\n"
         s += f"corr ({len(self.corr)})\n"
         s += f"dict_mmd ({len(self.dict_mmd)})\n\n"
@@ -376,12 +381,20 @@ class Tester:
                 return(n1,n2,n1+n2)
 
 
-    def get_outliers(self,threshold,which='proj_kfda',dataframe_names='standardstandard',column='1',orientation='>'):
-        df = self.init_df_proj(which=which,name=dataframe_names)[column]
+    def get_outliers(self,threshold,which='proj_kfda',column_in_dataframe='standardstandard',t='1',orientation='>',outliers_in_obs=None):
+        df = self.init_df_proj(which=which,name=column_in_dataframe)[str(t)]
+
+
         if orientation == '>':
             outliers = df[df>threshold].index
         if orientation == '<':
             outliers = df[df<threshold].index
+
+        if outliers_in_obs is not None:
+            df_outliers = self.obs[outliers_in_obs]
+            old_outliers    = df_outliers[df_outliers].index
+            outliers = outliers.append(old_outliers)
+
         return(outliers)
 
     def add_outliers_in_obs(self,outliers,name_outliers):

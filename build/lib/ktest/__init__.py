@@ -22,6 +22,7 @@ from .nystrom_operations import \
 from .statistics import \
     get_trunc,\
     get_95variance_trunc,\
+    get_trace,\
     compute_kfdat,\
     compute_kfdat_with_different_order,\
     get_explained_variance,\
@@ -66,8 +67,12 @@ from .visualizations import \
     plot_relative_reconstruction_errors,\
     plot_ratio_reconstruction_errors,\
     plot_within_covariance_reconstruction_error_with_respect_to_t,\
-    plot_between_covariance_reconstruction_error_with_respect_to_t
-
+    plot_between_covariance_reconstruction_error_with_respect_to_t,\
+    plot_pval_and_errors,\
+    what_if_we_ignored_cells_by_condition,\
+    what_if_we_ignored_cells_by_outliers_list,\
+    prepare_vizualisation_without_outliers
+    
 from .initializations import \
     init_data,\
     init_model,\
@@ -76,7 +81,6 @@ from .initializations import \
     init_xy,\
     init_index_xy,\
     init_variables,\
-    init_masks,\
     init_metadata,\
     init_data_from_dataframe,\
     verbosity

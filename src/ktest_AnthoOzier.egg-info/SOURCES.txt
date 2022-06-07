@@ -20,6 +20,7 @@ src/ktest/scutils.py
 src/ktest/statistics.py
 src/ktest/tester.py
 src/ktest/utils.py
+src/ktest/utils_matplotlib.py
 src/ktest/utils_pandas.py
 src/ktest/utils_simu_ccdf.py
 src/ktest/visualizations.py

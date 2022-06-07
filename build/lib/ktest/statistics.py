@@ -1,6 +1,6 @@
 import torch
 import pandas as pd
-from torch import mv,diag,chain_matmul,dot
+from torch import mv,diag,chain_matmul,dot,sum
 from scipy.stats import chi2
 
 
@@ -53,7 +53,7 @@ def get_95variance_trunc(self,sample='xy'):
     t = len(spp[spp<(1-.05)])
     return(t)
 
-def get_explained_variance(self,sample='xy'):
+def get_explained_variance(self,sample='xy',outliers_in_obs=None):
     '''
     This function returns a list of percentages of supported variance, the ith element contain the 
     variance supported by the first i eigenvectors of the covariance operator of interest. 
@@ -72,13 +72,22 @@ def get_explained_variance(self,sample='xy'):
 
     '''
 
-
+    cov = self.approximation_cov
     suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-    sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+    sp = self.spev[sample][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
     spp = (sp/torch.sum(sp)).cumsum(0)
     return(spp)
 
-def compute_pkm(self):
+def get_trace(self,sample='xy',outliers_in_obs=None):
+    cov = self.approximation_cov
+    suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+    sp = self.spev[sample][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
+    return(sum(sp))
+    
+
+def compute_pkm(self,outliers_in_obs=None):
     '''
 
     This function computes the term corresponding to the matrix-matrix-vector product PK omega
@@ -120,7 +129,10 @@ def compute_pkm(self):
     
     if cov == 'standard':
         if mmd == 'standard':
-            Kx = self.compute_gram()
+            # Toutes les fonctions nystrom ne sont pas adaptées a outliers in obs pour l'instant, d'où la copie)
+            omega = self.compute_omega(quantization=(mmd=='quantization'),outliers_in_obs=outliers_in_obs)
+            Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'),outliers_in_obs=outliers_in_obs)
+            Kx = self.compute_gram(outliers_in_obs=outliers_in_obs)
             pkm = mv(Pbi,mv(Kx,omega))
 
         elif mmd == 'nystrom':
@@ -207,7 +219,7 @@ def compute_pkm(self):
             pkm = mv(Pbi,mv(A,mv(Kz,omega)))
     return(pkm)
 
-def compute_upk(self,t):
+def compute_upk(self,t,outliers_in_obs=None):
     """
     epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
     This functions computes the corresponding block with respect to the model parameters. 
@@ -218,18 +230,21 @@ def compute_upk(self,t):
     """
     
     cov = self.approximation_cov
+
     anchors_basis = self.anchors_basis
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+    sp = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
+    ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
     
 
-    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'),outliers_in_obs=outliers_in_obs)
       
     if not (cov == 'standard'):
         Kzx = self.compute_kmn(sample='xy')
     
     if cov == 'standard':
-        Kx = self.compute_gram()
+        Kx = self.compute_gram(outliers_in_obs=outliers_in_obs)
         epk = chain_matmul(ev.T[:t],Pbi,Kx).T
         # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
     if cov == 'nystrom3':
@@ -255,7 +270,7 @@ def compute_upk(self,t):
     
     return(epk)
 #
-def compute_kfdat(self,t=None,name=None,verbose=0,):
+def compute_kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
     Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -327,10 +342,12 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
     cov_anchors='shared'
     mmd_anchors='shared'
     
-    name = name if name is not None else f'{cov}{mmd}' 
+    name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
 
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+
+    sp,ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp'],self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
     
     # j'avais mis un tmax mais je ne sais plus pourquoi 
     # si je veux mettre un tmax, c'est plus pertinent de le mettre directement sur le spectre
@@ -354,9 +371,8 @@ def compute_kfdat(self,t=None,name=None,verbose=0,):
             verbose = verbose)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    pkm = self.compute_pkm()
-    n1,n2 = (self.n1,self.n2) 
-    n = n1+n2
+    pkm = self.compute_pkm(outliers_in_obs=outliers_in_obs)
+    n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
     exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant'
     kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy()
     kfda = kfda_contributions.cumsum(axis=0)
@@ -423,8 +439,6 @@ def compute_pval(self,t=None):
     self.df_pval = pd.DataFrame(pvals).T 
     self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
 
-        
-
 def correct_BenjaminiHochberg_pval_of_dfcolumn(df,t):
     df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)
     df['pvalc'] = df.apply(lambda x: len(df) * x['pval']/x['rank'],axis=1) # correction
@@ -481,37 +495,35 @@ def correct_BenjaminiHochberg_pval(self,t=20):
     
     self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
-def initialize_kfdat(self,sample='xy',verbose=0,**kwargs):
+def initialize_kfdat(self,sample='xy',verbose=0,outliers_in_obs=None,**kwargs):
     # verbose -1 au lieu de verbose ? 
     cov,mmd = self.approximation_cov,self.approximation_mmd
     
     # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
 
     if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(verbose=verbose)
+        self.compute_nystrom_landmarks(verbose=verbose) # (ajouter outliers_in_obs)
     
     if any([ny in [cov,mmd] for ny in ['nystrom1','nystrom2','nystrom3']]):
         if not self.has_landmarks:
-            self.compute_nystrom_landmarks(verbose=verbose)
+            self.compute_nystrom_landmarks(verbose=verbose) #(ajouter outliers_in_obs)
         if "anchors" not in self.spev[sample]:
-            self.compute_nystrom_anchors(sample=sample,verbose=verbose)
+            self.compute_nystrom_anchors(sample=sample,verbose=verbose) # (ajouter outliers_in_obs)
     
     # if cov not in self.spev[sample]:
-    self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose)
+    self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
 #
-def kfdat(self,t=None,name=None,pval=True,verbose=0):
+def kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
     cov,mmd = self.approximation_cov,self.approximation_mmd
-    name = name if name is not None else f'{cov}{mmd}' 
+    name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
     if name in self.df_kfdat :
         if verbose : 
             print(f'kfdat {name} already computed')
     else:
-        self.initialize_kfdat(sample='xy',verbose=verbose)            
-        self.compute_kfdat(t=t,name=name,verbose=verbose)
+        self.initialize_kfdat(sample='xy',verbose=verbose,outliers_in_obs=outliers_in_obs)            
+        self.compute_kfdat(t=t,name=name,verbose=verbose,outliers_in_obs=outliers_in_obs)
         self.get_trunc()
-        
-        if pval:
-            self.compute_pval()
+        self.compute_pval()
         self.kfda_stat = self.df_kfdat[name][self.t]
 
 

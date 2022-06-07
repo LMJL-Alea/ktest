@@ -184,7 +184,7 @@ def get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data):
         if name in dict_tests:
             test = dict_tests[name]
             t = test.t
-            stat = test.df_kfdat[name][t]
+            stat = test.df_kfdat['kfda'][t]
             dist[cat1][cat2] = stat
             dist[cat2][cat1] = stat
     return(pd.DataFrame(dist).fillna(0).to_numpy())
@@ -309,15 +309,15 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
             test.obs['sexe']=test.obs['sexe'].astype('category')
             test.obs['patient']=test.obs['patient'].astype('category')
             test.init_model(**params_model)
-            test.kfdat(name=name)
+            test.kfdat(name = 'kfda')
             t = test.t
             
                         
-            test.compute_proj_kfda(t=t+1)
+            test.compute_proj_kfda(t=20,name='kfda')
             
-            kfda = test.df_kfdat[name][t]
+            kfda = test.df_kfdat['kfda'][t]
             test.compute_pval(t=t)
-            pval = test.df_pval[name][t]
+            pval = test.df_pval['kfda'][t]
             if free_memory:
                 test.x = np.array(0)
                 test.y = np.array(0) 
@@ -473,7 +473,7 @@ def get_kfda_from_name_and_dict_tests(name,dict_tests):
     if name in dict_tests:
         test = dict_tests[name]
         t = test.t
-        kfda = test.df_kfdat[name][t]
+        kfda = test.df_kfdat['kfda'][t]
     else:
         kfda = np.inf
     return(kfda)
@@ -606,8 +606,8 @@ def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=No
 def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
     test = dict_tests[name]
     t = test.t
-    pval = test.df_pval[name][t]
-    kfda = test.df_kfdat[name][t]
+    pval = test.df_pval['kfda'][t]
+    kfda = test.df_kfdat['kfda'][t]
     c = 'green' if pval >.05 else 'red'
     yaccept = chi2.ppf(.95,t)
     ax.scatter(x,yaccept,s=500,c='red',alpha=.5,marker='_',)
@@ -615,6 +615,37 @@ def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
 
 
 ### Comparaison M vs W 
+
+# def get_name_MvsF(ct,data_type,cts,dict_data):
+#     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
+#     name = ''
+#     for m in mwi:
+#         if 'M' in m:
+#             if ct in cts: 
+#                 for celltype in cts[ct]:
+#                     cat = f'{m}{celltype}{data_type}'
+#                     if cat in dict_data:
+#                         name += f'{cat},'
+#             else:
+#                 cat = f'{m}{ct}{data_type}'
+#                 if cat in dict_data:
+#                     name += f'{cat},'
+                
+
+#     name = name[:-1]
+#     name += '_'
+#     for m in mwi:
+#         if 'W' in m:
+#             if ct in cts: 
+#                 for celltype in cts[ct]:
+#                     cat = f'{m}{celltype}{data_type}'
+#                     if cat in dict_data:
+#                         name += f'{cat},'
+#             else:
+#                 cat = f'{m}{ct}{data_type}'
+#                 if cat in dict_data:
+#                     name += f'{cat},'
+#     return(name[:-1])
 
 def get_name_MvsF(ct,data_type,cts,dict_data):
     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
@@ -630,7 +661,6 @@ def get_name_MvsF(ct,data_type,cts,dict_data):
                 cat = f'{m}{ct}{data_type}'
                 if cat in dict_data:
                     name += f'{cat},'
-                
 
     name = name[:-1]
     name += '_'
@@ -645,8 +675,12 @@ def get_name_MvsF(ct,data_type,cts,dict_data):
                 cat = f'{m}{ct}{data_type}'
                 if cat in dict_data:
                     name += f'{cat},'
-    return(name[:-1])
-
+    
+    name = name[:-1]
+    if len(name.split(sep='_'))==2 and name[0]!='_':
+        return(name)
+    else: 
+        return('')
 
 ## plot 
 

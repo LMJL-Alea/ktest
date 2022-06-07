@@ -2,11 +2,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 # from functions import get_between_covariance_projection_error
+from .utils_matplotlib import replace_label
+from adjustText import adjust_text
+
 
 from scipy.stats import chi2
 import numpy as np
 import torch
-from torch import mv,dot
+from torch import mv,dot,sum,cat,tensor,float64
 
 
 def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None):
@@ -179,26 +182,59 @@ def plot_spectrum(self,fig=None,ax=None,t=None,title=None,sample='xy',label=None
 
     return(fig,ax)
 #
-def density_proj(self,ax,projection,which='proj_kfda',name=None,orientation='vertical',sample='xy',labels='CT'):
-    
-    df_proj= self.init_df_proj(which,name)
+def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',sample='xy',labels='CT',color=None,fig=None,ax=None):
+    if fig is None:
+        fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
+        
+    c = self.set_color_for_scatter(color)
+    df_proj= self.init_df_proj(which,name)
+    pop_colors = {}
     for xy,l in zip(sample,labels):
         
-        dfxy = df_proj.loc[df_proj['sample']==xy][str(projection)]
+        dfxy = df_proj.loc[df_proj['sample']==xy][str(t)]
         if len(dfxy)>0:
-            color = 'blue' if xy =='x' else 'orange'
-            bins=int(np.floor(np.sqrt(len(dfxy))))
-            ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=bins,color=color,orientation=orientation)
-            ax.hist(dfxy,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
-            if orientation =='vertical':
-                ax.axvline(dfxy.mean(),c=color)
-            else:
-                ax.axhline(dfxy.mean(),c=color)
+            if xy in c : 
+                color = c[xy] #'blue' if xy =='x' else 'orange'
+                bins=int(np.floor(np.sqrt(len(dfxy))))
+                ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=bins,color=color,orientation=orientation)
+                ax.hist(dfxy,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
+                if orientation =='vertical':
+                    ax.axvline(dfxy.mean(),c=color)
+                else:
+                    ax.axhline(dfxy.mean(),c=color)
 
-    ax.set_xlabel(f't={projection}',fontsize=20)    
-    ax.legend()
-#       
+            else:
+                for pop,ipop in c.items():
+                    bins = int(np.floor(np.sqrt(len(ipop))))
+                    dfpop = dfxy[dfxy.index.isin(ipop)]
+                    if len(dfpop)>0:
+                        color = 'blue' if xy =='x' else 'orange'
+                        ax.hist(dfpop,density=True,histtype='bar',label=f'{pop}({len(dfpop)})',alpha=.3,bins=bins,orientation=orientation)
+                        ax.hist(dfpop,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
+                        pop_colors[pop] = ax._children[-1]._facecolor
+
+                        if orientation =='vertical':
+                            ax.axvline(dfpop.mean(),c=pop_colors[pop])
+                        else:
+                            ax.axhline(dfpop.mean(),c=pop_colors[pop])
+                
+
+    xlabel = which if which in self.variables else which.split(sep='_')[1]+f': t={t}'
+    xlabel += f'  pval={self.df_pval[name].loc[t]:.5f}' if which == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[name].loc[t]:.5f}' if which == 'proj_kfda' else \
+              ''
+    if orientation == 'vertical':
+        ax.set_xlabel(xlabel,fontsize=25)
+    else:
+        ax.set_ylabel(xlabel,fontsize=25)
+
+    ax.legend(fontsize=30)
+
+
+
+    fig.tight_layout()
+    return(fig,ax)
 
 # cette fonction peut servir a afficher plein de figures usuelles, que je dois définir et nommer pour créer une fonction par figure usuelle
 
@@ -231,7 +267,10 @@ def set_color_for_scatter(self,color):
 
     return(color_)
     
-def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,highlight=None,color=None,sample='xy',labels='CT'):
+def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,
+                 highlight=None,color=None,sample='xy',labels='CT',text=False,fig=None,ax=None):
+    if fig is None:
+        fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
     p1,p2 = projection
     yproj = xproj if yproj is None else yproj
@@ -254,31 +293,14 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
                 # ax.scatter(x_,y_,c=c,s=30,label=,alpha=.8,marker =m)
                 ax.scatter(x_,y_,s=30,c=color[xy],label=f'{l}({len(x_)})', alpha=.8,marker =m)
             else:
-                
+                alpha = .2 if text else .8 
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
+                    
                     if len(x_)>0:
-                        ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=.8,marker =m)
+                        ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=alpha,marker =m)
                         pop_colors[pop] = ax._children[-1]._facecolors[0]
-
-            # if color is None or (isinstance(color,str) and color in list(self.variables)): # list vraiment utile ? 
-                # c = 'xkcd:cerulean' if xy =='x' else 'xkcd:light orange'
-                # if color in list(self.variables):
-                #     x,y = self.get_xy()
-                #     c = x[:,self.variables.get_loc(color)] if xy=='x' else y[:,self.variables.get_loc(color)]   
-            
-                # x_ = df_abscisse_xy[f'{p1}']
-                # y_ = df_ordonnee_xy[f'{p2}']
-
-                # ax.scatter(x_,y_,c=c,s=30,label=f'{l}({len(x_)})',alpha=.8,marker =m)
-            
-            # else:
-            #     if xy in color: # a complexifier si besoin (nystrom ou mask) 
-            #         x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
-            #         y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
-            #         ax.scatter(x_,y_,s=30,c=color[xy], alpha=.8,marker =m)
-
 
             
     
@@ -299,6 +321,7 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
                 c = color[f'm{xy}'] if f'm{xy}' in color else color[xy]
                 ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,c=c)
             else:
+                texts = []
                 for pop,ipop in color.items():
                     x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
                     y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
@@ -306,21 +329,34 @@ def scatter_proj(self,ax,projection,xproj='proj_kfda',yproj=None,xname=None,ynam
                         c = pop_colors[pop]
                         mx_ = x_.mean()
                         my_ = y_.mean()
-                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,facecolor=c)
-
-            
+                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,facecolor=c,alpha=1)
+                    if text :
+                        texts += [plt.text(mx_,my_,pop,fontsize=20)]
+                if text:
+                    adjust_text(texts)#,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
             
     
     if 'title' in color :
         ax.set_title(color['title'],fontsize=20)
 
-        
+
     xlabel = xproj if xproj in self.variables else xproj.split(sep='_')[1]+f': t={p1}'
+    xlabel += f'  pval={self.df_pval[xname].loc[p1]:.5f}' if xproj == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[xname].loc[p1]:.5f}' if xproj == 'proj_kfda' else \
+              ''
+
     ylabel = yproj if yproj in self.variables else yproj.split(sep='_')[1]+f': t={p2}'
-    ax.set_xlabel(xlabel,fontsize=20)                    
-    ax.set_ylabel(ylabel,fontsize=20)
+    ylabel += f'  pval={self.df_pval[yname].loc[p2]:.5f}' if yproj == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[yname].loc[p2]:.5f}' if yproj == 'proj_kfda' else \
+              ''
+
+    ax.set_xlabel(xlabel,fontsize=25)                    
+    ax.set_ylabel(ylabel,fontsize=25)
     
     ax.legend()
+
+    return(fig,ax)
+ 
 
 def init_axes_projs(self,fig,axes,projections,sample,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
     if axes is None:
@@ -345,7 +381,7 @@ def density_projs(self,fig=None,axes=None,which='proj_kfda',sample='xy',name=Non
     if not isinstance(axes,np.ndarray):
         axes = [axes]
     for ax,proj in zip(axes,projections):
-        self.density_proj(ax,proj,which=which,name=name,labels=labels,sample=sample)
+        self.density_proj(t=proj,which=which,name=name,labels=labels,sample=sample,fig=fig,ax=ax)
     fig.tight_layout()
     return(fig,axes)
 
@@ -388,7 +424,7 @@ def plot_correlation_proj_var(self,fig=None,ax=None,name=None,nvar=30,projection
 
     
     
-def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,trunc=None):
+def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,trunc=None,outliers_in_obs=None):
     '''
     Plots the opposite of log10 pvalue with respect to the percentage of reconstruction 
     of the spectral truncation of the within covariance operator 
@@ -424,9 +460,11 @@ def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,f
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
     
+    name = outliers_in_obs if outliers_in_obs is not None else name 
+
     log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
     log10pval = np.array(log10pval[log10pval<10**10])
-    expvar = np.array(self.get_explained_variance()[:len(log10pval)])
+    expvar = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
     
     threshold = -np.log(0.05)/np.log(10)
     ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
@@ -455,10 +493,12 @@ def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,f
     return(fig,ax)
 
     
-def plot_pval_with_respect_to_between_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True):
+def plot_pval_with_respect_to_between_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
     
+    name = outliers_in_obs if outliers_in_obs is not None else name 
+
     log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
     log10pval = np.array(log10pval[log10pval<10**10])
     error = np.array(self.get_between_covariance_projection_error()[:len(log10pval)])
@@ -490,16 +530,18 @@ def plot_pval_with_respect_to_between_covariance_reconstruction_error(self,name,
     
     
     
-def plot_relative_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
+def plot_relative_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
-    
+
+    name = outliers_in_obs if outliers_in_obs is not None else name 
+
     log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
     log10pval = np.array(log10pval[log10pval<10**10])
     threshold = -np.log(0.05)/np.log(10)
 
-    errorB = np.array(self.get_between_covariance_projection_error())
-    errorW = np.array(self.get_explained_variance())
+    errorB = np.array(self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs))
+    errorW = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs))
 
     errorB_acc = errorB[:len(log10pval)][log10pval<=threshold]
     errorW_acc = errorW[:len(log10pval)][log10pval<=threshold]
@@ -521,16 +563,17 @@ def plot_relative_reconstruction_errors(self,name,fig=None,ax=None,scatter=True)
     ax.set_ylabel(r'$\Sigma_W$ reconstruction ',fontsize=30)
     ax.set_xlabel(r'$\Sigma_B$ reconstruction ',fontsize=30)
     
+    errorB = errorB[~np.isnan(errorB)]
+    errorW = errorW[~np.isnan(errorW)]
+
+    mini = np.min([np.min(errorB),np.min(errorW)])
+    h = (1 - mini)/20
+    ax.plot(np.arange(mini,1,h),np.arange(mini,1,h),c='xkcd:bluish purple',lw=.4,alpha=1)
     
-    if not any(np.isnan(errorB)):
-        mini = np.min([np.min(errorB),np.min(errorW)])
-        h = (1 - mini)/20
-        ax.plot(np.arange(mini,1,h),np.arange(mini,1,h),c='xkcd:bluish purple',lw=.4,alpha=1)
-        
     return(fig,ax)
     
     
-def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
+def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
     
@@ -541,8 +584,8 @@ def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
 #     errorB = np.array(get_between_covariance_projection_error(self))
 #     errorW = np.array(self.get_explained_variance())
 
-    errorB = np.array(self.get_between_covariance_projection_error()[:len(log10pval)])
-    errorW = np.array(self.get_explained_variance()[:len(log10pval)])
+    errorB = np.array(self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
+    errorW = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
 
     
     errorB_acc = errorB[log10pval<=threshold]
@@ -566,48 +609,179 @@ def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True):
     return(fig,ax)
 
 
-def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None):
+
+
+def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None,outliers_in_obs=None):
     
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
-    expvar = 1 - self.get_explained_variance()
-    trunc = np.arange(1,len(expvar)+1)
+
+    
+    trace = self.get_trace(outliers_in_obs=outliers_in_obs)
+    label = f'{name} tr($\Sigma_W$) = {trace:.3e}'
+
+    explained_variance = self.get_explained_variance(outliers_in_obs=outliers_in_obs)
+    explained_variance = cat([tensor([0],dtype=float64),explained_variance])
+    expvar = 1 - explained_variance
+    trunc = np.arange(0,len(expvar))
     
     if scatter:
         ax.scatter(trunc,expvar)
-        ax.plot(trunc,expvar,label=name,lw=.8,alpha=.5)
+        ax.plot(trunc,expvar,label=label,lw=.8,alpha=.5)
     else:
-        ax.plot(trunc,expvar,lw=1,alpha=1,label=name)
+        ax.plot(trunc,expvar,lw=1,alpha=1,label=label)
       
 
     ax.set_ylabel(r'$\Sigma_W$ reconstruction',fontsize=30)
     ax.set_xlabel('truncation',fontsize=30)
     ax.set_ylim(-.05,1.05)
-    xmax = len(expvar)+1 if xmax is None else xmax
+    xmax = len(expvar) if xmax is None else xmax
     
-    ax.set_xlim(0,xmax)
-    ax.set_xticks(np.arange(1,xmax))
+    ax.set_xlim(-1,xmax)
+    ax.set_xticks(np.arange(0,xmax))
     return(fig,ax)
 
   
-def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None):
+def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
-    errorB = 1 - self.get_between_covariance_projection_error()
-    trunc = np.arange(1,len(errorB)+1)
-    
+    projection_error,delta = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs,return_total=True)
+    projection_error = cat([tensor([0],dtype=float64),projection_error])
+    errorB = 1 - projection_error
+    trunc = np.arange(0,len(errorB))
+    label = f'{name} of {delta:.3e}'
     if scatter:
         ax.scatter(trunc,errorB)
-        ax.plot(trunc,errorB,label=name,lw=.8,alpha=.5)
+        ax.plot(trunc,errorB,label=label,lw=.8,alpha=.5)
     else:
-        ax.plot(trunc,errorB,lw=1,alpha=1,label=name)
+        ax.plot(trunc,errorB,lw=1,alpha=1,label=label)
       
 
     ax.set_ylabel(r'$(\mu_2 - \mu_1)$ projection error',fontsize=30)
     ax.set_xlabel('truncation',fontsize=30)
     ax.set_ylim(-.05,1.05)
-    xmax = len(errorB)+1 if xmax is None else xmax
+    xmax = len(errorB) if xmax is None else xmax
     
-    ax.set_xlim(0,xmax)
-    ax.set_xticks(np.arange(1,xmax))
+    ax.set_xlim(-1,xmax)
+    ax.set_xticks(np.arange(0,xmax))
     return(fig,ax)
+
+
+
+def plot_pval_and_errors(self,column,outliers=None,fig=None,ax=None):
+    if fig is None:
+        fig,ax = plt.subplots(ncols=1,figsize=(12,8))
+    self.plot_pvalue(fig,ax,t=20,columns = [column],)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',
+                                                                        fig,ax,xmax=20,outliers_in_obs=outliers)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',
+                                                                       fig,ax,xmax=20,outliers_in_obs=outliers)
+    ax.legend()
+    ax.set_xlabel('Truncation',fontsize=30)
+    ax.set_ylabel('Errors or pval',fontsize=30)
+    replace_label(ax,0,'p-value')
+    
+    return(fig,ax)
+
+def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',column_in_dataframe='kfda',which='proj_kfda',outliers_in_obs=None):
+    oname = f"{which}[{column_in_dataframe}][{t}]{orientation}{threshold}"
+#     print(oname_)
+#     oname = f'outliers_kfdat1_{threshold}'
+    outliers = self.get_outliers(threshold = threshold,
+                                 orientation =orientation, 
+                                 t=t,
+                                 column_in_dataframe=column_in_dataframe,
+                                 which=which,
+                                outliers_in_obs=outliers_in_obs)
+    
+    print(f'{oname} : {len(outliers)} outliers')
+
+    self.add_outliers_in_obs(outliers,name_outliers=oname)
+    self.kfdat(outliers_in_obs=oname)    
+#     self.diagonalize_residual_covariance(t=1,outliers_in_obs=oname)
+#     self.proj_residus(t=1,ndirections=20,outliers_in_obs=oname)
+    self.compute_proj_kfda(t=20,outliers_in_obs=oname)
+
+    fig,axes = plt.subplots(ncols=4,figsize=(48,8))
+    
+    ax = axes[0]
+    self.density_proj(t=int(t),labels='MF',name=column_in_dataframe,fig=fig,ax=ax)
+    ax.axvline(threshold,ls='--',c='crimson')
+    ax.set_title(column_in_dataframe,fontsize=20)
+    ax = axes[1]
+    self.plot_kfdat(fig,ax,t=20,columns = [column_in_dataframe,oname])
+    
+    ax = axes[2]
+    self.plot_pvalue(fig,ax,t=20,columns = [column_in_dataframe],)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    ax.legend()
+    ax.set_xlabel('Truncation',fontsize=30)
+    ax.set_ylabel('Errors or pval',fontsize=30)
+    replace_label(ax,0,'p-value')
+    ax.set_title('Before',fontsize=30)
+    
+    ax = axes[3]
+    self.plot_pvalue(fig,ax,t=20,columns = [oname],)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    ax.legend()
+    ax.set_xlabel('Truncation',fontsize=30)
+    ax.set_ylabel('Errors or pval',fontsize=30)
+    replace_label(ax,0,'p-value')
+    ax.set_title(f'After ({oname})',fontsize=30)
+    fig.tight_layout()
+    return(oname)
+
+    
+def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_dataframe='kfda',outliers_in_obs=None):
+    
+#     print(oname_)
+#     oname = f'outliers_kfdat1_{threshold}'
+
+    if outliers_in_obs is not None:
+        df_outliers = self.obs[outliers_in_obs]
+        old_outliers    = df_outliers[df_outliers].index
+        outliers = outliers.append(old_outliers)
+
+    print(f'{oname} : {len(outliers)} outliers')
+
+    self.add_outliers_in_obs(outliers,name_outliers=oname)
+    self.kfdat(outliers_in_obs=oname)    
+#     self.diagonalize_residual_covariance(t=1,outliers_in_obs=oname)
+#     self.proj_residus(t=1,ndirections=20,outliers_in_obs=oname)
+    self.compute_proj_kfda(t=20,outliers_in_obs=oname)
+
+    fig,axes = plt.subplots(ncols=3,figsize=(35,8))
+    
+    ax = axes[0]
+    self.plot_kfdat(fig,ax,t=20,columns = [column_in_dataframe,oname])
+    
+    ax = axes[1]
+    self.plot_pvalue(fig,ax,t=20,columns = [column_in_dataframe],)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    ax.legend()
+    ax.set_xlabel('Truncation',fontsize=30)
+    ax.set_ylabel('Errors or pval',fontsize=30)
+    replace_label(ax,0,'p-value')
+    ax.set_title('Before',fontsize=30)
+    
+    ax = axes[2]
+    self.plot_pvalue(fig,ax,t=20,columns = [oname],)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    ax.legend()
+    ax.set_xlabel('Truncation',fontsize=30)
+    ax.set_ylabel('Errors or pval',fontsize=30)
+    replace_label(ax,0,'p-value')
+    ax.set_title(f'After ({oname})',fontsize=30)
+    fig.tight_layout()
+
+    return(oname)
+
+def prepare_vizualisation_without_outliers(self,t,outliers_in_obs):
+    self.kfdat(outliers_in_obs=outliers_in_obs)    
+    self.diagonalize_residual_covariance(t=t,outliers_in_obs=outliers_in_obs)
+    self.proj_residus(t=t,ndirections=20,outliers_in_obs=outliers_in_obs)
+    self.compute_proj_kfda(t=20,outliers_in_obs=outliers_in_obs)

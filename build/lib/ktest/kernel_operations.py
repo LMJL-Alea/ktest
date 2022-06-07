@@ -4,7 +4,7 @@ from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
 
 
-def compute_gram(self,sample='xy',landmarks=False): 
+def compute_gram(self,sample='xy',landmarks=False,outliers_in_obs=None): 
     """
     Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 
     
@@ -40,7 +40,7 @@ def compute_gram(self,sample='xy',landmarks=False):
 
     kernel = self.kernel
    
-    x,y = self.get_xy(landmarks=landmarks)
+    x,y = self.get_xy(landmarks=landmarks,outliers_in_obs=outliers_in_obs)
     
     if 'x' in sample:
         kxx = kernel(x,x)
@@ -51,17 +51,17 @@ def compute_gram(self,sample='xy',landmarks=False):
         kxy = kernel(x, y)
         K = torch.cat((torch.cat((kxx, kxy), dim=1),
                         torch.cat((kxy.t(), kyy), dim=1)), dim=0)
-        K = self.center_gram_matrix_with_respect_to_some_effects(K)
+        K = self.center_gram_matrix_with_respect_to_some_effects(K,outliers_in_obs=outliers_in_obs)
 
         return(K)
     else:
         return(kxx if sample =='x' else kyy)
 
-def center_gram_matrix_with_respect_to_some_effects(self,K):
+def center_gram_matrix_with_respect_to_some_effects(self,K,outliers_in_obs=None):
     if self.center_by is None:
         return(K)
     else:
-        P = self.compute_centering_matrix_with_respect_to_some_effects()
+        P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=None)
         return(torch.chain_matmul(P,K,P))
         # retutn(torch.linalg.multi_dot([P,K,P]))
 
@@ -87,7 +87,7 @@ def compute_kmn(self,sample='xy'):
     else:
         return(kz1x if sample =='x' else kz2y)
 
-def compute_within_covariance_centered_gram(self,approximation='standard',sample='xy',verbose=0):
+def compute_within_covariance_centered_gram(self,approximation='standard',sample='xy',verbose=0,outliers_in_obs=None):
     """ 
     Computes the bicentered Gram matrix which shares its spectrom with the 
     within covariance operator. 
@@ -98,6 +98,8 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
     approximation in 'standard','nystrom','quantization'
     # contre productif de choisir 'nystrom' car cela est aussi cher que standard pour une qualité d'approx de la matrice moins grande. 
     # pour utiliser nystrom, mieux vaux calculer la SVD de BB^T pas encore fait. 
+
+    # pour l'instant les outliers ne sont pas compatibles avec nystrom
     """
 
     self.verbosity(function_name='compute_centered_gram',
@@ -107,14 +109,13 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
             verbose = verbose)    
     
     quantization = approximation == 'quantization'
-    P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization).double()
+    P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization,outliers_in_obs=outliers_in_obs).double()
     
     n=0
+    n1,n2,_ = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
     if 'x' in sample:
-        n1 = self.n1 
         n+=n1     
     if 'y' in sample:
-        n2 = self.n2
         n+=n2
     if 'nystrom' in approximation:
         r = self.r if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors
@@ -165,7 +166,7 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
                 
 
     elif approximation == 'standard':
-        K = self.compute_gram(landmarks=False,sample=sample)
+        K = self.compute_gram(landmarks=False,sample=sample,outliers_in_obs=outliers_in_obs)
         Kw = 1/n * torch.chain_matmul(P,K,P)
         # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
@@ -176,7 +177,7 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
 
     return Kw
 
-def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=0):
+def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=0,outliers_in_obs=None):
     """
     Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
     Stores eigenvalues (sp or spny) and eigenvectors (ev or evny) as attributes
@@ -193,16 +194,18 @@ def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=
             start=True,
             verbose = verbose)
     
-    Kw = self.compute_within_covariance_centered_gram(approximation=approximation,sample=sample,verbose=verbose)
+    Kw = self.compute_within_covariance_centered_gram(approximation=approximation,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
     
     sp,ev = ordered_eigsy(Kw)
     # print('Kw',Kw,'sp',sp,'ev',ev)
     suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
-    self.spev[sample][approximation+suffix_nystrom] = {'sp':sp,'ev':ev}
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+    self.spev[sample][f'{approximation}{suffix_nystrom}{suffix_outliers}'] = {'sp':sp,'ev':ev}
     
     self.verbosity(function_name='diagonalize_centered_gram',
             dict_of_variables={'approximation':approximation,
-                                'sample':sample},
+                                'sample':sample,
+                                'outliers_in_obs':outliers_in_obs},
             start=False,
             verbose = verbose)
 

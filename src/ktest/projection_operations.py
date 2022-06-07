@@ -2,7 +2,7 @@ import torch
 from torch import mv
 import pandas as pd
 
-def compute_proj_kfda(self,t=None,name=None,verbose=0):
+def compute_proj_kfda(self,t=None,name=None,verbose=0,outliers_in_obs=None):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
     Computes the vector of projection of the embeddings on the discriminant axis corresponding 
@@ -20,17 +20,19 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
     cov,mmd = self.approximation_cov,self.approximation_mmd
     anchors_basis = self.anchors_basis
     
-    name = name if name is not None else f'{cov}{mmd}' 
 
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
-     
-    if name in self.df_proj_kfda :
+    suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+    name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}{suffix_nystrom}' 
+    sp,ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp'],self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
+    
+    tmax = 200
+    t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
+        
+    if name in self.df_proj_kfda and str(t) in self.df_proj_kfda[name]:
         if verbose : 
             print('Proj on discriminant axis Already computed')
     else:
-        tmax = 200
-        t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
         trunc = range(1,t+1) 
         self.verbosity(function_name='compute_proj_kfda',
                 dict_of_variables={
@@ -42,9 +44,9 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
                 verbose = verbose)
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        pkm=self.compute_pkm()
-        upk=self.compute_upk(t)
-        n1,n2,n = self.get_n1n2n()
+        pkm=self.compute_pkm(outliers_in_obs=outliers_in_obs)
+        upk=self.compute_upk(t,outliers_in_obs=outliers_in_obs)
+        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
 
         if cov == 'standard' or 'nystrom' in cov: 
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
@@ -54,7 +56,7 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0):
 
         if name in self.df_proj_kfda:
             print(f"écrasement de {name} dans df_proj_kfda")
-        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.get_index(),columns=[str(t) for t in trunc])
+        self.df_proj_kfda[name] = pd.DataFrame(proj,index= self.get_index(outliers_in_obs=outliers_in_obs),columns=[str(t) for t in trunc])
         self.df_proj_kfda[name]['sample'] = ['x']*n1 + ['y']*n2
         
         self.verbosity(function_name='compute_proj_kfda',
@@ -151,8 +153,8 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
 
 
 
-def compute_proj_mmd(self,approximation='standard',name=None,verbose=0):
-    name = name if name is not None else f'{approximation}' 
+def compute_proj_mmd(self,approximation='standard',name=None,verbose=0,outliers_in_obs=None):
+    name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{approximation}' 
     if name in self.df_proj_mmd :
         if verbose : 
             print('Proj on discriminant axis Already computed')
@@ -165,17 +167,17 @@ def compute_proj_mmd(self,approximation='standard',name=None,verbose=0):
                 verbose = verbose)
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        n1,n2,n = self.get_n1n2n()
+        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
 
-        m = self.compute_omega(quantization=(approximation=='quantization'))
+        m = self.compute_omega(quantization=(approximation=='quantization'),outliers_in_obs=outliers_in_obs)
         if approximation == 'standard':
-            K = self.compute_gram()
+            K = self.compute_gram(outliers_in_obs=outliers_in_obs)
         
         
         proj = torch.matmul(K,m)
         if name in self.df_proj_mmd:
             print(f"écrasement de {name} dans df_proj_mmd")
-        self.df_proj_mmd[name] = pd.DataFrame(proj,index=self.get_index(),columns=['mmd'])
+        self.df_proj_mmd[name] = pd.DataFrame(proj,index=self.get_index(outliers_in_obs=outliers_in_obs),columns=['mmd'])
         self.df_proj_mmd[name]['sample'] = ['x']*n1 + ['y']*n2
         
         self.verbosity(function_name='compute_proj_mmd',
@@ -209,8 +211,11 @@ def init_df_proj(self,which,name=None):
                 df_proj = dict_df_proj[names[0]]
         if nproj >1:
             if name is not None and name not in names:
-                print(f'{name} not found in {names}')
-                df_proj = dict_df_proj[self.main_name]
+                print(f'{name} not found in {names}, default projection:  {names[0]}')
+                df_proj = dict_df_proj[names[0]]
+            elif name is None:
+                print(f'projection not specified, default projection : {names[0]}') 
+                df_proj = dict_df_proj[names[0]]
             else: 
                 df_proj = dict_df_proj[name]
     elif which in self.variables:
