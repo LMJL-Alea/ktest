@@ -278,12 +278,16 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
         colsexe2 = []
         colpatient1 = []
         colpatient2 = []
-        for cat,colcat,colsexe,colpatient in zip([cat1,cat2],[colcat1,colcat2],[colsexe1,colsexe2],[colpatient1,colpatient2]):
+        colcelltype1 = []
+        colcelltype2 = []
+        
+
+        for cat,colcat,colsexe,colpatient,colcelltype in zip([cat1,cat2],[colcat1,colcat2],[colsexe1,colsexe2],[colpatient1,colpatient2],[colcelltype1,colcelltype2]):
             for c in cat.split(sep=','):
                 colcat += [c]*len(dict_data[c])
                 colsexe += [c[0]]*len(dict_data[c])
                 colpatient += [c[:2]]*len(dict_data[c])
-                
+                colcelltype += [c[2:]]*len(dict_data[c])
                 
         df1_meta['cat'] = colcat1
         df2_meta['cat'] = colcat2
@@ -291,12 +295,16 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
         df2_meta['sexe'] = colsexe2
         df1_meta['patient'] = colpatient1
         df2_meta['patient'] = colpatient2
+        df1_meta['celltype'] = colcelltype1
+        df2_meta['celltype'] = colcelltype2
         df1_meta['cat'] = df1_meta['cat'].astype('category')
         df2_meta['cat'] = df2_meta['cat'].astype('category')
         df1_meta['sexe'] = df1_meta['sexe'].astype('category')
         df2_meta['sexe'] = df2_meta['sexe'].astype('category')
         df1_meta['patient'] = df1_meta['patient'].astype('category')
         df2_meta['patient'] = df2_meta['patient'].astype('category')
+        df1_meta['celltype'] = df1_meta['celltype'].astype('category')
+        df2_meta['celltype'] = df2_meta['celltype'].astype('category')
         
 #         print(len(df1),len(df2))
         if len(df1)>10 and len(df2)>10:
@@ -326,7 +334,13 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
             
             dict_tests[name] = test
             print(f'{time()-t0:.3f} t={t} kfda={kfda:.4f} pval={pval}')
- 
+        else: 
+            print(f'{len(df1)} and {len(df2)} is not enough data')
+
+    else:
+        print(f'{name} in dict_tests')
+
+
 def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,color_col=None):
 
     cat1 = name.split(sep='_')[0]
@@ -689,4 +703,73 @@ from torch import mv,dot,sqrt,abs,isnan
 
 
 
+
+
+def visualize_patient_celltypes_CRCL(self,t,title,outliers_in_obs=None):
+    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
+    
+    xname = dict_names['kfda_name']    
+    yname = dict_names['residuals_name']
+    
+    
+    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
+    ax = axes[0]
+    self.density_proj(t=t,labels='MF',name=xname,fig=fig,ax=ax)
+    ax.set_title(f'{title}',fontsize=30)
+
+    ax = axes[1]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='celltype',fig=fig,ax=ax,show_conditions=False)
+    ax.set_title(f'{title} \n cell type',fontsize=30)
+
+
+    ax = axes[2]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='patient',fig=fig,ax=ax,show_conditions=False)
+    ax.set_title(f'{title} \n patient',fontsize=30)
+
+    ax = axes[3]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='patient',marker='celltype',fig=fig,ax=ax,)
+    ax.set_title(f'{title} \n patient and cell type',fontsize=30)
+
+
+    fig.tight_layout()
+    
+def visualize_quality_CRCL(self,t,outliers_in_obs=None):
+    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
+    
+    xname = dict_names['kfda_name']    
+    yname = dict_names['residuals_name']
+
+    
+    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
+    ax = axes[0]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='percent.mt',fig=fig,ax=ax,show_conditions=False,outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'percent.mt',fontsize=30)#,y=1.04)
+
+   
+    ax = axes[1]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='nCount_RNA',fig=fig,ax=ax,show_conditions=False,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'nCount_RNA',fontsize=30)#,y=1.04)
+
+   
+    ax = axes[2]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='nFeature_RNA',fig=fig,ax=ax,show_conditions=False,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'nFeature_RNA',fontsize=30)#,y=1.04)
+
+    ax = axes[3]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='percent.ribo',marker='celltype',fig=fig,ax=ax,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'percent.ribo',fontsize=30)#,y=1.04)
+
+    
+    fig.tight_layout()
+    
  

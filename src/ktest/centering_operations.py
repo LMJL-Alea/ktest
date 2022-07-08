@@ -41,7 +41,7 @@ def compute_diag_Jn_by_n(effectifs):
                         cat([
                                 zeros(nprec,nell,dtype = torch.float64),
                                 compute_Jn_by_n(nell),
-                                zeros(n-nprec-nell,nell)
+                                zeros(n-nprec-nell,nell,dtype = torch.float64)
                             ],dim=0) 
                             for nell,nprec in zip(effectifs,cumul_effectifs)
                         ],dim=1)
@@ -143,14 +143,15 @@ def compute_centering_matrix_with_respect_to_some_effects(self,center_by=None,ou
         torch.tensor, the centering matrix corresponding to center_by
     '''
     center_by = self.center_by if center_by is None else center_by
-    n  = len(self.obs)
+    n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs) 
     Pw = eye(n,dtype = torch.float64)
+    obs = self.obs if outliers_in_obs is None else self.obs[~self.obs[outliers_in_obs]]
 
     if self.center_by[0] == '#':
         for center_by in self.center_by[1:].split(sep='_'):
             
             operation,effect = center_by[0],center_by[1:]
-            col              = self.obs[effect].astype('category')
+            col              = obs[effect].astype('category')
             effectifs        = compute_effectifs(col)
             diag_Jn          = compute_diag_Jn_by_n(effectifs)
             diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)
@@ -162,7 +163,7 @@ def compute_centering_matrix_with_respect_to_some_effects(self,center_by=None,ou
 
     else:
         effect           = self.center_by
-        col              = self.obs[effect].astype('category')
+        col              = obs[effect].astype('category')
         effectifs        = compute_effectifs(col)
         diag_Jn          = compute_diag_Jn_by_n(effectifs)
         diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)

@@ -4,54 +4,6 @@ from torch import mv,diag,chain_matmul,dot,sum
 from scipy.stats import chi2
 
 
-def get_trunc(self):
-    '''
-    This function should select automatically the truncation parameter of the KFDA method corresponding to the 
-    number of eigenvectors of Sigma_W used to compute the discriminant axis. 
-
-    It stores the choosen truncation parameter in the attribute self.t
-
-    The different methods we tried so far are : 
-        - take only the eigenvectors that support more than a certain threshold of the variance individually (e.g. 5%)
-        - take enough eigenvectors to cumulate 95% of the variance. 
-        - take the first eigenvector
-    '''
-
-
-    # suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-    # sp = self.spev[sample][self.approximation_cov+suffix_nystrom]['sp']
-    # avec ce code je ne prennais pas 95% de la variance comme je l'ai cru au départ.
-    # mais je prenais seulement les valeurs propres portant plus de 5% de variance
-    # spp = sp/torch.sum(sp)
-    # t = len(spp[spp>=ratio])
-    # return(t if t >0 else 1 )
-    # le test issu de t tel qu'on porte 95% de la variance est trop sensible et prend des valeurs de troncature très grandes
-
-        # spp = self.get_explained_variance(sample)
-        # t = len(spp[spp<(1-ratio)])
-    self.t = 1
-
-def get_95variance_trunc(self,sample='xy'):
-    '''
-    This function returns the number of eigenvalues to take to support 95% of the variance of the covariance operator
-    of interest.
-
-    Parameters
-    ----------
-        sample : str,
-        if sample = 'x' : Focuses on the covariance operator of the first sample
-        if sample = 'y' : Focuses on the covariance operator of the second sample
-        if sample = 'xy' : Focuses on the within-group covariance operator 
-        
-    Returns
-    ------- 
-        t : int,
-        The number of composants needed to have 95% of the variance
- 
-    ''' 
-    spp = self.get_explained_variance(sample)
-    t = len(spp[spp<(1-.05)])
-    return(t)
 
 def get_explained_variance(self,sample='xy',outliers_in_obs=None):
     '''
@@ -115,29 +67,29 @@ def compute_pkm(self,outliers_in_obs=None):
     
     if 'nystrom' in cov or 'nystrom' in mmd :
         r = self.r
-    
-    omega = self.compute_omega(quantization=(mmd=='quantization'))
-    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'))
+        m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
+        
+    omega = self.compute_omega(quantization=(mmd=='quantization'),outliers_in_obs=outliers_in_obs)
+    Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'),outliers_in_obs=outliers_in_obs)
     
 
     if any([ny in [mmd,cov] for ny in ['nystrom1','nystrom2','nystrom3','nystrom']]):
-        Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
+        anchor_name = f'{anchors_basis}{suffix_outliers}'
+        Uz = self.spev['xy']['anchors'][anchor_name]['ev']
+        Lz = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-1)
         
     if not (mmd == cov) or mmd == 'nystrom':
-        Kzx = self.compute_kmn(sample='xy')
+        Kzx = self.compute_kmn(sample='xy',outliers_in_obs=outliers_in_obs)
     
     if cov == 'standard':
         if mmd == 'standard':
-            # Toutes les fonctions nystrom ne sont pas adaptées a outliers in obs pour l'instant, d'où la copie)
-            omega = self.compute_omega(quantization=(mmd=='quantization'),outliers_in_obs=outliers_in_obs)
-            Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'),outliers_in_obs=outliers_in_obs)
             Kx = self.compute_gram(outliers_in_obs=outliers_in_obs)
             pkm = mv(Pbi,mv(Kx,omega))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-            pkm = 1/r * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
         elif mmd == 'quantization':
@@ -145,49 +97,51 @@ def compute_pkm(self,outliers_in_obs=None):
 
     if cov == 'nystrom1' and cov_anchors == 'shared':
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-            pkm = 1/r**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
         elif mmd == 'quantization':
-            Kz = self.compute_gram(landmarks=True)
-            pkm = 1/r**2 * mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
+            Kz = self.compute_gram(landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
             # pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
     
     if cov == 'nystrom2' and cov_anchors == 'shared':
-        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lz12 = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-(1/2))
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-            pkm = 1/r**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
 
         elif mmd == 'quantization': # pas à jour
             # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
-            Kz = self.compute_gram(landmarks=True)
-            pkm = 1/r**3 * mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
+            Kz = self.compute_gram(landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
     
     if cov == 'nystrom3' and cov_anchors == 'shared':
-        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        Lz12 = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-(1/2))
         # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
-        Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
+        Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
 
         if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-            pkm = 1/r * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
+            pkm = 1/m * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega)))) 
+            # je n'ai pas retrouvé le 1/r dans mes notes, je sais pas si je l'ai choisi par le calcul ou empiriquement
             # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,omega))))
             # print(f'in compute pkm: \n\t\
             #      Lz12{Lz12}\n Uz{Uz}\n Kzx{Kzx}')
 
         elif mmd == 'quantization': # pas à jour 
             # il faut ajouter Pi ici . 
-            Kz = self.compute_gram(landmarks=True)
-            pkm = 1/r**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
+            Kz = self.compute_gram(landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
             # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
     
     if cov == 'nystrom1' and cov_anchors == 'separated':
+        # utile ?  A mettre à jour
         if mmd == 'standard':
-            x,y = self.get_xy()
-            z1,z2 = self.get_xy(landmarks=True)
+            x,y = self.get_xy(outlier_in_obs=outliers_in_obs)
+            z1,z2 = self.get_xy(landmarks=True,outlier_in_obs=outliers_in_obs)
             Kz1x = self.kerne(z1,x)
             Kz1y = self.kerne(z1,y)
             Kz2x = self.kerne(z2,x)
@@ -210,12 +164,12 @@ def compute_pkm(self,outliers_in_obs=None):
             pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
 
         elif mmd == 'nystrom':
-            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-            Kz = self.compute_gram(landmarks=True)
-            pkm = 1/r * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
+            Pi = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            Kz = self.compute_gram(landmarks=True,outliers_in_obs=outliers_in_obs)
+            pkm = 1/m * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
         elif mmd == 'quantization':
-            Kz = self.compute_gram(landmarks=True)
+            Kz = self.compute_gram(landmarks=True,outliers_in_obs=outliers_in_obs)
             pkm = mv(Pbi,mv(A,mv(Kz,omega)))
     return(pkm)
 
@@ -236,32 +190,36 @@ def compute_upk(self,t,outliers_in_obs=None):
     suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
     sp = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
     ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
-    
+        
 
     Pbi = self.compute_covariance_centering_matrix(sample='xy',quantization=(cov=='quantization'),outliers_in_obs=outliers_in_obs)
       
     if not (cov == 'standard'):
-        Kzx = self.compute_kmn(sample='xy')
+        Kzx = self.compute_kmn(sample='xy',outliers_in_obs=outliers_in_obs)
     
     if cov == 'standard':
         Kx = self.compute_gram(outliers_in_obs=outliers_in_obs)
         epk = chain_matmul(ev.T[:t],Pbi,Kx).T
         # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
     if cov == 'nystrom3':
-        m = self.m
-        Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
-        Lz12 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
+        anchor_name = f'{anchors_basis}{suffix_outliers}'
+        m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
+        Uz = self.spev['xy']['anchors'][anchor_name]['ev']
+        Lz = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-1)
+        Lz12 = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-(1/2))
         # print(f'm:{m} evt:{ev.T[:t].shape} Lz12{Lz12.shape} Uz{Uz.shape} Kzx{Kzx.shape}')
         
         epk = 1/m**(1/2) * chain_matmul(ev.T[:t],Lz12,Uz.T,Kzx).T
 
     elif 'nystrom' in cov:
-        Uz = self.spev['xy']['anchors'][anchors_basis]['ev']
-        Lz = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-1)
+        anchor_name = f'{anchors_basis}{suffix_outliers}'
+        Uz = self.spev['xy']['anchors'][anchor_name]['ev']
+        Lz = diag(self.spev['xy']['anchors'][anchor_name]['sp']**-1)
         r = self.r
-        print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
-        epk = 1/r*chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
+        m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
+
+        # print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
+        epk = 1/m*chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx).T
         # epk = 1/r*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx]).T
     if cov == 'quantization':
         A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
@@ -392,6 +350,7 @@ def compute_kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
             'name':name},
             start=False,
             verbose = verbose)
+    return(name)
 
 def compute_kfdat_with_different_order(self,order='between'):
     '''
@@ -496,20 +455,16 @@ def correct_BenjaminiHochberg_pval(self,t=20):
     self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
 def initialize_kfdat(self,sample='xy',verbose=0,outliers_in_obs=None,**kwargs):
-    # verbose -1 au lieu de verbose ? 
     cov,mmd = self.approximation_cov,self.approximation_mmd
-    
     # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
 
     if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(verbose=verbose) # (ajouter outliers_in_obs)
+        self.compute_nystrom_landmarks(outliers_in_obs=outliers_in_obs,verbose=verbose) # (ajouter outliers_in_obs)
     
     if any([ny in [cov,mmd] for ny in ['nystrom1','nystrom2','nystrom3']]):
-        if not self.has_landmarks:
-            self.compute_nystrom_landmarks(verbose=verbose) #(ajouter outliers_in_obs)
-        if "anchors" not in self.spev[sample]:
-            self.compute_nystrom_anchors(sample=sample,verbose=verbose) # (ajouter outliers_in_obs)
-    
+        print('nystrom detected')
+        self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs) #(ajouter outliers_in_obs)
+        self.compute_nystrom_anchors(sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs) # (ajouter outliers_in_obs)
     # if cov not in self.spev[sample]:
     self.diagonalize_centered_gram(approximation=cov,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
 #
@@ -522,13 +477,14 @@ def kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
     else:
         self.initialize_kfdat(sample='xy',verbose=verbose,outliers_in_obs=outliers_in_obs)            
         self.compute_kfdat(t=t,name=name,verbose=verbose,outliers_in_obs=outliers_in_obs)
-        self.get_trunc()
+        self.select_trunc() 
         self.compute_pval()
         self.kfda_stat = self.df_kfdat[name][self.t]
+    return(name)
 
 
 
-def initialize_mmd(self,shared_anchors=True,verbose=0,anchors_basis=None):
+def initialize_mmd(self,shared_anchors=True,verbose=0,outliers_in_obs=None):
 
     """
     Calculs preliminaires pour lancer le MMD.
@@ -548,23 +504,22 @@ def initialize_mmd(self,shared_anchors=True,verbose=0,anchors_basis=None):
         # verbose -1 au lieu de verbose ? 
 
     approx = self.approximation_mmd
-    anchors_basis = self.anchors_basis
 
     if approx == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-        self.compute_nystrom_landmarks(verbose=verbose)
+        self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs)
     
     if approx == 'nystrom':
         if not self.has_landmarks:
-                self.compute_nystrom_landmarks(verbose=verbose)
+                self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs)
         
         if shared_anchors:
             if "anchors" not in self.spev['xy']:
-                self.compute_nystrom_anchors(sample='xy',verbose=verbose,anchors_basis=anchors_basis)
+                self.compute_nystrom_anchors(sample='xy',verbose=verbose,outliers_in_obs=outliers_in_obs)
         else:
             for xy in 'xy':
                 if 'anchors' not in self.spev[xy]:
                     assert(self.r is not None,"r not specified")
-                    self.compute_nystrom_anchors(sample=xy,verbose=verbose,anchors_basis=anchors_basis)
+                    self.compute_nystrom_anchors(sample=xy,verbose=verbose,outliers_in_obs=outliers_in_obs)
 #
 def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):
     """
@@ -585,9 +540,12 @@ def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):
         self.compute_mmd(shared_anchors=shared_anchors,
                         name=name,unbiaised=unbiaised,verbose=0)
 
-def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anchors_basis=None):
+def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,outliers_in_obs=None):
     
     approx = self.approximation_mmd
+    anchors_basis=self.anchors_basis
+    suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
+    anchors_name = f'{anchors_basis}{suffix_outliers}'
     self.verbosity(function_name='compute_mmd',
             dict_of_variables={'unbiaised':unbiaised,
                                 'approximation':approx,
@@ -597,23 +555,26 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
             verbose = verbose)
 
     if approx == 'standard':
-        m = self.compute_omega(sample='xy',quantization=False)
-        K = self.compute_gram()
+        m = self.compute_omega(sample='xy',quantization=False,outliers_in_obs=outliers_in_obs)
+        K = self.compute_gram(outliers_in_obs=outliers_in_obs)
         if unbiaised:
             K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
-        mmd = dot(mv(K,m),m)**2
+        mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
     
     if approx == 'nystrom' and shared_anchors:
-        m = self.compute_omega(sample='xy',quantization=False)
-        Up = self.spev['xy']['anchors'][anchors_basis][anchors_basis]['ev']
-        Lp_inv2 = diag(self.spev['xy']['anchors'][anchors_basis]['sp']**-(1/2))
-        Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-        Kmn = self.compute_kmn(sample='xy')
+        anchors_basis=self.anchors_basis
+        suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
+        anchors_name = f'{anchors_basis}{suffix_outliers}'
+        m = self.compute_omega(sample='xy',quantization=False,outliers_in_obs=outliers_in_obs)
+        Up = self.spev['xy']['anchors'][anchors_name]['ev']
+        Lp_inv2 = diag(self.spev['xy']['anchors'][anchors_name]['sp']**-(1/2))
+        Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+        Kmn = self.compute_kmn(sample='xy',outliers_in_obs=outliers_in_obs)
         psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
         mmd = dot(psi_m,psi_m)**2
     
     if approx == 'nystrom' and not shared_anchors:
-        
+        # utile ? a mettre à jour
         mx = self.compute_omega(sample='x',quantization=False)
         my = self.compute_omega(sample='y',quantization=False)
         Upx = self.spev['x']['anchors'][anchors_basis]['ev']
@@ -623,8 +584,8 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
         Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
         Pmx = self.compute_covariance_centering_matrix(sample='x',landmarks=True)
         Pmy = self.compute_covariance_centering_matrix(sample='y',landmarks=True)
-        Kmnx = self.compute_kmn(sample='x')
-        Kmny = self.compute_kmn(sample='y')
+        Kmnx = self.compute_kmn(sample='x',outliers_in_obs=outliers_in_obs)
+        Kmny = self.compute_kmn(sample='y',outliers_in_obs=outliers_in_obs)
         
         Km = self.compute_gram(sample='xy',landmarks=True)
         m1 = Kmnx.shape[0]
@@ -640,7 +601,7 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
     if approx == 'quantization':
         mq = self.compute_omega(sample='xy',quantization=True)
         Km = self.compute_gram(sample='xy',landmarks=True)
-        mmd = dot(mv(Km,mq),mq)**2
+        mmd = dot(mv(Km,mq),mq) **2
 
 
     if name is None:
@@ -657,6 +618,7 @@ def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,anc
                                 'name':name},
             start=False,
             verbose = verbose)
+    return(mmd.item())
 
 def kpca(self,t=None,approximation_cov='standard',sample='xy',name=None,verbose=0):
     

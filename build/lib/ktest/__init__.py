@@ -4,6 +4,7 @@ from .kernel_operations import \
     compute_gram, \
     center_gram_matrix_with_respect_to_some_effects, \
     compute_kmn, \
+    center_kmn_matrix_with_respect_to_some_effects,\
     diagonalize_centered_gram,\
     compute_within_covariance_centered_gram
 
@@ -20,8 +21,6 @@ from .nystrom_operations import \
     reinitialize_anchors
 
 from .statistics import \
-    get_trunc,\
-    get_95variance_trunc,\
     get_trace,\
     compute_kfdat,\
     compute_kfdat_with_different_order,\
@@ -59,8 +58,8 @@ from .visualizations import \
     init_axes_projs,\
     density_projs,\
     scatter_projs,\
-    set_color_for_scatter,\
-    find_cells_from_proj,\
+    get_color_for_scatter,\
+    get_plot_properties,\
     plot_correlation_proj_var,\
     plot_pval_with_respect_to_within_covariance_reconstruction_error,\
     plot_pval_with_respect_to_between_covariance_reconstruction_error,\
@@ -71,7 +70,7 @@ from .visualizations import \
     plot_pval_and_errors,\
     what_if_we_ignored_cells_by_condition,\
     what_if_we_ignored_cells_by_outliers_list,\
-    prepare_vizualisation_without_outliers
+    prepare_visualization
     
 from .initializations import \
     init_data,\
@@ -94,4 +93,21 @@ from .residuals import \
     diagonalize_residual_covariance,\
     proj_residus,\
     get_between_covariance_projection_error,\
+    get_between_covariance_projection_error_associated_to_t,\
     get_ordered_spectrum_wrt_between_covariance_projection_error
+from .truncation_selection import \
+    select_trunc_by_between_reconstruction_ratio,\
+    select_trunc_by_between_reconstruction_ressaut,\
+    select_trunc
+
+from .univariate_testing import \
+    update_var_from_dataframe,\
+    save_univariate_test_results_in_var,\
+    load_univariate_test_results_in_var,\
+    visualize_univariate_test_CRCL,\
+    plot_density_of_variable,\
+    get_zero_proportions_of_variable,\
+    add_zero_proportions_to_var,\
+    volcano_plot,\
+    volcano_plot_zero_pvals_and_non_zero_pvals,\
+    color_volcano_plot

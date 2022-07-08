@@ -1,3 +1,4 @@
+from os import POSIX_FADV_SEQUENTIAL
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
@@ -10,7 +11,7 @@ from scipy.stats import chi2
 import numpy as np
 import torch
 from torch import mv,dot,sum,cat,tensor,float64
-
+from time import time
 
 def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None):
 
@@ -37,22 +38,22 @@ def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,tit
 
     return(fig,ax)
 
-def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None,log=False):
+def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,log=False):
 
     assert(t is not None)
     trunc=range(1,t)
 
     if ax is None:
         fig,ax = plt.subplots(figsize=(10,10))
-    if asymp_arg is None:
-        asymp_arg = {'label':r'$q_{\chi^2}(0.95)$' if label else '',
-                    'ls':'--','c':'crimson','lw': 4}
+    asymp_arg = {'label':r'$q_{\chi^2}(0.95)$' if label else '',
+                 'ls':'--','c':'crimson','lw': 4}
     if title is not None:
         ax.set_title(title,fontsize=title_fontsize)
     
     ax.set_xlabel(r'regularization $t$',fontsize= 20)
     ax.set_ylabel(r'$\frac{n_1 n_2}{n} \Vert \widehat{\Sigma}_{W}^{-1/2}(t)(\widehat{\mu}_2 - \widehat{\mu}_1) \Vert _\mathcal{H}^2$',fontsize= 20)
     ax.set_xlim(0,trunc[-1])
+    ax.set_xticks(trunc)
     
     yas = [-np.log(.05) for t in trunc] if log else [.05 for t in trunc]
     ax.plot(trunc,yas,**asymp_arg)
@@ -61,6 +62,7 @@ def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,ti
         ax.set_ylim(ylim)
 
     return(fig,ax)
+
 
 def plot_kfdat(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo',contrib=False,label_asymp=False,asymp_arg=None,legend=True):
     # try:
@@ -93,44 +95,22 @@ def plot_kfdat(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,ti
            ax.legend()  
         return(fig,ax)
 
-def plot_pvalue(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo',contrib=False,label_asymp=False,asymp_arg=None,legend=True,log=False):
-    # on a pas le choix avec BH pour l'instant 
-    # try:
-        if columns is None:
-            columns = self.df_kfdat.columns
-        kfdat = self.df_pval[columns].copy()
-        if log :
-            kfdat = -np.log(kfdat)
+def plot_pvalue(self,column,t=20,fig=None,ax=None,legend=True,label=None,log=False,ylim=None,title=None,title_fontsize=40,label_asymp=False):
 
-        t = max([(~kfdat[c].isna()).sum() for c in columns]) if t is None and len(columns)==0 else \
-            100 if t is None else t 
-        trunc = range(1,t)  
-        no_data_to_plot = len(columns)==0
-
-        fig,ax = init_plot_pvalue(fig=fig,ax=ax,ylim=ylim,t=t,label=label_asymp,title=title,title_fontsize=title_fontsize,asymp_arg=asymp_arg,log=log)
-        
-        # if mean:
-        #     ax.plot(kfdat.mean(axis=1),label=mean_label,c=mean_color)
-        #     ax.plot(kfdat.mean(axis=1)- 2* kfdat.std(axis=1)/(~kfdat[columns[0]].isna()).sum(),c=mean_color,ls = '--',alpha=.5)
-        #     ax.plot(kfdat.mean(axis=1)+ 2* kfdat.std(axis=1)/(~kfdat[columns[0]].isna()).sum(),c=mean_color,ls = '--',alpha=.5)
-
-        if len(self.df_kfdat.columns)>0:
-            kfdat.plot(ax=ax)
-
-        # if ylim is None and not no_data_to_plot:
-            # if log :
-            # # probleme je voulais pas yas dans cette fonction 
-            
-            # yas = [chi2.ppf(0.95,t) for t in trunc] 
-            # ymax = np.max([yas[-1], np.nanmax(np.isfinite(kfdat[kfdat.index == trunc[-1]]))]) # .max(numeric_only=True)
-            # ylim = (-5,ymax)
-            # ax.set_ylim(ylim)
-        if contrib and len(columns)==1:
-            self.plot_kfdat_contrib(fig,ax,t,columns[0])
-        if legend:
-           ax.legend()  
-        return(fig,ax)
-
+    fig,ax = init_plot_pvalue(fig=fig,ax=ax,ylim=ylim,t=t,label=label_asymp,
+                              title=title,title_fontsize=title_fontsize,log=log)
+ 
+    pvals = self.df_pval[column].copy()
+    if log :
+        pvals = -np.log(pvals)
+    t_ = (~pvals.isna()).sum()
+    ax.plot(pvals[:t_],label=column if label is None else label)
+    ax.set_xlim(0,t)
+    
+    if legend:
+        ax.legend()
+    
+    return(fig,ax)
 #    
 def plot_kfdat_contrib(self,fig=None,ax=None,t=None,name=None):
     
@@ -167,62 +147,84 @@ def plot_kfdat_contrib(self,fig=None,ax=None,t=None,name=None):
 
     return(fig,ax)
 #    
-def plot_spectrum(self,fig=None,ax=None,t=None,title=None,sample='xy',label=None):
+def plot_spectrum(self,fig=None,ax=None,t=None,title=None,sample='xy',anchors=False,label=None,outliers_in_obs=None,truncations_of_interest = None ):
     if ax is None:
         fig,ax = plt.subplots(figsize=(10,10))
     if title is not None:
         ax.set_title(title,fontsize=40)
     
-    sp = self.spev[sample][self.approximation_cov]['sp']
+
+    cov = self.approximation_cov
+
+    if anchors:
+        if 'nystrom' not in cov:
+            print('impossible to plot anchor spectrum')
+        else:
+            suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
+            anchors_basis = self.anchors_basis
+            name_spev = f'{anchors_basis}{suffix_outliers}'
+            sp = self.spev[sample]['anchors'][name_spev]['sp']
+    else:
+        suffix_nystrom = self.anchors_basis if 'nystrom' in cov else ''
+        suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
+        name_spev = f'{cov}{suffix_nystrom}{suffix_outliers}'
+        sp = self.spev[sample][name_spev]['sp']
+
+    if truncations_of_interest is not None:
+        texts = []
+        for t in set(truncations_of_interest):
+            if len(sp)>t-1:
+                spt = sp[t-1]
+                text = f'{spt:.2f}' if spt >=.01 else f'{spt:1.0e}'
+                ax.scatter(x=t,y=spt,s=20)
+                texts += [ax.text(t,spt,text,fontsize=20)]
+        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
     
-    t = len(sp) if t is None else t
+    t = len(sp) if t is None else min(t,len(sp))
     trunc = range(1,t)
     ax.plot(trunc,sp[:trunc[-1]],label=label)
     ax.set_xlabel('t',fontsize= 20)
 
     return(fig,ax)
 #
-def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',sample='xy',labels='CT',color=None,fig=None,ax=None):
+def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',labels='MW',color=None,fig=None,ax=None,show_conditions=True,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
-        
-    c = self.set_color_for_scatter(color)
-    df_proj= self.init_df_proj(which,name)
-    pop_colors = {}
-    for xy,l in zip(sample,labels):
-        
-        dfxy = df_proj.loc[df_proj['sample']==xy][str(t)]
-        if len(dfxy)>0:
-            if xy in c : 
-                color = c[xy] #'blue' if xy =='x' else 'orange'
-                bins=int(np.floor(np.sqrt(len(dfxy))))
-                ax.hist(dfxy,density=True,histtype='bar',label=f'{l}({len(dfxy)})',alpha=.3,bins=bins,color=color,orientation=orientation)
-                ax.hist(dfxy,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
-                if orientation =='vertical':
-                    ax.axvline(dfxy.mean(),c=color)
-                else:
-                    ax.axhline(dfxy.mean(),c=color)
-
+    properties = self.get_plot_properties(color=color,labels=labels,show_conditions=show_conditions)
+    df_proj= self.init_df_proj(which,name,outliers_in_obs=outliers_in_obs)
+    
+    # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
+    
+    for kprop,vprop in properties.items():
+#         print(kprop,vprop['mean_plot_args'].keys())
+        if len(vprop['index'])>0:
+            dfxy = df_proj.loc[df_proj.index.isin(vprop['index'])]
+            dfxy = dfxy[which] if which in dfxy else dfxy[str(t)]                        
+            
+            ax.hist(dfxy,density=True,histtype='bar',alpha=.5,orientation=orientation,**vprop['hist_args'])
+            if 'label' in vprop['hist_args']:
+                del(vprop['hist_args']['label'])
+            if 'edgecolor' not in vprop['hist_args']:
+#                 print(ax._children[-1].__dict__)
+                vprop['hist_args']['edgecolor'] = ax._children[-1]._facecolor
+            if 'color' not in vprop['hist_args']:
+                vprop['hist_args']['color'] = ax._children[-1]._facecolor
+            
+            ax.hist(dfxy,density=True,histtype='step',lw=3,orientation=orientation,**vprop['hist_args'])
+            
+            # si je voulais faire des mean qui correspondent à d'autre pop que celles des histogrammes,
+            # la solution la plus simple serait de faire une fonction spécifique 'plot_mean_hist' par ex
+            # dédiée au tracé des lignes verticales correspondant aux means que j'appelerais séparément. 
+            if orientation =='vertical':
+                ax.axvline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
             else:
-                for pop,ipop in c.items():
-                    bins = int(np.floor(np.sqrt(len(ipop))))
-                    dfpop = dfxy[dfxy.index.isin(ipop)]
-                    if len(dfpop)>0:
-                        color = 'blue' if xy =='x' else 'orange'
-                        ax.hist(dfpop,density=True,histtype='bar',label=f'{pop}({len(dfpop)})',alpha=.3,bins=bins,orientation=orientation)
-                        ax.hist(dfpop,density=True,histtype='step',bins=bins,lw=3,edgecolor=color,orientation=orientation)
-                        pop_colors[pop] = ax._children[-1]._facecolor
-
-                        if orientation =='vertical':
-                            ax.axvline(dfpop.mean(),c=pop_colors[pop])
-                        else:
-                            ax.axhline(dfpop.mean(),c=pop_colors[pop])
+                ax.axhline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
                 
 
     xlabel = which if which in self.variables else which.split(sep='_')[1]+f': t={t}'
-    xlabel += f'  pval={self.df_pval[name].loc[t]:.5f}' if which == 'proj_kfda' else \
-              f'  pval={self.df_pval_contributions[name].loc[t]:.5f}' if which == 'proj_kfda' else \
+    xlabel += f'  pval={self.df_pval[name].loc[t]:.3e}' if which == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[name].loc[t]:.3e}' if which == 'proj_kfda' else \
               ''
     if orientation == 'vertical':
         ax.set_xlabel(xlabel,fontsize=25)
@@ -231,14 +233,14 @@ def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',sampl
 
     ax.legend(fontsize=30)
 
-
-
     fig.tight_layout()
     return(fig,ax)
 
+
+
 # cette fonction peut servir a afficher plein de figures usuelles, que je dois définir et nommer pour créer une fonction par figure usuelle
 
-def set_color_for_scatter(self,color):
+def get_color_for_scatter(self,color):
     # pas de couleur
     if color is None:
         color_ = {'x':'xkcd:cerulean',
@@ -267,8 +269,283 @@ def set_color_for_scatter(self,color):
 
     return(color_)
     
+def get_plot_properties(self,marker=None,color=None,show_conditions=True,labels='CT',
+                        marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
+                        big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
+                        outliers_in_obs=None
+                       #color_list,marker_list,big_marker_list,show_conditions
+                       ):
+
+    properties = {}
+    cx_ = 'xkcd:cerulean'
+    cy_ = 'xkcd:light orange'
+    mx_ = 'o'
+    my_ = 's'
+    
+    if marker is None and color is None : 
+        ipopx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs)
+        ipopy = self.get_index(sample='y',outliers_in_obs=outliers_in_obs)
+
+        labx = f'{labels[0]}({len(ipopx)})'
+        laby = f'{labels[1]}({len(ipopy)})'
+        
+        binsx=int(np.floor(np.sqrt(len(ipopx))))
+        binsy=int(np.floor(np.sqrt(len(ipopy))))
+                        
+        properties['x'] = {'index':ipopx,
+                           'plot_args':{'marker':'x','color':cx_},
+                           'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
+                           'hist_args':{'bins':binsx,'label':labx,'color':cx_}}
+                          
+        properties['y'] = {'index':ipopy,
+                           'plot_args':{'marker':'+','color':cy_},
+                           'mean_plot_args':{'marker':my_,'color':cy_,'label':laby},
+                           'hist_args':{'bins':binsy,'label':laby,'color':cy_}}
+                          
+    
+    elif isinstance(color,str) and marker is None:
+        if color in list(self.variables):
+            x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
+            
+            ipopx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs)
+            ipopy = self.get_index(sample='y',outliers_in_obs=outliers_in_obs)
+
+            cx = x[:,self.variables.get_loc(color)]
+            cy = y[:,self.variables.get_loc(color)]
+            
+            labx = f'{labels[0]}({len(ipopx)})'
+            laby = f'{labels[1]}({len(ipopy)})'
+        
+            properties['x']  = {'index':ipopx,
+                                'plot_args':{'marker':'x','c':cx},
+                                'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
+                                }
+            properties['y']  = {'index':ipopy,
+                                'plot_args':{'marker':'+','c':cy},
+                                'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
+            
+            
+        elif color in list(self.obs.columns):
+            if self.obs[color].dtype == 'category':
+                for pop in self.obs[color].cat.categories:
+                    if show_conditions: 
+                
+                        ipopx = self.obs.loc[self.obs[color]==pop]\
+                                        .loc[self.obs['sample']=='x'].index
+                        ipopy = self.obs.loc[self.obs[color]==pop]\
+                                        .loc[self.obs['sample']=='y'].index
+                        if outliers_in_obs is not None:
+                            outliers = self.obs[self.obs[outliers_in_obs]].index
+                            ipopx = ipopx[~ipopx.isin(outliers)]
+                            ipopy = ipopy[~ipopy.isin(outliers)]
+
+                        labx = f'{labels[0]} {pop} ({len(ipopx)})'
+                        laby = f'{labels[1]} {pop} ({len(ipopy)})'
+                        
+                        binsx=int(np.floor(np.sqrt(len(ipopx))))
+                        binsy=int(np.floor(np.sqrt(len(ipopy))))
+                        
+                        properties[f'{pop}x'] = {'index':ipopx,
+                                                 'plot_args':{'marker':'x'},
+                                                 'mean_plot_args':{'marker':mx_,'label':labx},
+                                                 'hist_args':{'bins':binsx,'label':labx}}
+                        properties[f'{pop}y'] = {'index':ipopy,
+                                                 'plot_args':{'marker':'+'},
+                                                 'mean_plot_args':{'marker':my_,'label':laby},
+                                                 'hist_args':{'bins':binsy,'label':laby}}
+
+                        
+                    else:
+                        ipop = self.obs.loc[self.obs[color]==pop].index
+                        if outliers_in_obs is not None:
+                            outliers = self.obs[self.obs[outliers_in_obs]].index
+                            ipop = ipop[~ipop.isin(outliers)]
+
+                        lab = f'{pop} ({len(ipop)})'
+                        bins=int(np.floor(np.sqrt(len(ipop))))
+                        
+                        
+                        properties[pop] = {'index':ipop,
+                                           'plot_args':{'marker':'.'},
+                                           'mean_plot_args':{'marker':'o','label':lab},
+                                           'hist_args':{'bins':bins,'label':lab}}
+                        
+                        
+            else: # pour une info numérique 
+
+                ipopx = self.obs.loc[self.obs['sample']=='x'].index                                
+                ipopy = self.obs.loc[self.obs['sample']=='y'].index
+                
+                if outliers_in_obs is not None:
+                    outliers = self.obs[self.obs[outliers_in_obs]].index
+                    ipopx = ipopx[~ipopx.isin(outliers)]
+                    ipopy = ipopy[~ipopy.isin(outliers)]
+
+                cx = self.obs.loc[self.obs.index.isin(ipopx)][color]
+                cy = self.obs.loc[self.obs.index.isin(ipopy)][color]
+
+
+                labx = f'{labels[0]}({len(ipopx)})'
+                laby = f'{labels[1]}({len(ipopy)})'
+
+                properties['x'] = {'index':ipopx,
+                                   'plot_args':{'c':cx,'marker':'x'},
+                                   'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx}}
+                properties['y'] = {'index':ipopy,
+                                   'plot_args':{'c':cy,'marker':'+'},
+                                   'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
+                    
+
+                    
+    elif color is None and isinstance(marker,str):
+        print('color is None and marker is specified : this case is not treated yet')
+    
+    elif isinstance(color,str) and isinstance(marker,str):
+        if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
+            if color in list(self.variables):
+                print('variable')
+                x,y = self.get_xy()
+
+                for im,popm in enumerate(self.obs[marker].cat.categories):
+                    
+                    m = marker_list[im%len(marker_list)]
+                    mean_m = big_marker_list[im%len(big_marker_list)]
+                    
+                    ipopx = self.obs.loc[self.obs[marker]==popm].loc[self.obs['sample']=='x'].index
+                    ipopy = self.obs.loc[self.obs[marker]==popm].loc[self.obs['sample']=='y'].index
+                    
+                    if outliers_in_obs is not None:
+                        outliers = self.obs[self.obs[outliers_in_obs]].index
+                        ipopx = ipopx[~ipopx.isin(outliers)]
+                        ipopy = ipopy[~ipopy.isin(outliers)]
+
+
+                    maskx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs).isin(ipopx)
+                    masky = self.get_index(sample='y',outliers_in_obs=outliers_in_obs).isin(ipopy)
+                    
+                    cx = x[maskx,self.variables.get_loc(color)]
+                    cy = y[masky,self.variables.get_loc(color)]
+                    
+                    labx = f'{labels[0]} {popm} ({len(ipopx)})'
+                    laby = f'{labels[1]} {popm} ({len(ipopy)})'
+
+                properties['x']  = {'index':ipopx,
+                                    'plot_args':{'marker':m,'c':cx},
+                                    'mean_plot_args':{'marker':mean_m,'c':cx_,'label':labx}}
+                properties['y']  = {'index':ipopy,
+                                    'plot_args':{'marker':m,'c':cy},
+                                    'mean_plot_args':{'marker':mean_m,'c':cy_,'label':laby}}
+
+            elif color in list(self.obs.columns):
+                print('in obs')
+                if self.obs[color].dtype == 'category':
+                    for popc in self.obs[color].cat.categories:
+                        for im,popm in enumerate(self.obs[marker].cat.categories):
+                            
+                            m = marker_list[im%len(marker_list)]
+                            mean_m = big_marker_list[im%len(big_marker_list)]
+                            
+                            if show_conditions: 
+                                ipopx = self.obs.loc[self.obs[color]==popc]\
+                                                .loc[self.obs['sample']=='x']\
+                                                .loc[self.obs[marker]==popm].index
+                                
+                                ipopy = self.obs.loc[self.obs[color]==popc]\
+                                                .loc[self.obs['sample']=='y']\
+                                                .loc[self.obs[marker]==popm].index
+                                if outliers_in_obs is not None:
+                                    outliers = self.obs[self.obs[outliers_in_obs]].index
+                                    ipopx = ipopx[~ipopx.isin(outliers)]
+                                    ipopy = ipopy[~ipopy.isin(outliers)]
+                                labx = f'{labels[0]} {popc} {popm} ({len(ipopx)})'
+                                laby = f'{labels[1]} {popc} {popm} ({len(ipopy)})'
+
+                                properties[f'{popc}{popm}x'] = {
+                                    'index':ipopx,
+                                    'plot_args':{'marker':m},
+                                    'mean_plot_args':{'marker':mean_m,'label':labx}}
+                                properties[f'{popc}{popm}y'] = {
+                                    'index':ipopy,
+                                    'plot_args':{'marker':m},
+                                    'mean_plot_args':{'marker':mean_m,'label':laby}}
+                            
+                            else:
+                                ipop = self.obs.loc[self.obs[color]==popc].loc[self.obs[marker]==popm].index
+                                
+                                if outliers_in_obs is not None:
+                                    outliers = self.obs[self.obs[outliers_in_obs]].index
+                                    ipop = ipop[~ipop.isin(outliers)]
+                                
+                                lab = f'{popc} {popm} ({len(ipop)})'
+                                properties[f'{popc}{popm}'] = {'index':ipop,
+                                                               'plot_args':{'marker':m},
+                                                               'mean_plot_args':{'marker':mean_m,'label':lab}}
+
+
+                
+                else: # pour une info numérique 
+                    for im,popm in enumerate(self.obs[marker].cat.categories):
+
+                        m = marker_list[im%len(marker_list)]
+                        mean_m = big_marker_list[im%len(big_marker_list)]
+
+                        if show_conditions:
+
+                            ipopx = self.obs.loc[self.obs['sample']=='x']\
+                                            .loc[self.obs[marker]==popm].index
+
+                            ipopy = self.obs.loc[self.obs['sample']=='y']\
+                                            .loc[self.obs[marker]==popm].index
+                                           
+                            if outliers_in_obs is not None:
+                                outliers = self.obs[self.obs[outliers_in_obs]].index
+                                ipopx = ipopx[~ipopx.isin(outliers)]
+                                ipopy = ipopy[~ipopy.isin(outliers)]
+
+                            cx = self.obs.loc[self.obs.index.isin(ipopx)][color]
+                            cy = self.obs.loc[self.obs.index.isin(ipopy)][color]
+
+                            labx = f'{labels[0]} {popm} ({len(ipopx)})'
+                            laby = f'{labels[1]} {popm} ({len(ipopy)})'
+                                           
+                            properties[f'{popm}x'] = {
+                                'index':ipopx,
+                                'plot_args':{'c':cx,'marker':m,},
+                                'mean_plot_args':{'marker':mean_m,'color':cx_,'label':labx}}
+                            properties[f'{popm}y'] = {
+                                'index':ipopy,
+                                'plot_args':{'c':cy,'marker':m,},
+                                'mean_plot_args':{'marker':mean_m,'color':cy_,'label':laby}}
+
+                        else:
+                            ipop = self.obs.loc[self.obs[marker]==popm].index
+                            
+                            if outliers_in_obs is not None:
+                                outliers = self.obs[self.obs[outliers_in_obs]].index
+                                ipop = ipop[~ipop.isin(outliers)]
+
+                            c = self.obs.loc[self.obs.index.isin(ipop)][color]
+                            
+                            lab = f'{popm} ({len(ipop)})'
+
+                            properties[f'{popm}'] = {'index':ipop,
+                                                     'plot_args':{'c':c,'marker':m,},
+                                                     'mean_plot_args':{'marker':mean_m,'label':lab}}
+                            
+                            
+        else:
+            print(f"{marker} is not in self.obs or is not categorical, \
+            use self.obs['{marker}'] = self.obs['{marker}'].astype('category')")
+        
+    else:
+
+            print(f'{color} and {marker} not found in obs and variables')
+
+    return(properties)
+
 def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,
-                 highlight=None,color=None,sample='xy',labels='CT',text=False,fig=None,ax=None):
+                 highlight=None,color=None,marker=None,show_conditions=True,labels='CT',text=False,fig=None,ax=None,
+                 outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -276,78 +553,62 @@ def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=N
     yproj = xproj if yproj is None else yproj
     if xproj == yproj and yname is None:
         yname = xname
-    df_abscisse = self.init_df_proj(xproj,xname)
-    df_ordonnee = self.init_df_proj(yproj,yname)
-    color = self.set_color_for_scatter(color)
-    pop_colors = {}
-    for xy,l in zip(sample,labels):
-        
-        df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
-        df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
-        m = 'x' if xy =='x' else '+'
-        if len(df_abscisse_xy)>0 and len(df_ordonnee_xy)>0 :
-            if xy in color :
-                
-                x_ = df_abscisse_xy[f'{p1}'] #[df_abscisse_xy.index.isin(ipop)]
-                y_ = df_ordonnee_xy[f'{p2}'] #[df_ordonnee_xy.index.isin(ipop)]
-                # ax.scatter(x_,y_,c=c,s=30,label=,alpha=.8,marker =m)
-                ax.scatter(x_,y_,s=30,c=color[xy],label=f'{l}({len(x_)})', alpha=.8,marker =m)
-            else:
-                alpha = .2 if text else .8 
-                for pop,ipop in color.items():
-                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
-                    
-                    if len(x_)>0:
-                        ax.scatter(x_,y_,s=30,label=f'{pop} {l}({len(x_)})',alpha=alpha,marker =m)
-                        pop_colors[pop] = ax._children[-1]._facecolors[0]
-
-            
+    df_abscisse = self.init_df_proj(xproj,xname,outliers_in_obs=outliers_in_obs)
+    df_ordonnee = self.init_df_proj(yproj,yname,outliers_in_obs=outliers_in_obs)
+    properties = self.get_plot_properties(marker=marker,color=color,labels=labels,show_conditions=show_conditions,outliers_in_obs=outliers_in_obs)
+    texts = []
     
-    for xy,l in zip(sample,labels):
-
-        df_abscisse_xy = df_abscisse.loc[df_abscisse['sample']==xy]
-        df_ordonnee_xy = df_ordonnee.loc[df_ordonnee['sample']==xy]
-        x_ = df_abscisse_xy[f'{p1}']
-        y_ = df_ordonnee_xy[f'{p2}']
-        if len(df_abscisse_xy)>0 and len(df_ordonnee_xy)>0 :
-            if highlight is not None:
-                x_ = df_abscisse_xy[f'{p1}']
-                y_ = df_ordonnee_xy[f'{p2}']
-                ax.scatter(x_[x_.index.isin(highlight)],y_[y_.index.isin(highlight)],c=color[xy],s=100,marker='*',edgecolor='black',linewidths=1)
-            if xy in color:
+    for kprop,vprop in properties.items():
+#         print(kprop,vprop['mean_plot_args'].keys())
+        if len(vprop['index'])>0:
+            x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
+            y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
+                        
+            alpha = .2 if text else .8 
+            ax.scatter(x_,y_,s=30,alpha=alpha,**vprop['plot_args'])
+            if 'mean_plot_args' in vprop and 'color' not in vprop['mean_plot_args']:
+                vprop['mean_plot_args']['color'] = ax._children[-1]._facecolors[0]
+                
+    for kprop,vprop in properties.items():
+        if len(vprop['index'])>0:
+            x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
+            y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
+            
+            if highlight is not None and vprop['index'].isin(highlight).sum()>0:
+                
+                ihighlight = vprop['index'][vprop['index'].isin(highlight)]
+                
+                xhighlight_ = df_abscisse.loc[df_abscisse.index.isin(ihighlight)][f'{p1}']
+                yhighlight_ = df_ordonnee.loc[df_ordonnee.index.isin(ihighlight)][f'{p2}']
+                c = vprop['plot_args']['color'] if 'color' in vprop['plot_args'] else \
+                    vprop['mean_plot_args']['color'] if 'mean_plot_args' in vprop and 'color' in vprop['mean_plot_args'] \
+                    else 'xkcd:neon purple'
+                ax.scatter(xhighlight_,yhighlight_,color=c,s=100,marker='*',edgecolor='black',linewidths=1)    
+                
+            if 'mean_plot_args' in vprop:
                 mx_ = x_.mean()
                 my_ = y_.mean()
-                c = color[f'm{xy}'] if f'm{xy}' in color else color[xy]
-                ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,c=c)
-            else:
-                texts = []
-                for pop,ipop in color.items():
-                    x_ = df_abscisse_xy[f'{p1}'][df_abscisse_xy.index.isin(ipop)]
-                    y_ = df_ordonnee_xy[f'{p2}'][df_ordonnee_xy.index.isin(ipop)]
-                    if len(x_)>0:
-                        c = pop_colors[pop]
-                        mx_ = x_.mean()
-                        my_ = y_.mean()
-                        ax.scatter(mx_,my_,edgecolor='black',linewidths=3,s=200,facecolor=c,alpha=1)
-                    if text :
-                        texts += [plt.text(mx_,my_,pop,fontsize=20)]
-                if text:
-                    adjust_text(texts)#,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
-            
-    
-    if 'title' in color :
-        ax.set_title(color['title'],fontsize=20)
+                ax.scatter(mx_,my_,edgecolor='black',linewidths=1.5,s=200,**vprop['mean_plot_args'],alpha=1)
+
+                if text :
+                    texts += [ax.text(mx_,my_,kprop,fontsize=20)]
+                    
+    if text:
+
+        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+         
+    if 'title' in properties :
+        ax.set_title(properties['title'],fontsize=20)
 
 
     xlabel = xproj if xproj in self.variables else xproj.split(sep='_')[1]+f': t={p1}'
-    xlabel += f'  pval={self.df_pval[xname].loc[p1]:.5f}' if xproj == 'proj_kfda' else \
-              f'  pval={self.df_pval_contributions[xname].loc[p1]:.5f}' if xproj == 'proj_kfda' else \
+    xlabel += f'  pval={self.df_pval[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
               ''
 
     ylabel = yproj if yproj in self.variables else yproj.split(sep='_')[1]+f': t={p2}'
-    ylabel += f'  pval={self.df_pval[yname].loc[p2]:.5f}' if yproj == 'proj_kfda' else \
-              f'  pval={self.df_pval_contributions[yname].loc[p2]:.5f}' if yproj == 'proj_kfda' else \
+    ylabel += f'  pval={self.df_pval[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
+              f'  pval={self.df_pval_contributions[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
               ''
 
     ax.set_xlabel(xlabel,fontsize=25)                    
@@ -355,7 +616,10 @@ def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=N
     
     ax.legend()
 
-    return(fig,ax)
+    return(fig,ax)      
+            
+                    
+                    
  
 
 def init_axes_projs(self,fig,axes,projections,sample,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
@@ -400,9 +664,6 @@ def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',sample='xy',yproj=No
     fig.tight_layout()
     return(fig,axes)
 
-def find_cells_from_proj(self,which='proj_kfda',name=None,t=1,bound=0,side='left'):
-    df_proj= self.init_df_proj(which,name=name)
-    return df_proj[df_proj[str(t)] <= bound].index if side =='left' else df_proj[df_proj[str(t)] >= bound].index
 
 def plot_correlation_proj_var(self,fig=None,ax=None,name=None,nvar=30,projections=range(1,10),title=None,prefix_col=''):
     if name is None:
@@ -611,7 +872,7 @@ def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,out
 
 
 
-def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None,outliers_in_obs=None):
+def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
     
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
@@ -635,14 +896,14 @@ def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=
     ax.set_ylabel(r'$\Sigma_W$ reconstruction',fontsize=30)
     ax.set_xlabel('truncation',fontsize=30)
     ax.set_ylim(-.05,1.05)
-    xmax = len(expvar) if xmax is None else xmax
+    xmax = len(expvar) if t is None else t
     
     ax.set_xlim(-1,xmax)
     ax.set_xticks(np.arange(0,xmax))
     return(fig,ax)
 
   
-def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,xmax=None,outliers_in_obs=None):
+def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
     projection_error,delta = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs,return_total=True)
@@ -660,7 +921,7 @@ def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig
     ax.set_ylabel(r'$(\mu_2 - \mu_1)$ projection error',fontsize=30)
     ax.set_xlabel('truncation',fontsize=30)
     ax.set_ylim(-.05,1.05)
-    xmax = len(errorB) if xmax is None else xmax
+    xmax = len(errorB) if t is None else t
     
     ax.set_xlim(-1,xmax)
     ax.set_xticks(np.arange(0,xmax))
@@ -668,26 +929,41 @@ def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig
 
 
 
-def plot_pval_and_errors(self,column,outliers=None,fig=None,ax=None):
+def plot_pval_and_errors(self,column,outliers=None,truncations_of_interest=[1],t=20,fig=None,ax=None):
+
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,8))
-    self.plot_pvalue(fig,ax,t=20,columns = [column],)
+    self.plot_pvalue(fig=fig,ax=ax,t=t,column = column,)
     self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',
-                                                                        fig,ax,xmax=20,outliers_in_obs=outliers)
+                                                                        fig,ax,t=t,outliers_in_obs=outliers)
     self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',
-                                                                       fig,ax,xmax=20,outliers_in_obs=outliers)
-    ax.legend()
+                                                                       fig,ax,t=t,outliers_in_obs=outliers)
+    if truncations_of_interest is not None:
+        texts = []
+        for t in set(truncations_of_interest):
+            pvalt = self.df_pval[column][t]
+            text = f'{pvalt:.2f}' if pvalt >=.01 else f'{pvalt:1.0e}'
+            ax.scatter(x=t,y=pvalt,s=20)
+            texts += [ax.text(t,pvalt,text,fontsize=20)]
+        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+            
+    ax.legend(fontsize=20)
     ax.set_xlabel('Truncation',fontsize=30)
     ax.set_ylabel('Errors or pval',fontsize=30)
-    replace_label(ax,0,'p-value')
+    n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers)
+    ax.set_title(f'n1={n1} vs n2={n2}',fontsize=30)
+    pval = self.df_pval[column][1]
+    text=  f'{pval:.2f}' if pval >=.1 else f'{pval:1.0e}'
+    replace_label(ax,0,f'p-value  (t=1:{text})')
     
     return(fig,ax)
+
 
 def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',column_in_dataframe='kfda',which='proj_kfda',outliers_in_obs=None):
     oname = f"{which}[{column_in_dataframe}][{t}]{orientation}{threshold}"
 #     print(oname_)
 #     oname = f'outliers_kfdat1_{threshold}'
-    outliers = self.get_outliers(threshold = threshold,
+    outliers = self.determine_outliers_from_condition(threshold = threshold,
                                  orientation =orientation, 
                                  t=t,
                                  column_in_dataframe=column_in_dataframe,
@@ -697,22 +973,22 @@ def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',colum
     print(f'{oname} : {len(outliers)} outliers')
 
     self.add_outliers_in_obs(outliers,name_outliers=oname)
+
     self.kfdat(outliers_in_obs=oname)    
-#     self.diagonalize_residual_covariance(t=1,outliers_in_obs=oname)
-#     self.proj_residus(t=1,ndirections=20,outliers_in_obs=oname)
     self.compute_proj_kfda(t=20,outliers_in_obs=oname)
 
+    # a remplacer par self.compare_two_stats
     fig,axes = plt.subplots(ncols=4,figsize=(48,8))
     
     ax = axes[0]
-    self.density_proj(t=int(t),labels='MF',name=column_in_dataframe,fig=fig,ax=ax)
+    self.density_proj(t=int(t),labels='MF',which=which,name=column_in_dataframe,fig=fig,ax=ax)
     ax.axvline(threshold,ls='--',c='crimson')
     ax.set_title(column_in_dataframe,fontsize=20)
     ax = axes[1]
     self.plot_kfdat(fig,ax,t=20,columns = [column_in_dataframe,oname])
     
     ax = axes[2]
-    self.plot_pvalue(fig,ax,t=20,columns = [column_in_dataframe],)
+    self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
     self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
     self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
     ax.legend()
@@ -722,7 +998,7 @@ def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',colum
     ax.set_title('Before',fontsize=30)
     
     ax = axes[3]
-    self.plot_pvalue(fig,ax,t=20,columns = [oname],)
+    self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
     self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
     self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
     ax.legend()
@@ -758,7 +1034,7 @@ def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_data
     self.plot_kfdat(fig,ax,t=20,columns = [column_in_dataframe,oname])
     
     ax = axes[1]
-    self.plot_pvalue(fig,ax,t=20,columns = [column_in_dataframe],)
+    self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
     self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
     self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
     ax.legend()
@@ -768,7 +1044,7 @@ def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_data
     ax.set_title('Before',fontsize=30)
     
     ax = axes[2]
-    self.plot_pvalue(fig,ax,t=20,columns = [oname],)
+    self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
     self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
     self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
     ax.legend()
@@ -780,8 +1056,23 @@ def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_data
 
     return(oname)
 
-def prepare_vizualisation_without_outliers(self,t,outliers_in_obs):
-    self.kfdat(outliers_in_obs=outliers_in_obs)    
+def prepare_visualization(self,t,outliers_in_obs=None):
+    t0 = time()
+    kfda_name = self.kfdat(outliers_in_obs=outliers_in_obs)  
+    self.compute_pval() 
+    print('calcul KFDA :',time()-t0)
+    
+    t0 = time()
     self.diagonalize_residual_covariance(t=t,outliers_in_obs=outliers_in_obs)
-    self.proj_residus(t=t,ndirections=20,outliers_in_obs=outliers_in_obs)
-    self.compute_proj_kfda(t=20,outliers_in_obs=outliers_in_obs)
+    print('diagonalize_residual_covariance :',time()-t0)
+    
+    t0 = time()
+    residuals_name = self.proj_residus(t=t,ndirections=20,outliers_in_obs=outliers_in_obs)
+    proj_kfda_name = self.compute_proj_kfda(t=20,outliers_in_obs=outliers_in_obs,name=kfda_name)
+    print('projections :',time()-t0)
+    return({'kfda_name':kfda_name,
+            'residuals_name':residuals_name,
+            'proj_kfda_name':proj_kfda_name
+            })
+
+    

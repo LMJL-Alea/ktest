@@ -67,28 +67,26 @@ def compute_proj_kfda(self,t=None,name=None,verbose=0,outliers_in_obs=None):
                 'name':name},
                 start=False,
                 verbose = verbose)
+    return(name)
 
-def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=None,verbose=0,anchors_basis=None):
+def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=None,verbose=0,outliers_in_obs=None):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
     
     """
     
     cov,mmd = self.approximation_cov,self.approximation_mmd
-    anchors_basis = self.anchors_basis
-    
-    name = name if name is not None else f'{cov}{mmd}{sample}' 
+    name = name if name is not None else \
+            outliers_in_obs if outliers_in_obs is not None else \
+            f'{cov}{mmd}{sample}' 
     # name = name if name is not None else f'{cov}{mmd}' 
 
+    anchors_basis = self.anchors_basis
     suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-    sp,ev = self.spev['xy'][cov+suffix_nystrom]['sp'],self.spev['xy'][cov+suffix_nystrom]['ev']
+    suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs
 
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # quantization = approximation_cov =='quantization'
-    # sp,ev = self.spev[sample][approximation_cov]['sp'],self.spev[sample][approximation_cov]['ev']
-    # P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization)    
-    # n1,n2 = (self.n1,self.n2) 
-    # n = (n1*('x' in sample)+n2*('y' in sample))
+    sp = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
+    ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
     
     if name in self.df_proj_kpca :
         if verbose : 
@@ -109,9 +107,9 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
 
 
         # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        pkm=self.compute_pkm()
-        upk=self.compute_upk(t)
-        n1,n2,n = self.get_n1n2n()
+        pkm=self.compute_pkm(outliers_in_obs=outliers_in_obs)
+        upk=self.compute_upk(t,outliers_in_obs=outliers_in_obs)
+        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
 
         if cov == 'standard' or 'nystrom' in cov: 
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
@@ -125,7 +123,7 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
             print(f"écrasement de {name} dans df_proj_kpca")
         
 
-        index = get_index(sample)
+        index = self.get_index(sample=sample,outliers_in_obs=outliers_in_obs)
         self.df_proj_kpca[name] = pd.DataFrame(proj,index=index,columns=[str(t) for t in trunc])
         self.df_proj_kpca[name]['sample'] = ['x']*n1*('x' in sample) + ['y']*n2*('y' in sample)
                 
@@ -137,20 +135,6 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
                 'name':name},
                 start=False,
                 verbose = verbose)
-
-    # if approximation_cov =='quantization':
-    #     Kmn = self.compute_kmn(sample=sample)
-    #     A_12 = self.compute_quantization_weights(sample=sample,power=1/2)                
-    #     proj = ( sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],A_12,P,Kmn).T)
-    # elif approximation_cov == 'nystrom':
-    #     Kmn = self.compute_kmn(sample=sample)
-    #     Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-    #     Lp_inv = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**-1)
-    #     proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,Kmn.T,Up,Lp_inv,Up.T,Kmn).T).cumsum(axis=1).numpy()
-    # elif approximation_cov == 'standard':
-    #     K = self.compute_gram(sample=sample)
-    #     proj = (  n**(-1/2)*sp[:t]**(-1/2)*torch.chain_matmul(ev.T[:t],P,K).T).numpy()
-
 
 
 def compute_proj_mmd(self,approximation='standard',name=None,verbose=0,outliers_in_obs=None):
@@ -189,7 +173,7 @@ def compute_proj_mmd(self,approximation='standard',name=None,verbose=0,outliers_
 
 
 
-def init_df_proj(self,which,name=None):
+def init_df_proj(self,which,name=None,outliers_in_obs=None):
     # if name is None:
     #     name = self.main_name
     
@@ -219,10 +203,12 @@ def init_df_proj(self,which,name=None):
             else: 
                 df_proj = dict_df_proj[name]
     elif which in self.variables:
-        datax,datay = self.get_xy()
+        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
+        datax,datay = self.get_xy(outliers_in_obs=outliers_in_obs,name_data=name)
         loc_variable = self.variables.get_loc(which)
-        df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=self.get_index(),columns=[which])
-        df_proj['sample']=['x']*self.n1 + ['y']*self.n2
+        index = self.get_index(outliers_in_obs=outliers_in_obs)
+        df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=index,columns=[which])
+        # df_proj['sample']=['x']*n1 + ['y']*n2
     else:
         print(f'{which} not recognized')
         

@@ -20,7 +20,7 @@ from typing import Optional,Callable,Union,List
 
 
 
-def init_xy(self,x,y):
+def init_xy(self,x,y,data_name ='data',main=True ):
     '''
     This function initializes the attributes `x` and `y` of the Tester object 
     which contain the two datasets in torch.tensors format.
@@ -62,14 +62,19 @@ def init_xy(self,x,y):
             print(f'unknown data type {type(xy)}')
         if token:
             if sxy == 'x':
-                self.x = xy
-                self.n1 = xy.shape[0]
+                self.data['x'][data_name] = xy
+                self.data['x']['n'] = xy.shape[0]                
+                self.data['x'][f'{data_name}_p'] = xy.shape[1]
             if sxy == 'y':
-                self.y = xy
-                self.n2 = xy.shape[0]
+                self.data['y'][data_name] = xy
+                self.data['y']['n'] = xy.shape[0]                
+                self.data['y'][f'{data_name}_p'] = xy.shape[1]
+                
             self.has_data = True
+        if main:
+            self.main_data = data_name
 
-         
+
 def init_index_xy(self,x_index = None,y_index = None):
     '''
     This function initializes the attributes of the data indexes 
@@ -97,12 +102,12 @@ def init_index_xy(self,x_index = None,y_index = None):
 
     '''
     # generates range index if no index
-    self.x_index=pd.Index(range(1,self.n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
-    self.y_index=pd.Index(range(self.n1,self.n1+self.n2)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
-    assert(len(self.x_index) == self.n1)
-    assert(len(self.y_index) == self.n2)
-    self.index = self.x_index.append(self.y_index)
-
+    n1,n2,n = self.get_n1n2n()
+    self.data['x']['index']=pd.Index(range(1,n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
+    self.data['y']['index']=pd.Index(range(n1,n)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
+    assert(len(self.data['x']['index']) == self.data['x']['n'])
+    assert(len(self.data['y']['index']) == self.data['y']['n'])
+    
 def init_variables(self,variables = None):
     '''
     Initializes the variables names in the attribute `variables`. 
@@ -118,9 +123,9 @@ def init_variables(self,variables = None):
         variables : the list of variable names
 
     '''
-    self.variables = range(self.x.shape[1]) if variables is None else variables
-
-
+    self.variables = range(self.data['x']['data'].shape[1]) if variables is None else variables
+    self.var = pd.DataFrame(index=self.variables)
+    self.vard = {v:{} for v in self.variables}
 def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0):
     '''
     This function initializes all the information concerning the data of the Tester object.
@@ -253,12 +258,14 @@ def init_metadata(self,dfx_meta=None,dfy_meta=None):
             firs dataset and 'y' otherwise. 
 
     '''
-        
+
     if dfx_meta is not None :
         dfx_meta['sample'] = ['x']*len(dfx_meta)
         dfy_meta['sample'] = ['y']*len(dfy_meta)
         self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
-        self.obs.index = self.index
+        self.obs.index = self.get_index()
+    else:
+        self.obs= pd.DataFrame(index=self.get_index())
 
 
 
@@ -314,8 +321,7 @@ def init_kernel(self,kernel):
     ------- 
     '''
 
-    x = self.x
-    y = self.y
+    x,y = self.get_xy()
     verbose = self.verbose
 
     if type(kernel) == str:
@@ -338,7 +344,7 @@ def init_kernel(self,kernel):
 
 
 def init_model(self,approximation_cov='standard',approximation_mmd='standard',
-                m=None,r=None,landmark_method='random',anchors_basis='W'):
+                m=None,r=None,landmark_method='random',anchors_basis='w'):
     '''
     
     Parameters
@@ -351,7 +357,7 @@ def init_model(self,approximation_cov='standard',approximation_mmd='standard',
 
     
 
-    n1,n2 = self.n1,self.n2
+    n1,n2,n = self.get_n1n2n()
     if "nystrom" in approximation_cov and (n1<100 or n2<100): 
         self.approximation_cov = 'standard'
     self.approximation_cov = approximation_cov

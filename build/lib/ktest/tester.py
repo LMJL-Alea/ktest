@@ -88,6 +88,7 @@ class Tester:
         compute_gram, \
         center_gram_matrix_with_respect_to_some_effects, \
         compute_kmn, \
+        center_kmn_matrix_with_respect_to_some_effects,\
         diagonalize_centered_gram,\
         compute_within_covariance_centered_gram
 
@@ -104,8 +105,6 @@ class Tester:
         reinitialize_anchors
 
     from .statistics import \
-        get_trunc,\
-        get_95variance_trunc,\
         get_explained_variance,\
         get_trace,\
         compute_kfdat,\
@@ -144,8 +143,8 @@ class Tester:
         init_axes_projs,\
         density_projs,\
         scatter_projs,\
-        set_color_for_scatter,\
-        find_cells_from_proj,\
+        get_plot_properties,\
+        get_color_for_scatter,\
         plot_correlation_proj_var,\
         plot_pval_with_respect_to_within_covariance_reconstruction_error,\
         plot_pval_with_respect_to_between_covariance_reconstruction_error,\
@@ -156,7 +155,7 @@ class Tester:
         plot_pval_and_errors,\
         what_if_we_ignored_cells_by_condition,\
         what_if_we_ignored_cells_by_outliers_list,\
-        prepare_vizualisation_without_outliers
+        prepare_visualization
 
     from .initializations import \
         init_data,\
@@ -178,7 +177,26 @@ class Tester:
         diagonalize_residual_covariance,\
         proj_residus,\
         get_between_covariance_projection_error,\
+        get_between_covariance_projection_error_associated_to_t,\
         get_ordered_spectrum_wrt_between_covariance_projection_error
+
+    from .truncation_selection import \
+        select_trunc_by_between_reconstruction_ratio,\
+        select_trunc_by_between_reconstruction_ressaut,\
+        select_trunc
+
+    from .univariate_testing import \
+        update_var_from_dataframe,\
+        save_univariate_test_results_in_var,\
+        load_univariate_test_results_in_var,\
+        visualize_univariate_test_CRCL,\
+        plot_density_of_variable,\
+        get_zero_proportions_of_variable,\
+        add_zero_proportions_to_var,\
+        volcano_plot,\
+        volcano_plot_zero_pvals_and_non_zero_pvals,\
+        color_volcano_plot
+
 
     def __init__(self):
         """\
@@ -193,7 +211,9 @@ class Tester:
         self.quantization_with_landmarks_possible = False
         
         # attributs initialisés 
-        self.dict_data = {}
+        self.data = {'x':{},'y':{}}
+        self.main_data=None
+
         # self.dict_model = {}
         self.df_kfdat = pd.DataFrame()
         self.df_kfdat_contributions = pd.DataFrame()
@@ -204,7 +224,7 @@ class Tester:
         self.df_proj_residuals = {}
         self.corr = {}     
         self.dict_mmd = {}
-        self.spev = {'x':{},'y':{},'xy':{},'residuals':{}} # dict containing every result of diagonalization
+        self.spev = {'x':{'anchors':{}},'y':{'anchors':{}},'xy':{'anchors':{}},'residuals':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
@@ -216,8 +236,10 @@ class Tester:
 
     def __str__(self):
         if self.has_data:
-            s = f"View of Tester object with n1 = {self.n1}, n2 = {self.n2}\n"
-            s += f"x ({self.x.shape}), y ({self.y.shape})\n"                       
+            n1,n2,n = self.get_n1n2n()
+            x,y = self.get_xy()
+            s = f"View of Tester object with n1 = {n1}, n2 = {n2}\n"
+            s += f"x ({x.shape}), y ({y.shape})\n"                       
         else: 
             s = "View of Tester object with no data\n"  
         cov = self.approximation_cov
@@ -327,68 +349,97 @@ class Tester:
     # def save_data():
     # def save_a_dataframe(self,path,which)
 
-    def get_xy(self,landmarks=False,outliers_in_obs=None):
-        if landmarks: 
-            x,y = self.xlandmarks,self.ylandmarks
+    def get_xy(self,landmarks=False,outliers_in_obs=None,name_data=None):
+        if name_data is None:
+            name_data = self.main_data
+        if landmarks: # l'attribut name_data n'a pas été adatpé aux landmarks car je n'en ai pas encore vu l'utilité 
+            if outliers_in_obs is None:
+                x = self.data['xlandmarks']['data'] 
+                y = self.data['ylandmarks']['data']
+            else: 
+                x = self.data[f'xlandmarks{outliers_in_obs}']['data']
+                y = self.data[f'ylandmarks{outliers_in_obs}']['data']
+            
         else:
             if outliers_in_obs is None:
-                return(self.x,self.y)
+                x = self.data['x'][name_data]
+                y = self.data['y'][name_data]
             else:         
+                xindex = self.data['x']['index'] 
+                yindex = self.data['y']['index']
                 
-                df_outliers = self.obs[outliers_in_obs]
-                outliers    = df_outliers[df_outliers].index
+                outliers    = self.obs[self.obs[outliers_in_obs]].index
+                xmask       = ~xindex.isin(outliers)
+                ymask       = ~yindex.isin(outliers)
                 
-                xmask       = ~self.x_index.isin(outliers)
-                ymask       = ~self.y_index.isin(outliers)
-                
-                return(self.x[xmask,:],self.y[ymask,:])
+                x = self.data['x'][name_data][xmask,:]
+                y = self.data['y'][name_data][ymask,:]
+
+        return(x,y)
 
     def get_index(self,sample='xy',landmarks=False,outliers_in_obs=None):
-        if outliers_in_obs is None:
-            return(self.index if sample =='xy' else self.x_index if sample =='x' else self.y_index)
-        else:
-            df_outliers = self.obs[outliers_in_obs]
-            outliers    = df_outliers[df_outliers].index
-            
-            if sample == 'xy':
-                return(self.index[~self.obs.index.isin(outliers)])
-            elif sample =='x':
-                return(self.x_index[~self.x_index.isin(outliers)])
-            elif sample =='y':
-                return(self.y_index[~self.y_index.isin(outliers)])
-            
-    def get_n1n2n(self,landmarks=False,outliers_in_obs=None):
-
         if landmarks: 
-            n1 = len(self.xlandmarks)
-            n2 = len(self.ylandmarks)
-            return(n1,n2,n1+n2)
+            if outliers_in_obs is None:
+                xindex = self.data['xlandmarks']['index'] 
+                yindex = self.data['ylandmarks']['index']
+            else: 
+                xindex = self.data[f'xlandmarks{outliers_in_obs}']['index']
+                yindex = self.data[f'ylandmarks{outliers_in_obs}']['index']
         else:
             if outliers_in_obs is None:
-                n1 = len(self.x)
-                n2 = len(self.y)
-                return(n1,n2,n1+n2)
-            else:         
+                xindex = self.data['x']['index'] 
+                yindex = self.data['y']['index']
+            else:
+                xindex = self.data['x']['index'] 
+                yindex = self.data['y']['index']
                 
-                df_outliers = self.obs[outliers_in_obs]
-                outliers    = df_outliers[df_outliers].index
-                
-                xmask       = ~self.x_index.isin(outliers)
-                ymask       = ~self.y_index.isin(outliers)
-                
-                n1 = len(self.x[xmask,:])
-                n2 = len(self.y[ymask,:])
-                return(n1,n2,n1+n2)
+                outliers    = self.obs[self.obs[outliers_in_obs]].index
+                xmask       = ~xindex.isin(outliers)
+                ymask       = ~yindex.isin(outliers)
 
+                xindex = self.data['x']['index'][xmask]
+                yindex = self.data['y']['index'][ymask]
 
-    def get_outliers(self,threshold,which='proj_kfda',column_in_dataframe='standardstandard',t='1',orientation='>',outliers_in_obs=None):
-        df = self.init_df_proj(which=which,name=column_in_dataframe)[str(t)]
+        return(xindex.append(yindex) if sample =='xy' else xindex if sample =='x' else yindex)
+                
+
+    def get_n1n2n(self,landmarks=False,outliers_in_obs=None):
+        if landmarks: 
+            if outliers_in_obs is None:
+                n1 = self.data['xlandmarks']['n'] 
+                n2 = self.data['ylandmarks']['n']
+            else: 
+                n1 = self.data[f'xlandmarks{outliers_in_obs}']['n']
+                n2 = self.data[f'ylandmarks{outliers_in_obs}']['n']
+        else:
+            if outliers_in_obs is None:
+                n1 = self.data['x']['n'] 
+                n2 = self.data['y']['n']
+            else:
+                xindex = self.data['x']['index'] 
+                yindex = self.data['y']['index']
+                
+                outliers    = self.obs[self.obs[outliers_in_obs]].index
+                xmask       = ~xindex.isin(outliers)
+                ymask       = ~yindex.isin(outliers)
+
+                n1 = len(self.data['x']['index'][xmask])
+                n2 = len(self.data['y']['index'][ymask])
+
+        return(n1,n2,n1+n2)
+        
+
+    def determine_outliers_from_condition(self,threshold,which='proj_kfda',column_in_dataframe='standardstandard',t='1',orientation='>',outliers_in_obs=None):
+        df = self.init_df_proj(which=which,name=column_in_dataframe,outliers_in_obs=outliers_in_obs)[str(t)]
 
 
         if orientation == '>':
             outliers = df[df>threshold].index
         if orientation == '<':
             outliers = df[df<threshold].index
+        if orientation == '<>':
+            outliers = df[df<threshold[0]].index
+            outliers = outliers.append(df[df>threshold[1]].index)
 
         if outliers_in_obs is not None:
             df_outliers = self.obs[outliers_in_obs]
@@ -398,53 +449,8 @@ class Tester:
         return(outliers)
 
     def add_outliers_in_obs(self,outliers,name_outliers):
-        self.obs[name_outliers] = self.index.isin(outliers)
-
-    # def name_generator(self,t=None,nystrom=0,nystrom_method='kmeans',r=None,obs_to_ignore=None):
-        
-    #     if obs_to_ignore is not None:
-    #         name_ = f'~{obs_to_ignore[0]} n={len(obs_to_ignore)}'
-    #     else:
-    #         name_ = ""
-    #         if t is not None:
-    #             name_ += f"tmax{t}"
-    #         if nystrom:
-    #             name_ +=f'ny{nystrom}{nystrom_method}na{r}'
-    #     return(name_)
-    
-
-
-
-    # def ignore_obs(self,obs_to_ignore=None,reinitialize_ignored_obs=False):
-   
-    #     if self.ignored_obs is None or reinitialize_ignored_obs:
-    #         self.ignored_obs = obs_to_ignore
-    #     else:
-    #         self.ignored_obs.append(obs_to_ignore)
-
-    #     if obs_to_ignore is not None:
-    #         x,y = self.get_xy()
-    #         self.xmask = ~self.x_index.isin(obs_to_ignore)
-    #         self.ymask = ~self.y_index.isin(obs_to_ignore)
-    #         self.imask = ~self.index.isin(obs_to_ignore)
-    #         self.n1 = x.shape[0]
-    #         self.n2 = y.shape[0]
-
-    # def unignore_obs(self):
-        
-    #     self.xmask = [True]*len(self.x)
-    #     self.ymask = [True]*len(self.y)
-    #     self.imask = [True]*len(self.index)
-    #     self.n1 = self.x.shape[0]
-    #     self.n2 = self.y.shape[0]
-    
-    # def infer_nobs(self,which ='proj_kfda',name=None):
-    #     if not hasattr(self,'n1'):
-    #         if name is None:
-    #             name = self.get_names()[which][0]
-    #         df_proj= self.init_df_proj(which,name)
-    #         self.n1 =  df_proj[df_proj['sample']=='x'].shape[0]
-    #         self.n2 =  df_proj[df_proj['sample']=='y'].shape[0]
+        index = self.get_index()
+        self.obs[name_outliers] = index.isin(outliers)
 #       
     def eval_nystrom_trace(self):
         """

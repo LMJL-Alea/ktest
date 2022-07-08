@@ -5,7 +5,7 @@ import torch
 # import apt.kmeans 
 from kmeans_pytorch import kmeans
 
-def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
+def compute_nystrom_anchors(self,sample='xy',verbose=0,outliers_in_obs=None):
     """
     Determines the nystrom anchors using 
     Stores the results as a list of eigenvalues and the 
@@ -24,52 +24,51 @@ def compute_nystrom_anchors(self,sample='xy',verbose=0,anchors_basis=None):
                     dict_of_variables={'r':self.r},
                     start=True,
                     verbose = verbose)
-
-    if sample == 'xy':
-        if self.r is None:
-            if verbose > 0:
-                print("r not specified, by default, r = m" )
-        self.r = self.m if self.r is None else self.r
-        anchors_basis = self.anchors_basis
-        assert(self.r <= self.m)
-        
-    # a réfléchir dans le cas de 1 groupe 
-    # elif sample =='x':
-    #     self.nxanchors = self.nxlandmarks if r is None else r
-    #     assert(self.nxanchors <= self.nxlandmarks)
-    # elif sample =='y':
-    #     self.nyanchors = self.nylandmarks if r is None else r
-    #     assert(self.nyanchors <= self.nylandmarks)
-
-    r = self.r if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
+    anchors_basis=self.anchors_basis
+    suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
+    anchor_name = f'{anchors_basis}{suffix_outliers}'
     
-    Km = self.compute_gram(sample=sample,landmarks=True)
-    P = self.compute_covariance_centering_matrix(sample=sample,landmarks=True)
-    sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.chain_matmul(P,Km,P))        
-    # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
-    if any(sp_anchors<0):
-        # ajout suite aux simu univariées ou le spectre était parfois négatif, ce qui provoquait des abérations quand on l'inversait. La solution que j'ai choisie est de tronquer le spectre uniquement aux valeurs positives et considérer les autres comme nulles. 
-        if verbose>0:
-            print(f'due to a numerical aberation, the number of anchors is reduced from {self.r} to {sum(sp_anchors>0)}')
-        r = sum(sp_anchors>0)
-        self.r = r.item()
+    if anchor_name not in self.spev[sample]['anchors']:
+
+        if sample == 'xy':
+            if self.r is None:
+                if verbose > 0:
+                    print("r not specified, by default, r = m" )
+            self.r = self.m if self.r is None else self.r
+            anchors_basis = self.anchors_basis
+            assert(self.r <= self.m)
+
+        # a réfléchir dans les cas de sample in {'x','y'} 
+
+        r = self.r if sample =='xy' else self.nxanchors if sample=='x' else self.nyanchors
+        m = self.m
+        Km = self.compute_gram(sample=sample,landmarks=True,outliers_in_obs=outliers_in_obs)
+        P = self.compute_covariance_centering_matrix(sample=sample,landmarks=True,outliers_in_obs=outliers_in_obs)
+        sp_anchors,ev_anchors = ordered_eigsy(1/m*torch.chain_matmul(P,Km,P))        
+        # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
+        if sum(sp_anchors>0)<r:
+
+            self.r = sum(sp_anchors>0).item()
+            r = self.r
+            # ajout suite aux simu univariées ou le spectre était parfois négatif, ce qui provoquait des abérations quand on l'inversait. La solution que j'ai choisie est de tronquer le spectre uniquement aux valeurs positives et considérer les autres comme nulles. 
+            if verbose>0:
+                print(f'due to a numerical aberation, the number of anchors is reduced from {self.r} to {sum(sp_anchors>0)}')
 
     # print(f'In compute nystrom anchors:\n\t Km\n{Km}\n\t P\n{P} \n\t sp_anchors\n{sp_anchors}\n\t ev_anchors\n{ev_anchors}')
 
-    if 'anchors' in self.spev[sample]:
-        self.spev[sample]['anchors'][anchors_basis] = {'sp':sp_anchors[:r],'ev':ev_anchors[:,:r]}
-    else:
-        self.spev[sample]['anchors'] = {anchors_basis:{'sp':sp_anchors[:r],'ev':ev_anchors[:,:r]}}
+        self.spev[sample]['anchors'][anchor_name] = {'sp':sp_anchors[:r],'ev':ev_anchors[:,:r]}
 
-    self.verbosity(function_name='compute_nystrom_anchors',
-                    dict_of_variables={'r':r},
-                    start=False,
-                    verbose = verbose)
+        self.verbosity(function_name='compute_nystrom_anchors',
+                        dict_of_variables={'r':r},
+                        start=False,
+                        verbose = verbose)
 
-def compute_nystrom_landmarks(self,verbose=0):
+def compute_nystrom_landmarks(self,outliers_in_obs=None,verbose=0):
     # anciennement compute_nystrom_anchors(self,r,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
     
     """
+    Problème des landmarks : on perd l'info 
+
     We distinguish the nystrom landmarks and nystrom anchors.
     The nystrom landmarks are the points from the observation space that will be used to compute the nystrom anchors. 
     The nystrom anchors are the points in the RKHS computed from the nystrom landmarks on which we will apply the nystrom method. 
@@ -85,8 +84,9 @@ def compute_nystrom_landmarks(self,verbose=0):
                     start=True,
                     verbose = verbose)
         
-    x,y = self.get_xy()
-    n1,n2,n = self.get_n1n2n()
+    landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
+    x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
+    n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
     xratio,yratio = n1/n, n2/n
 
     if self.m is None:
@@ -99,23 +99,45 @@ def compute_nystrom_landmarks(self,verbose=0):
             print("landmark_method not specified, by default, landmark_method='random'")
         self.landmark_method = 'random'
     
-    self.nxlandmarks=np.int(np.floor(xratio * self.m)) 
-    self.nylandmarks=np.int(np.floor(yratio * self.m))
-
+    nxlandmarks=np.int(np.floor(xratio * self.m)) 
+    nylandmarks=np.int(np.floor(yratio * self.m))
     
 
     if self.landmark_method == 'kmeans':
-        self.xassignations,self.xlandmarks = kmeans(X=x, num_clusters=self.nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
-        self.yassignations,self.ylandmarks = kmeans(X=y, num_clusters=self.nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
-        self.xlandmarks = self.xlandmarks.double()
-        self.ylandmarks = self.ylandmarks.double()
+        xassignations,xlandmarks = kmeans(X=x, num_clusters=nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+        yassignations,ylandmarks = kmeans(X=y, num_clusters=nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+        xlandmarks = xlandmarks.double()
+        ylandmarks = ylandmarks.double()
+
+        self.data[f'x{landmarks_name}'] = {'data':xlandmarks,
+                    'assignations':xassignations,'n':nxlandmarks}
+        self.data[f'y{landmarks_name}'] = {'data':ylandmarks,
+                    'assignations':yassignations,'n':nylandmarks}
+
         self.quantization_with_landmarks_possible = True
         
 
     elif self.landmark_method == 'random':
-        self.xlandmarks = x[np.random.choice(x.shape[0], size=self.nxlandmarks, replace=False)]
-        self.ylandmarks = y[np.random.choice(y.shape[0], size=self.nylandmarks, replace=False)]
         
+        z1 = np.random.choice(n1, size=nxlandmarks, replace=False)
+        z2 = np.random.choice(n2, size=nylandmarks, replace=False)
+        
+        xindex = self.get_index(sample='x')
+        yindex = self.get_index(sample='y')
+
+        self.add_outliers_in_obs(xindex[z1],f'x{landmarks_name}')
+        self.add_outliers_in_obs(yindex[z2],f'y{landmarks_name}')
+
+        # on pourrait s'arrêter là et construire la matrice des landmarks a chaque fois qu'on appelle get_xy
+        # et calculer facilement nlandmarks quand on appelle get_n1n2n. 
+        # mais ça se généralise mal à l'approche kmeans donc pour l'instant je garde les deux versions.  
+
+        xlandmarks = x[z1]
+        ylandmarks = y[z2]
+        
+        self.data[f'x{landmarks_name}'] = {'data':xlandmarks,'n':nxlandmarks}
+        self.data[f'y{landmarks_name}'] = {'data':ylandmarks,'n':nylandmarks}
+
         # Necessaire pour remettre a false au cas ou on a déjà utilisé 'kmeans' avant 
         self.quantization_with_landmarks_possible = False
 

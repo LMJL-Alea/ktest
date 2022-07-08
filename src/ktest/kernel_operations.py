@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from torch import mv,ones,cat,eye,zeros,ger
+from torch import mv,ones,cat,eye,zeros,ger,isnan
 from .utils import ordered_eigsy
 
 
@@ -51,29 +51,39 @@ def compute_gram(self,sample='xy',landmarks=False,outliers_in_obs=None):
         kxy = kernel(x, y)
         K = torch.cat((torch.cat((kxx, kxy), dim=1),
                         torch.cat((kxy.t(), kyy), dim=1)), dim=0)
-        K = self.center_gram_matrix_with_respect_to_some_effects(K,outliers_in_obs=outliers_in_obs)
-
+        if not landmarks: 
+            K = self.center_gram_matrix_with_respect_to_some_effects(K,outliers_in_obs=outliers_in_obs)
         return(K)
     else:
         return(kxx if sample =='x' else kyy)
 
 def center_gram_matrix_with_respect_to_some_effects(self,K,outliers_in_obs=None):
+    '''
+    Faire ce calcul au moment de calculer la gram n'est pas optimal car il ajoute un produit de matrice
+    qui peut être cher, surtout quand n est grand. 
+    L'autre alternative plus optimale serait de calculer la matrice de centrage par effet à chaque fois 
+    qu'on a besoin de faire une opération sur la gram. Cette solution diminuerait le nombre d'opération 
+    mais augmenterait la complexité du code car il faudrait à chaque fois vérifier si on a un centrage à 
+    faire et écrire la version du calcul avec et sans centrage (pour éviter de multiplier inutilement par une 
+    matrice identité). 
+    '''
+
     if self.center_by is None:
         return(K)
     else:
-        P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=None)
+        P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=outliers_in_obs)
         return(torch.chain_matmul(P,K,P))
         # retutn(torch.linalg.multi_dot([P,K,P]))
 
-def compute_kmn(self,sample='xy'):
+def compute_kmn(self,sample='xy',outliers_in_obs=None):
     """
     Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
     """
     assert(self.has_landmarks)
     kernel = self.kernel
     
-    x,y = self.get_xy()
-    z1,z2 = self.get_xy(landmarks=True)
+    x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
+    z1,z2 = self.get_xy(landmarks=True,outliers_in_obs=outliers_in_obs)
     if 'x' in sample:
         kz1x = kernel(z1,x)
     if 'y' in sample:
@@ -82,10 +92,23 @@ def compute_kmn(self,sample='xy'):
     if sample =='xy':
         kz2x = kernel(z2,x)
         kz1y = kernel(z1,y)
-        return(cat((cat((kz1x, kz1y), dim=1),
-                        cat((kz2x, kz2y), dim=1)), dim=0))
+        
+        kmn = cat((cat((kz1x, kz1y), dim=1),cat((kz2x, kz2y), dim=1)), dim=0)
+        kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn,outliers_in_obs=outliers_in_obs)
+        return(kmn)
     else:
         return(kz1x if sample =='x' else kz2y)
+
+def center_kmn_matrix_with_respect_to_some_effects(self,kmn,outliers_in_obs=None):
+    '''
+    Cf commentaire dans center_gram_matrix_with_respect_to_some_effects 
+    '''
+    if self.center_by is None:
+        return(kmn)
+    else:
+        P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=outliers_in_obs)
+        return(torch.matmul(kmn,P))
+        # retutn(torch.linalg.multi_dot([K,P]))
 
 def compute_within_covariance_centered_gram(self,approximation='standard',sample='xy',verbose=0,outliers_in_obs=None):
     """ 
@@ -119,10 +142,13 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
         n+=n2
     if 'nystrom' in approximation:
         r = self.r if sample=='xy' else self.nxanchors if sample =='x' else self.nyanchors
+        m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
+        suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
         anchors_basis = self.anchors_basis
+        anchor_name = f'{anchors_basis}{suffix_outliers}'
     if approximation == 'quantization':
         if self.quantization_with_landmarks_possible:
-            Kmm = self.compute_gram(sample=sample,landmarks=True)
+            Kmm = self.compute_gram(sample=sample,landmarks=True,outliers_in_obs=outliers_in_obs)
             A = self.compute_quantization_weights(sample=sample,power=.5)
             Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
             # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
@@ -133,11 +159,11 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
     elif approximation == 'nystrom1':
         # version brute mais a terme utiliser la svd ?? 
         if self.has_landmarks and "anchors" in self.spev[sample]:
-            Kmn = self.compute_kmn(sample=sample)
-            Lp_inv = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-1))
-            Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-            Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
-            Kw = 1/(n*r*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
+            Kmn = self.compute_kmn(sample=sample,outliers_in_obs=outliers_in_obs)
+            Lp_inv = torch.diag(self.spev[sample]['anchors'][anchor_name]['sp']**(-1))
+            Up = self.spev[sample]['anchors'][anchor_name]['ev']
+            Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            Kw = 1/(n*m*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
             # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
             # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
             
@@ -146,14 +172,14 @@ def compute_within_covariance_centered_gram(self,approximation='standard',sample
     
     elif approximation in ['nystrom2','nystrom3']:
         if self.has_landmarks and "anchors" in self.spev[sample]:
-            Kmn = self.compute_kmn(sample=sample)
-            Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchors_basis]['sp']**(-(1/2)))
+            Kmn = self.compute_kmn(sample=sample,outliers_in_obs=outliers_in_obs)
+            Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchor_name]['sp']**(-(1/2)))
             # on est pas censé avoir de nan, il y en avait quand les ancres donnaient des spectres négatifs à cause des abérations numérique en univarié 
             # assert(not any(torch.isnan(Lp_inv_12)))
-            Up = self.spev[sample]['anchors'][anchors_basis]['ev']
-            Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True)
+            Up = self.spev[sample]['anchors'][anchor_name]['ev']
+            Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
             # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
-            Kw = 1/(n*r**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
+            Kw = 1/(n*m**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
             # Kw = 1/(n*r**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])            
             
             # Kw = 1/(n) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
@@ -197,10 +223,16 @@ def diagonalize_centered_gram(self,approximation='standard',sample='xy',verbose=
     Kw = self.compute_within_covariance_centered_gram(approximation=approximation,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
     
     sp,ev = ordered_eigsy(Kw)
+    # Pour l'instant j'ai toujours pu régler les problèmes de nan dans le spectre en amont de la diagonalisation 
+    # en retirant les ancres associée à des valeurs propres négatives par exemple. 
+    # sp12 = sp**(-1/2)
+    # ev = ev[:,~isnan(sp12)]
+    # sp = sp[~isnan(sp12)]
     # print('Kw',Kw,'sp',sp,'ev',ev)
     suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
     suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-    self.spev[sample][f'{approximation}{suffix_nystrom}{suffix_outliers}'] = {'sp':sp,'ev':ev}
+    name_spev = f'{approximation}{suffix_nystrom}{suffix_outliers}'
+    self.spev[sample][name_spev] = {'sp':sp,'ev':ev}
     
     self.verbosity(function_name='diagonalize_centered_gram',
             dict_of_variables={'approximation':approximation,
