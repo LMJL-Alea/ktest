@@ -2,7 +2,16 @@ from torch import cat,tensor,float64
 import numpy as np
 from numpy import where
    
-    
+"""
+Le choix de la troncature est la question difficile des tests avec KFDA.
+Ici, j'ai mis plusieurs procédures de sélection automatique de la troncature. 
+Plus tard, une idée à implémenter est de selectionner t par permutation. 
+C'est à dire qu'on crée à partir des données des couples d'échantillons sous H0 et on voit jusqu'à 
+quelle troncature on peut aller avec une erreur de type I contrôllée. 
+On choisit à terme la plus grande troncature qui contrôle cette erreur.  
+"""
+
+
 def select_trunc_by_between_reconstruction_ratio(self,ratio,outliers_in_obs=None):
     pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
     pe = cat([tensor([0],dtype =float64),pe])

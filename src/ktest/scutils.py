@@ -9,6 +9,12 @@ from tester import Tester
 from importlib import reload 
 
 
+"""
+Un vieux fourre tout de fonctions pour des applications spécifiques au single-cell. 
+Plusieurs fonctions sont pensées pour être interfacées avec les objets AnnData de Scanpy, 
+J'ai finalement décidé de m'en éloigner même si je m'en suis inspiré pour les attributs var et obs. 
+Dans la finalité, ça peut être intéressant de penser la compatibilité avec Scanpy. 
+"""
 
 def split_H0(A: np.array,return_index=False):
     nA = len(A)
@@ -32,8 +38,6 @@ def split_adata_H0(adata:sc.AnnData,layer='norm_data',return_index=False):
     else:
         return(splitted)
 
-
-
 def get_ncells(adata,obs_col,obs_val):
     cells = adata.obs[obs_col]==obs_val
     return(len(adata[cells]))
@@ -41,7 +45,6 @@ def get_ncells(adata,obs_col,obs_val):
 def select_adata(adata,obs_col,obs_val):
     cells = adata.obs[obs_col]==obs_val
     return(adata[cells])
-
 
 def tester_of_Controle_Traite(adata,obs_col='treatment',obs_values=('Control','BH3'),layer='norm_data',spec=None):
     """
@@ -100,7 +103,6 @@ def density_proj_kfda(df_proj,ax,proj):
     ax.set_xlabel(f't={proj}')    
     ax.legend()
 
-    
 def initiate_kfda_plot(ax,trunc = range(1,60),asymp_ls='--',asymp_c = 'crimson',ylim=(-5,2000)):
     
     yas = [chi2.ppf(0.95,t) for t in trunc]    
@@ -109,7 +111,6 @@ def initiate_kfda_plot(ax,trunc = range(1,60),asymp_ls='--',asymp_c = 'crimson',
         ax.set_ylim(ylim)
     ax.set_xlabel('t',fontsize= 20)
     
-
 def correlationmatrix_kfda_genes(df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
 
     df_proj.index = df_array.index # inutile dans un futur proche 
@@ -123,7 +124,6 @@ def correlationmatrix_kfda_genes(df_array,df_proj,csvfile,pathfile,trunc=range(1
         acorr = df_array.corr()
         acorr.to_csv(pathfile+csvfile)
     return(acorr)
-
 
 def add_genes_of_interest_in_df_proj(acorr,df_proj,df_array,ngenes = 4,trunc=range(1,60)):
     '''
@@ -146,8 +146,6 @@ def add_genes_of_interest_in_df_proj(acorr,df_proj,df_array,ngenes = 4,trunc=ran
                 gname = sorted_genes.index[g+i]
                 i += 1
             df_proj[gname] = df_array[gname]
-
-
 
 def generate_which_dict(path_kfda,dataset_id,genes_selection='sg',spec=''):
 

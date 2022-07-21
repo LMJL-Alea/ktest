@@ -5,6 +5,10 @@
 import torch
 import numpy as np
 
+"""
+Ces fonctions déterminent la fonction noyau 
+"""
+
 def torch_transformator(x):
     if (isinstance(x, np.ndarray)):
         x = torch.from_numpy(x).type(torch.double)

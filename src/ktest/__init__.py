@@ -25,8 +25,6 @@ from .statistics import \
     compute_kfdat,\
     compute_kfdat_with_different_order,\
     get_explained_variance,\
-    compute_pval,\
-    correct_BenjaminiHochberg_pval,\
     compute_pkm,\
     compute_upk,\
     initialize_kfdat,\
@@ -70,7 +68,10 @@ from .visualizations import \
     plot_pval_and_errors,\
     what_if_we_ignored_cells_by_condition,\
     what_if_we_ignored_cells_by_outliers_list,\
-    prepare_visualization
+    prepare_visualization,\
+    visualize_patient_celltypes_CRCL,\
+    visualize_quality_CRCL,\
+    visualize_effect_graph_CRCL
     
 from .initializations import \
     init_data,\
@@ -101,6 +102,8 @@ from .truncation_selection import \
     select_trunc
 
 from .univariate_testing import \
+    univariate_kfda,\
+    parallel_univariate_kfda,\
     update_var_from_dataframe,\
     save_univariate_test_results_in_var,\
     load_univariate_test_results_in_var,\
@@ -111,3 +114,10 @@ from .univariate_testing import \
     volcano_plot,\
     volcano_plot_zero_pvals_and_non_zero_pvals,\
     color_volcano_plot
+
+from .pvalues import \
+    compute_pval,\
+    correct_BenjaminiHochberg_pval,\
+    correct_BenjaminiHochberg_pval_univariate,\
+    get_rejected_variables_univariate
+    

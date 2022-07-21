@@ -1,7 +1,15 @@
 import torch
 import pandas as pd
 from torch import mv,diag,chain_matmul,dot,sum
-from scipy.stats import chi2
+
+
+"""
+Ce fichier contient toutes les fonctions nécessaires au calcul des statistiques,
+Les quantités pkm et upk sont des quantités génériques qui apparaissent dans beaucoup de calculs. 
+Elles n'ont pas d'interprêtation facile, ces fonctions centrales permettent d'éviter les répétitions. 
+
+Les fonctions initialize_kfdat et kfdat font simplement appel a plusieurs fonctions en une fois. 
+"""
 
 
 
@@ -379,80 +387,6 @@ def compute_kfdat_with_different_order(self,order='between'):
         for c in kfda_contrib.columns:
             self.df_kfdat[f'{c}_between'] = kfda_between[c]
 
-def compute_pval(self,t=None):
-    """
-    Computes the asymptotic pvalues of the kfda statistic. 
-    
-    Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
-    Attention, la présence de Nan augmente considérablement le temps de calcul. 
-    """
-    pvals = {}
-    pvals_contrib = {}
-    t = min(100,len(self.df_kfdat)) if t is None else min(t,len(self.df_kfdat))
-    trunc=range(1,t+1)
-
-    for t_ in trunc:
-        pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
-        pvals_contrib[t_] = self.df_kfdat_contributions.T[t_].apply(lambda x: chi2.sf(x,1))
-
-    self.df_pval = pd.DataFrame(pvals).T 
-    self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
-
-def correct_BenjaminiHochberg_pval_of_dfcolumn(df,t):
-    df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)
-    df['pvalc'] = df.apply(lambda x: len(df) * x['pval']/x['rank'],axis=1) # correction
-    df['rankc'] = df['pvalc'].rank() # calcul du nouvel ordre
-    corrected_pvals = []
-    # correction des pval qui auraient changé d'ordre
-    l = []
-    if not df['rankc'].equals(df['rank']):
-        first_rank = df['rank'].sort_values().values[0] # égal à 1 sauf si égalité 
-        pvalc_prec = df.loc[df['rank']==first_rank,'pvalc'].iat[0]
-        df['rank'] = df['rank'].fillna(10000)
-        for rank in df['rank'].sort_values().values[1:]: # le 1 est déjà dans rank prec et on prend le dernier 
-            # if t >=8:
-            #     print(rank,end=' ')
-            pvalc = df.loc[df['rank']==rank,'pvalc'].iat[0]
-            if pvalc_prec >= 1 : 
-                pvalue = 1 # l += [1]
-            elif pvalc_prec > pvalc :
-                pvalue = pvalc # l += [pvalc]
-            elif pvalc_prec <= pvalc:
-                pvalue = pvalc_prec # l+= [pvalc_prec]
-            else: 
-                print('error pval correction',f'rank{rank} pvalc{pvalc} pvalcprec{pvalc_prec}')
-                print(df.loc[df['rank']==rank].index)
-            pvalc_prec = pvalc
-            l += [pvalue]
-        # dernier terme 
-        pvalue = 1 if pvalc >1 else pvalc
-        l += [pvalue]
-#             corrected_pvals[t] = pd.Series(l,index=ranks)#df['rank'].sort_values().index)
-    if len(l)>0: 
-        return(pd.Series(l,index=df['rank'].sort_values().index))
-    else: 
-        return(pd.Series(df['pvalc'].values,index=df['rank'].sort_values().index))
-
-def correct_BenjaminiHochberg_pval_of_dataframe(df_pval,t=20):
-    """
-    Benjamini Hochberg correction of a dataframe containing the p-values where the rows are the truncations.    
-    """
-    trunc = range(1,t+1)
-    corrected_pvals = []
-    for t in trunc:
-        # print(t)
-        corrected_pvals += [correct_BenjaminiHochberg_pval_of_dfcolumn(df_pval.T[t],t=t)]   
-    return(pd.concat(corrected_pvals,axis=1).T)
-
-def correct_BenjaminiHochberg_pval(self,t=20):
-    """
-    Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
-    This is to use when the different tests correspond to multiple testing. 
-    The results are stored in self.df_BH_corrected_pval 
-    The pvalues are adjusted for each truncation lower or equal to t. 
-    """
-    
-    self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
 def initialize_kfdat(self,sample='xy',verbose=0,outliers_in_obs=None,**kwargs):
     cov,mmd = self.approximation_cov,self.approximation_mmd

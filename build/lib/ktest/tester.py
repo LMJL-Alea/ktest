@@ -109,8 +109,6 @@ class Tester:
         get_trace,\
         compute_kfdat,\
         compute_kfdat_with_different_order,\
-        compute_pval,\
-        correct_BenjaminiHochberg_pval,\
         compute_pkm,\
         compute_upk,\
         initialize_kfdat,\
@@ -155,7 +153,10 @@ class Tester:
         plot_pval_and_errors,\
         what_if_we_ignored_cells_by_condition,\
         what_if_we_ignored_cells_by_outliers_list,\
-        prepare_visualization
+        prepare_visualization,\
+        visualize_patient_celltypes_CRCL,\
+        visualize_quality_CRCL,\
+        visualize_effect_graph_CRCL
 
     from .initializations import \
         init_data,\
@@ -186,6 +187,8 @@ class Tester:
         select_trunc
 
     from .univariate_testing import \
+        parallel_univariate_kfda,\
+        univariate_kfda,\
         update_var_from_dataframe,\
         save_univariate_test_results_in_var,\
         load_univariate_test_results_in_var,\
@@ -196,6 +199,12 @@ class Tester:
         volcano_plot,\
         volcano_plot_zero_pvals_and_non_zero_pvals,\
         color_volcano_plot
+
+    from .pvalues import \
+        compute_pval,\
+        correct_BenjaminiHochberg_pval,\
+        correct_BenjaminiHochberg_pval_univariate,\
+        get_rejected_variables_univariate
 
 
     def __init__(self):
@@ -218,6 +227,7 @@ class Tester:
         self.df_kfdat = pd.DataFrame()
         self.df_kfdat_contributions = pd.DataFrame()
         self.df_pval = pd.DataFrame()
+        self.df_pval_contributions = pd.DataFrame()
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
@@ -235,35 +245,61 @@ class Tester:
        
 
     def __str__(self):
+
+        s = '##### Data ##### \n'
+        
         if self.has_data:
             n1,n2,n = self.get_n1n2n()
             x,y = self.get_xy()
-            s = f"View of Tester object with n1 = {n1}, n2 = {n2}\n"
-            s += f"x ({x.shape}), y ({y.shape})\n"                       
+            xindex,yindex = self.get_index(sample='x'),self.get_index(sample='y')
+            s += f"View of Tester object with n1 = {n1}, n2 = {n2} (n={n})\n"
+
+            s += f"x ({x.shape}), y ({y.shape})\n"
+            s += f'kernel : {self.kernel_name}\n'                       
+            s += f'x index : {xindex[:3].tolist()}... \n'
+            s += f'y index : {yindex[:3].tolist()}... \n'
+            s += f'variables : {self.variables[:3].tolist()}...\n'
+            s += f'meta : {self.obs.columns.tolist()}\n'
         else: 
-            s = "View of Tester object with no data\n"  
-        cov = self.approximation_cov
-        mmd = self.approximation_mmd
-        ny = 'nystrom' in cov or 'nystrom' in mmd
-        s += f"Model: {cov},{mmd}"
-        if ny : 
-            anchors_basis = self.anchors_basis
-            m=self.m
-            r=self.r
-            s += f',{anchors_basis},m={m},r={r}'
-        s+= '\n'
+            s += "View of Tester object with no data.\n" 
+            s += "You can initiate the data with the class function 'init_data()'.\n\n"
         
+        s += '##### Model #### \n'
+        if self.has_model: 
+            cov = self.approximation_cov
+            mmd = self.approximation_mmd
+            ny = 'nystrom' in cov or 'nystrom' in mmd
+            s += f"Model: {cov},{mmd}"
+            if ny : 
+                anchors_basis = self.anchors_basis
+                m=self.m
+                r=self.r
+                s += f',{anchors_basis},m={m},r={r}'
+            s+= '\n\n'
+        else: 
+            s += "This Tester object has no model.\n"
+            s += "You can initiate the model with the class function 'init_model()'.\n\n"
+        
+        s += '##### Results ##### \n'
+        s += '--- Statistics --- \n'
         s += f"df_kfdat ({self.df_kfdat.columns})\n"
+        s += f"df_kfdat_contributions ({self.df_kfdat_contributions.columns})\n"
         s += f"df_pval ({self.df_pval.columns})\n"
         s += f"df_pval_contributions ({self.df_pval_contributions.columns})\n"
+        s += f"dict_mmd ({len(self.dict_mmd)})\n\n"
+
+
+        s += '--- Projections --- \n'
         s += f"df_proj_kfda ({self.df_proj_kfda.keys()})\n"
         s += f"df_proj_kpca ({self.df_proj_kpca.keys()})\n"
         s += f"df_proj_mmd ({self.df_proj_mmd.keys()})\n"
-        s += f"df_proj_residuals ({self.df_proj_residuals.keys()})\n"
-        s += f"corr ({len(self.corr)})\n"
-        s += f"corr ({len(self.corr)})\n"
-        s += f"dict_mmd ({len(self.dict_mmd)})\n\n"
+        s += f"df_proj_residuals ({self.df_proj_residuals.keys()})\n\n"
         
+        s += '--- Correlations --- \n'
+        s += f"corr ({len(self.corr)})\n"
+        s += f"corr ({len(self.corr)})\n\n"
+        
+        s += '--- Eigenvectors --- \n'
         kx = self.spev['x'].keys()
         ky = self.spev['y'].keys()
         kxy = self.spev['xy'].keys()
@@ -337,7 +373,6 @@ class Tester:
                 for name,path in to_load[type].items():
                     types_ref[type](path,name)
 
-
     def get_names(self):
         names = {'kfdat':[c for c in self.df_kfdat],
                 'proj_kfda':[name for name in self.df_proj_kfda.keys()],
@@ -348,22 +383,29 @@ class Tester:
     # def load_data(self,data_dict,):
     # def save_data():
     # def save_a_dataframe(self,path,which)
+    def get_dataframe_of_data(self,name_data=None):
+        " a mettre à jour"
+        x,y = self.get_xy(name_data=name_data)
+        xindex = self.get_index(sample='x')
+        yindex = self.get_index(sample='y')
+        var = self.variables
+        
+        dfx = pd.DataFrame(x,index=xindex,columns=var)
+        dfy = pd.DataFrame(y,index=yindex,columns=var)
+        return(dfx,dfy)
 
     def get_xy(self,landmarks=False,outliers_in_obs=None,name_data=None):
         if name_data is None:
             name_data = self.main_data
         if landmarks: # l'attribut name_data n'a pas été adatpé aux landmarks car je n'en ai pas encore vu l'utilité 
-            if outliers_in_obs is None:
-                x = self.data['xlandmarks']['data'] 
-                y = self.data['ylandmarks']['data']
-            else: 
-                x = self.data[f'xlandmarks{outliers_in_obs}']['data']
-                y = self.data[f'ylandmarks{outliers_in_obs}']['data']
+            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
+            x = self.data['x'][landmarks_name]['X'] 
+            y = self.data['y'][landmarks_name]['X']
             
         else:
             if outliers_in_obs is None:
-                x = self.data['x'][name_data]
-                y = self.data['y'][name_data]
+                x = self.data['x'][name_data]['X']
+                y = self.data['y'][name_data]['X']
             else:         
                 xindex = self.data['x']['index'] 
                 yindex = self.data['y']['index']
@@ -372,19 +414,17 @@ class Tester:
                 xmask       = ~xindex.isin(outliers)
                 ymask       = ~yindex.isin(outliers)
                 
-                x = self.data['x'][name_data][xmask,:]
-                y = self.data['y'][name_data][ymask,:]
+                x = self.data['x'][name_data]['X'][xmask,:]
+                y = self.data['y'][name_data]['X'][ymask,:]
 
         return(x,y)
 
     def get_index(self,sample='xy',landmarks=False,outliers_in_obs=None):
         if landmarks: 
-            if outliers_in_obs is None:
-                xindex = self.data['xlandmarks']['index'] 
-                yindex = self.data['ylandmarks']['index']
-            else: 
-                xindex = self.data[f'xlandmarks{outliers_in_obs}']['index']
-                yindex = self.data[f'ylandmarks{outliers_in_obs}']['index']
+            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
+            xindex = self.obs[self.obs[f'x{landmarks_name}']].index
+            yindex = self.obs[self.obs[f'y{landmarks_name}']].index
+            
         else:
             if outliers_in_obs is None:
                 xindex = self.data['x']['index'] 
@@ -402,15 +442,12 @@ class Tester:
 
         return(xindex.append(yindex) if sample =='xy' else xindex if sample =='x' else yindex)
                 
-
     def get_n1n2n(self,landmarks=False,outliers_in_obs=None):
         if landmarks: 
-            if outliers_in_obs is None:
-                n1 = self.data['xlandmarks']['n'] 
-                n2 = self.data['ylandmarks']['n']
-            else: 
-                n1 = self.data[f'xlandmarks{outliers_in_obs}']['n']
-                n2 = self.data[f'ylandmarks{outliers_in_obs}']['n']
+            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
+            n1 = self.data['x'][landmarks_name]['n'] 
+            n2 = self.data['y'][landmarks_name]['n']
+
         else:
             if outliers_in_obs is None:
                 n1 = self.data['x']['n'] 
@@ -428,7 +465,6 @@ class Tester:
 
         return(n1,n2,n1+n2)
         
-
     def determine_outliers_from_condition(self,threshold,which='proj_kfda',column_in_dataframe='standardstandard',t='1',orientation='>',outliers_in_obs=None):
         df = self.init_df_proj(which=which,name=column_in_dataframe,outliers_in_obs=outliers_in_obs)[str(t)]
 
@@ -451,102 +487,104 @@ class Tester:
     def add_outliers_in_obs(self,outliers,name_outliers):
         index = self.get_index()
         self.obs[name_outliers] = index.isin(outliers)
+
+# tout le reste est désuet. C'était des mesures de performances un peu bancales pour les calculs de nystrom. 
 #       
-    def eval_nystrom_trace(self):
-        """
-        Returns the squared difference between the spectrum in ``self.sp`` and the nystrom spectrum in ``self.spny``
-        """
-        # je pourrais choisir jusqu'où je somme mais pour l'instant je somme sur l'ensemble du spectre 
-        return((self.sp.sum() - self.spny.sum())**2)
+    # def eval_nystrom_trace(self):
+    #     """
+    #     Returns the squared difference between the spectrum in ``self.sp`` and the nystrom spectrum in ``self.spny``
+    #     """
+    #     # je pourrais choisir jusqu'où je somme mais pour l'instant je somme sur l'ensemble du spectre 
+    #     return((self.sp.sum() - self.spny.sum())**2)
     
-    def eval_nystrom_spectrum(self):
-        """
-        Returns the squared difference between each eigenvalue of the spectrum in ``self.sp`` and each eigenvalue of the nystrom spectrum in ``self.spny``
-        """
-        return([ (lny.item() - l.item())**2 for lny,l in zip(self.spny,self.sp)])
+    # def eval_nystrom_spectrum(self):
+    #     """
+    #     Returns the squared difference between each eigenvalue of the spectrum in ``self.sp`` and each eigenvalue of the nystrom spectrum in ``self.spny``
+    #     """
+    #     return([ (lny.item() - l.item())**2 for lny,l in zip(self.spny,self.sp)])
 
-    def eval_nystrom_discriminant_axis(self,nystrom=1,t=None,m=None):
-        # a adapter au GPU
-        # j'ai pas du tout réfléchi à la version test_data, j'ai juste fait en sorte que ça marche au niveau des tailles de matrices donc il y a peut-être des erreurs de logique
+    # def eval_nystrom_discriminant_axis(self,nystrom=1,t=None,m=None):
+    #     # a adapter au GPU
+    #     # j'ai pas du tout réfléchi à la version test_data, j'ai juste fait en sorte que ça marche au niveau des tailles de matrices donc il y a peut-être des erreurs de logique
 
-        n1,n2 = (self.n1,self.n2)
-        ntot = n1+n2
-        m1,m2 = (self.nxlandmarks,self.nylandmarks)
-        mtot = m1+m2
+    #     n1,n2 = (self.n1,self.n2)
+    #     ntot = n1+n2
+    #     m1,m2 = (self.nxlandmarks,self.nylandmarks)
+    #     mtot = m1+m2
 
-        mtot=self.nxlandmarks + self.nylandmarks
-        ntot= self.n1 + self.n2
+    #     mtot=self.nxlandmarks + self.nylandmarks
+    #     ntot= self.n1 + self.n2
         
-        t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
-        m = mtot if m is None else m
+    #     t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
+    #     m = mtot if m is None else m
         
-        kmn   = self.compute_kmn(test_data=False)
-        kmn_test   = self.compute_kmn(test_data=True)
-        kny   = self.compute_gram(landmarks=True)
-        k     = self.compute_gram(landmarks=False,test_data=False)
-        Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
-        Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False,test_data=False)
+    #     kmn   = self.compute_kmn(test_data=False)
+    #     kmn_test   = self.compute_kmn(test_data=True)
+    #     kny   = self.compute_gram(landmarks=True)
+    #     k     = self.compute_gram(landmarks=False,test_data=False)
+    #     Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
+    #     Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False,test_data=False)
         
-        Vny  = self.evny[:m]
-        V    = self.ev[:t] 
-        spny = self.spny[:m]
-        sp   = self.sp[:t]
+    #     Vny  = self.evny[:m]
+    #     V    = self.ev[:t] 
+    #     spny = self.spny[:m]
+    #     sp   = self.sp[:t]
 
-        mny1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
-        mny2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
-        m_mtot = torch.cat((mny1, mny2), dim=0) # .to(device)
+    #     mny1   = -1/m1 * torch.ones(m1, dtype=torch.float64) #, device=device) 
+    #     mny2   = 1/m2 * torch.ones(m2, dtype=torch.float64) # , device=device)
+    #     m_mtot = torch.cat((mny1, mny2), dim=0) # .to(device)
         
 
-        mn1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
-        mn2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
-        m_ntot = torch.cat((mn1, mn2), dim=0) #.to(device)
+    #     mn1    = -1/n1 * torch.ones(n1, dtype=torch.float64) # , device=device)
+    #     mn2    = 1/n2 * torch.ones(n2, dtype=torch.float64) # , device=device) 
+    #     m_ntot = torch.cat((mn1, mn2), dim=0) #.to(device)
         
-        # mn1_test    = -1/n1_test * torch.ones(n1_test, dtype=torch.float64) # , device=device)
-        # mn2_test    = 1/n2_test * torch.ones(n2_test, dtype=torch.float64) # , device=device) 
-        # m_ntot_test = torch.cat((mn1_test, mn2_test), dim=0) #.to(device)
+    #     # mn1_test    = -1/n1_test * torch.ones(n1_test, dtype=torch.float64) # , device=device)
+    #     # mn2_test    = 1/n2_test * torch.ones(n2_test, dtype=torch.float64) # , device=device) 
+    #     # m_ntot_test = torch.cat((mn1_test, mn2_test), dim=0) #.to(device)
         
-        vpkm    = mv(torch.chain_matmul(V,Pbi,k),m_ntot)
-        vpkm_ny = mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test) if nystrom==1 else \
-                  mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)
+    #     vpkm    = mv(torch.chain_matmul(V,Pbi,k),m_ntot)
+    #     vpkm_ny = mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test) if nystrom==1 else \
+    #               mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)
 
-        norm_h   = (ntot**-1 * sp**-2   * mv(torch.chain_matmul(V,Pbi,k),m_ntot)**2).sum()**(1/2)
-        norm_hny = (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test)**2).sum()**(1/2) if nystrom==1 else \
-                   (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)**2).sum()**(1/2)
+    #     norm_h   = (ntot**-1 * sp**-2   * mv(torch.chain_matmul(V,Pbi,k),m_ntot)**2).sum()**(1/2)
+    #     norm_hny = (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kmn_test),m_ntot_test)**2).sum()**(1/2) if nystrom==1 else \
+    #                (mtot**-1 * spny**-2 * mv(torch.chain_matmul(Vny,Pbiny,kny),m_mtot)**2).sum()**(1/2)
 
-        # print(norm_h,norm_hny)
+    #     # print(norm_h,norm_hny)
 
-        A = torch.zeros(m,t,dtype=torch.float64).addr(1/mtot*spny,1/ntot*sp) # A = outer(1/mtot*self.spny,1/ntot*self.sp)
-        B = torch.zeros(m,t,dtype=torch.float64).addr(vpkm_ny,vpkm) # B = torch.outer(vpkm_ny,vpkm)
-        C = torch.chain_matmul(Vny,Pbiny,kmn,Pbi,V.T)
+    #     A = torch.zeros(m,t,dtype=torch.float64).addr(1/mtot*spny,1/ntot*sp) # A = outer(1/mtot*self.spny,1/ntot*self.sp)
+    #     B = torch.zeros(m,t,dtype=torch.float64).addr(vpkm_ny,vpkm) # B = torch.outer(vpkm_ny,vpkm)
+    #     C = torch.chain_matmul(Vny,Pbiny,kmn,Pbi,V.T)
 
-        return(norm_h**-1*norm_hny**-1*(A*B*C).sum().item()) # <h_ny^* , h^*>/(||h_ny^*|| ||h^*||)
+    #     return(norm_h**-1*norm_hny**-1*(A*B*C).sum().item()) # <h_ny^* , h^*>/(||h_ny^*|| ||h^*||)
 
-    def eval_nystrom_eigenfunctions(self,t=None,m=None):
-        # a adapter au GPU
+    # def eval_nystrom_eigenfunctions(self,t=None,m=None):
+    #     # a adapter au GPU
 
 
-        n1,n2 = (self.n1,self.n2)
-        ntot = n1+n2
-        m1,m2 = (self.nxlandmarks,self.nylandmarks)
-        mtot = m1+m2
+    #     n1,n2 = (self.n1,self.n2)
+    #     ntot = n1+n2
+    #     m1,m2 = (self.nxlandmarks,self.nylandmarks)
+    #     mtot = m1+m2
 
-        mtot=self.nxlandmarks + self.nylandmarks
-        ntot= self.n1 + self.n2
+    #     mtot=self.nxlandmarks + self.nylandmarks
+    #     ntot= self.n1 + self.n2
         
-        t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
-        m = mtot if m is None else m
+    #     t = 60   if t is None else t # pour éviter un calcul trop long # t= self.n1 + self.n2
+    #     m = mtot if m is None else m
         
-        kmn   = self.compute_kmn()
-        Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
-        Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False)
+    #     kmn   = self.compute_kmn()
+    #     Pbiny = self.compute_covariance_centering_matrix(sample='xy',quantization=True)
+    #     Pbi   = self.compute_covariance_centering_matrix(sample='xy',quantization=False)
         
-        Vny  = self.evny[:m]
-        V    = self.ev[:t] 
-        spny = self.spny[:m]
-        sp   = self.sp[:t]
+    #     Vny  = self.evny[:m]
+    #     V    = self.ev[:t] 
+    #     spny = self.spny[:m]
+    #     sp   = self.sp[:t]
 
-        # print(((spny * mtot)**(-1/2))[:3],'\n',((sp*ntot)**-(1/2))[:3])
-        return( ((((spny * mtot)**(-1/2))*((sp*ntot)**-(1/2)*torch.chain_matmul(Vny,Pbiny,kmn,Pbi, V.T)).T).T).diag())
+    #     # print(((spny * mtot)**(-1/2))[:3],'\n',((sp*ntot)**-(1/2))[:3])
+    #     return( ((((spny * mtot)**(-1/2))*((sp*ntot)**-(1/2)*torch.chain_matmul(Vny,Pbiny,kmn,Pbi, V.T)).T).T).diag())
         
 
 

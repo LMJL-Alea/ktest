@@ -5,6 +5,11 @@ import torch
 # import apt.kmeans 
 from kmeans_pytorch import kmeans
 
+"""
+Ces fonctions déterminent permettent de déterminer les landmarks puis les ancres dans le cas de l'utilisation
+de la méthode de nystrom. 
+"""
+
 def compute_nystrom_anchors(self,sample='xy',verbose=0,outliers_in_obs=None):
     """
     Determines the nystrom anchors using 
@@ -109,10 +114,8 @@ def compute_nystrom_landmarks(self,outliers_in_obs=None,verbose=0):
         xlandmarks = xlandmarks.double()
         ylandmarks = ylandmarks.double()
 
-        self.data[f'x{landmarks_name}'] = {'data':xlandmarks,
-                    'assignations':xassignations,'n':nxlandmarks}
-        self.data[f'y{landmarks_name}'] = {'data':ylandmarks,
-                    'assignations':yassignations,'n':nylandmarks}
+        self.data['x'][landmarks_name] = {'X':xlandmarks,'assignations':xassignations,'n':nxlandmarks}
+        self.data['y'][landmarks_name] = {'X':ylandmarks,'assignations':yassignations,'n':nylandmarks}
 
         self.quantization_with_landmarks_possible = True
         
@@ -135,8 +138,8 @@ def compute_nystrom_landmarks(self,outliers_in_obs=None,verbose=0):
         xlandmarks = x[z1]
         ylandmarks = y[z2]
         
-        self.data[f'x{landmarks_name}'] = {'data':xlandmarks,'n':nxlandmarks}
-        self.data[f'y{landmarks_name}'] = {'data':ylandmarks,'n':nylandmarks}
+        self.data['x'][landmarks_name] = {'X':xlandmarks,'n':nxlandmarks}
+        self.data['y'][landmarks_name] = {'X':ylandmarks,'n':nylandmarks}
 
         # Necessaire pour remettre a false au cas ou on a déjà utilisé 'kmeans' avant 
         self.quantization_with_landmarks_possible = False

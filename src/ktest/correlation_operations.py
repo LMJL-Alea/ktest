@@ -2,6 +2,10 @@ import torch
 import numpy as np
 import pandas as pd
 
+"""
+On peut vouloir calculer la corrélation entre les variables d'origine et les directions déterminées par 
+nos méthodes. Ces fonctions permettent de le faire simplement. 
+"""
 
 def compute_corr_proj_var(self,t=None,sample='xy',which='proj_kfda',name_corr=None,
                         name_proj=None,prefix_col='',verbose=0): 

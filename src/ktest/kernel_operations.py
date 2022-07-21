@@ -3,7 +3,10 @@ import numpy as np
 from torch import mv,ones,cat,eye,zeros,ger,isnan
 from .utils import ordered_eigsy
 
-
+"""
+Les fonctions de ce fichier gèrent tout ce qui est évaluation de matrices de gram, centrage et 
+diagonalisation. 
+"""
 def compute_gram(self,sample='xy',landmarks=False,outliers_in_obs=None): 
     """
     Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 

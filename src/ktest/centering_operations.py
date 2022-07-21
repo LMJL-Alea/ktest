@@ -3,7 +3,11 @@ import numpy as np
 from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
 
-
+"""
+La plupart des quantités d'intérêt à calculer numériquement s'écrivent Ka ou PKP grace au kernel trick, avec 
+a un vecteur de poids ou P une matrice de centrage. Les fonctions de ce fichier déterminent ces vecteurs 
+de poids et matrices de centrage. 
+"""
 
 def compute_Jn_by_n(n):
     '''

@@ -1,15 +1,26 @@
 from scipy.stats import chi2
 import pandas as pd
 from ktest.tester import Tester
-from ktest.statistics import correct_BenjaminiHochberg_pval_of_dfcolumn,correct_BenjaminiHochberg_pval_of_dataframe
-import torch
 import numpy as np
-import os
 from joblib import parallel_backend
 from joblib import Parallel, delayed
-from joblib.externals.loky import set_loky_pickler
 import matplotlib.pyplot as plt
+from time import time
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.stats import chi2
+from scipy.cluster.hierarchy import dendrogram
 
+"""
+Ce fichier est un fichier fourre tout où j'ai mis la plupart des fonctions dont j'ai régulièrement 
+besoin et qui ne sont pas directement à intégrer au package, il y a notamment toute une 
+série de méta-fonctions qui me permettent de gérer plus facilement une situation où j'ai plusieurs 
+objets tester en parallèle correspondant à différents modèles ou jeux de données. 
+"""
+
+"""
+Ces fonctions calculent la stat à partir de données et renvoie directement la stat 
+L'objet tester reste en back et n'est pas accessible. 
+"""
 
 def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
 
@@ -36,62 +47,10 @@ def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
     test.mmd(name=name)
     return(test.dict_mmd)
 
-
-
-# Pour chaque simu, un param bouge tandis que les autres sont fixés. 
-# Pour un format uniforme, les param fixés sont rangés dans un dict 
-
-
-def concat_kfda_and_pval_from_parallel_simu(output_parallel_simu):
-    lkfda,lpval = [],[]
-    for l in output_parallel_simu: 
-        lkfda += [l[0]]
-        lpval += [l[1]]
-    
-    return(pd.concat(lkfda,axis=1),pd.concat(lpval,axis=1))
-
-
-def parallel_kfda_univariate(x,y,kernel='gauss_median',params_model={},n_jobs=3):
-    """
-    A function to analyse each gene in parallel using the univariate approach
-    n_job=1 : parallel code is not used, it is usefull for debugging
-    """
-
-    outputs_test = Tester()
-    outputs_test.df_power = pd.DataFrame()
-    outputs_test.infos = {}
-    # non parallel 
-    if n_jobs==1:
-        a=[]
-        for c in x.columns:
-            xc, yc = x[c].to_numpy().reshape(-1,1),y[c].to_numpy().reshape(-1,1)
-            a+=[compute_standard_kfda(xc,yc,c,kernel=kernel,params_model=params_model)]
-    elif n_jobs >1:
-        # with parallel_backend('loky'):
-        with parallel_backend('loky'):
-            a = Parallel(n_jobs=n_jobs)(delayed(compute_standard_kfda)(
-                x[variable].to_numpy().reshape(-1,1),
-                y[variable].to_numpy().reshape(-1,1),
-                variable,
-                kernel = kernel,
-                params_model=params_model,
-                ) for variable  in  x.columns)
-    kfda0,pval0 = concat_kfda_and_pval_from_parallel_simu(a)
-    outputs_test.df_kfdat = kfda0
-    outputs_test.df_pval = pval0
-    return(outputs_test)
-
-    
-def parallel_BH_correction(dict_of_df_pval,stat,t=20,n_jobs=6):
-    iter_param = list(dict_of_df_pval.keys())
-    if stat == 'mmd':        
-        with parallel_backend('loky'):
-            a = Parallel(n_jobs=n_jobs)(delayed(correct_BenjaminiHochberg_pval_of_dfcolumn)(dict_of_df_pval[param]['0']) for param  in  iter_param)
-    else: 
-        with parallel_backend('loky'):
-            a = Parallel(n_jobs=n_jobs)(delayed(correct_BenjaminiHochberg_pval_of_dataframe)(dict_of_df_pval[param],t=t) for param  in  iter_param)
-    return({k:df for k,df in zip(iter_param,a)})
-
+"""
+Dans le cas d'un grid search pour tuner plusieurs paramètres, ces fonctions 
+génèrent des tableaux de graphes pour visualiser l'influence de chaque paramètre sur les résultats. 
+"""
         
 def plot_xrowcol(res,xs,rows,cols,cats,d):
     for row in rows:
@@ -140,14 +99,28 @@ def plot_xrepcol(res,xs,reps,cols,cats,d): # pas de row mais rep
         else:
             axes[0].legend()
 
-
 ##### Functions specific to my notebooks for CRCL data and ccdf illustrations 
-from time import time
-from scipy.cluster.hierarchy import dendrogram, linkage
+"""
+J'ai souvent l'occasion de faire des tests de deux échantillons sur plus de deux jeux de données. 
+La solution simple et efficace que j'ai trouvée pour gérer les multiples instances de l'objet Tester, 
+une pour chaque couple d'échantillons comparés, consiste à nommer chaque instance et de toutes les 
+stocker dans un dictionnaire que j'appelle toujours "dict_tests". 
+Dans ce genre de situation, les données sont réutilisées plusieurs fois, je nomme chaque jeu de données 
+et le stocke dans un dictionnaire que j'appelle "dict_data". 
+En général, les noms des instances de Tester dans "dict_tests" correspondent aux noms dans "dict_data" qu'ont 
+les deux jeux de données comparés, séparés par un "_". 
+Quand je veux comparer des concaténations de jeux de données présents dans dict_data, le nom dans "dict_tests" 
+contient les noms des jeux de données séparés par une virgule ",". 
+
+Tout ça est explicité plus en détail dans la description de la fonction "add_tester_to_dict_tests_from_name_and_dict_data"
+
+Plusieurs fonctions ci-dessous servent uniquement à construire le dendrogramme d'un clustering hierarchique 
+qui prend la statistique KFDA comme metrique. La fonctions correspondante est "plot_custom_dendrogram_from_cats"
+"""
+
 
 def reduce_category(c,ct):
     return(c.replace(ct,"").replace(' ','').replace('_',''))
-
 
 def get_color_from_color_col(color_col):
     if color_col is not None:
@@ -172,8 +145,6 @@ def get_cat_from_names(names,dict_data):
         if len(df2)>10:
             cat += [cat2]
     return(list(set(cat)))
-
-
 
 def get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data):
     cat = get_cat_from_names(names,dict_data)
@@ -340,7 +311,6 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
     else:
         print(f'{name} in dict_tests')
 
-
 def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,color_col=None):
 
     cat1 = name.split(sep='_')[0]
@@ -357,7 +327,6 @@ def plot_discriminant_and_kpca_of_chosen_truncation_from_name(name,dict_tests,co
     fig.tight_layout()
     return(fig,axes)
 
-
 def plot_density_of_chosen_truncation_from_names(name,dict_tests,fig=None,ax=None,t=None,labels=None):
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,6))
@@ -372,7 +341,6 @@ def plot_density_of_chosen_truncation_from_names(name,dict_tests,fig=None,ax=Non
     # fig.suptitle(f'{cat1} vs {cat2} {infos}: pval={pval:.5f}',fontsize=30,y=1.04)
     fig.tight_layout()
     return(fig,ax)
-
 
 def plot_scatter_of_chosen_truncation_from_names(name,dict_tests,color_col=None,fig=None,ax=None,t=None):
     if fig is None:
@@ -407,27 +375,6 @@ def plot_density_of_univariate_data_from_name_and_dict_data(name,dict_data,fig=N
     fig.tight_layout()
     return(fig,ax)
 
-def plot_dendrogram_from_names(names,dict_tests,dict_data,rotlab=0,ct=''):
-    cat = get_cat_from_names(names,dict_data)
-    cat_plot = []
-    for c in cat:
-        cat_plot += [reduce_category(c,ct)]
-
-    dists = get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data)
-
-
-    fig,ax = plt.subplots(figsize=(7,7))
-    dendrogram(linkage(dists,'single'),
-               ax=ax, 
-               orientation='top',
-                labels=cat_plot,
-                distance_sort='descending',
-        
-                show_leaf_counts=True)
-    ax.set_title(ct,fontsize=20)
-    ax.tick_params(axis='x', labelrotation=rotlab,labelsize=20 )
-    return(fig,ax)
-
 def reduce_labels_and_add_ncells(cats,ct,dict_data):
     cats_labels=[]
     for cat in cats: 
@@ -442,46 +389,6 @@ def reduce_labels_and_add_ncells(cats,ct,dict_data):
             rcat =  reduce_category(cat,ct)
         cats_labels+= [f'{rcat}({ncells})']
     return cats_labels
-
-
-####################### Residual of Discrimination
-
-
-
-
-
-################# Simple visualization 
-
-def plot_density(x,y,fig=None,ax=None):
-    if fig== None:
-        fig,ax = plt.subplots(figsize=(10,6))    
-    for x,xy,color in zip([x,y],'xy',['xkcd:cerulean','xkcd:light orange']):
-        bins=int(np.floor(np.sqrt(len(x))))
-        ax.hist(x,density=True,histtype='bar',label=f'{xy}({len(x)})',alpha=.3,bins=bins,color=color)
-        ax.hist(x,density=True,histtype='step',bins=bins,lw=3,edgecolor='black')
-    return(fig,ax)
-
-def plot_scatter(xh,xv,yh,yv,fig=None,ax=None):
-    if fig== None:
-        fig,ax = plt.subplots(figsize=(10,6))    
-    for hv,xy,color,m in zip([[xh,xv],[yh,yv]],'xy',['xkcd:cerulean','xkcd:light orange'],['x','+']):
-        h,v = hv
-        ax.scatter(h,v,c=color,s=30,alpha=.8,marker =m,label=f'{xy}({len(h)})')
-    for hv,xy,color in zip([[xh,xv],[yh,yv]],'xy',['xkcd:cerulean','xkcd:light orange']):         
-        h,v = hv
-        mh = h.mean()
-        mv = v.mean()
-        ax.scatter(mh,mv,edgecolor='black',linewidths=3,s=200,color=color)
-    return(fig,ax)
-
-
-
-#### custom dendrogram 
-
-from scipy.stats import chi2
-from torch import zeros
-from scipy.cluster.hierarchy import dendrogram
-
 
 def get_kfda_from_name_and_dict_tests(name,dict_tests):
     if name in dict_tests:
@@ -499,7 +406,6 @@ def get_cat_argmin_from_similarities(similarities,dict_tests):
     c2 = s[c1].sort_values().index[0]
     kfda = s.min().min()
     return(c1,c2,kfda)
-
 
 def update_cats_from_similarities(cats,similarities,dict_tests):
     c1,c2,_ = get_cat_argmin_from_similarities(similarities,dict_tests)
@@ -526,7 +432,6 @@ def kfda_similarity_of_datasets_from_cats(cats,dict_data,dict_tests,kernel='gaus
                 similarities[c1][c2] = kfda
                 similarities[c2][c1] = kfda
     return(pd.DataFrame(similarities,index=cats,columns=cats))
-
 
 def custom_linkage2(cats,dict_data,dict_tests,kernel='gauss_median',params_model={}):
     cats = cats.copy()
@@ -575,8 +480,6 @@ def custom_linkage2(cats,dict_data,dict_tests,kernel='gauss_median',params_model
 #         print(f'id_map={id_map} \n ')
     return(Z,ordered_comparisons)
 
-
-
 def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=None,ax=None,cats_labels=None,params_model={}):
     if fig is None:
         fig,ax = plt.subplots(figsize= (10,6))
@@ -616,7 +519,6 @@ def plot_custom_dendrogram_from_cats(cats,dict_data,dict_tests,y_max=None,fig=No
 
     return(fig,ax)
 
-
 def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
     test = dict_tests[name]
     t = test.t
@@ -626,40 +528,6 @@ def dot_of_test_result_on_dendrogram(x,y,name,dict_tests,ax):
     yaccept = chi2.ppf(.95,t)
     ax.scatter(x,yaccept,s=500,c='red',alpha=.5,marker='_',)
     ax.scatter(x,y,s=300,c=c,edgecolor='black',alpha=1,linewidths=3,)
-
-
-### Comparaison M vs W 
-
-# def get_name_MvsF(ct,data_type,cts,dict_data):
-#     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
-#     name = ''
-#     for m in mwi:
-#         if 'M' in m:
-#             if ct in cts: 
-#                 for celltype in cts[ct]:
-#                     cat = f'{m}{celltype}{data_type}'
-#                     if cat in dict_data:
-#                         name += f'{cat},'
-#             else:
-#                 cat = f'{m}{ct}{data_type}'
-#                 if cat in dict_data:
-#                     name += f'{cat},'
-                
-
-#     name = name[:-1]
-#     name += '_'
-#     for m in mwi:
-#         if 'W' in m:
-#             if ct in cts: 
-#                 for celltype in cts[ct]:
-#                     cat = f'{m}{celltype}{data_type}'
-#                     if cat in dict_data:
-#                         name += f'{cat},'
-#             else:
-#                 cat = f'{m}{ct}{data_type}'
-#                 if cat in dict_data:
-#                     name += f'{cat},'
-#     return(name[:-1])
 
 def get_name_MvsF(ct,data_type,cts,dict_data):
     mwi = [f'{mw}{i}' for i in '123' for mw in 'MW']
@@ -696,80 +564,5 @@ def get_name_MvsF(ct,data_type,cts,dict_data):
     else: 
         return('')
 
-## plot 
 
-from torch import mv,dot,sqrt,abs,isnan
-
-
-
-
-
-
-def visualize_patient_celltypes_CRCL(self,t,title,outliers_in_obs=None):
-    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
-    
-    xname = dict_names['kfda_name']    
-    yname = dict_names['residuals_name']
-    
-    
-    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
-    ax = axes[0]
-    self.density_proj(t=t,labels='MF',name=xname,fig=fig,ax=ax)
-    ax.set_title(f'{title}',fontsize=30)
-
-    ax = axes[1]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='celltype',fig=fig,ax=ax,show_conditions=False)
-    ax.set_title(f'{title} \n cell type',fontsize=30)
-
-
-    ax = axes[2]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='patient',fig=fig,ax=ax,show_conditions=False)
-    ax.set_title(f'{title} \n patient',fontsize=30)
-
-    ax = axes[3]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='patient',marker='celltype',fig=fig,ax=ax,)
-    ax.set_title(f'{title} \n patient and cell type',fontsize=30)
-
-
-    fig.tight_layout()
-    
-def visualize_quality_CRCL(self,t,outliers_in_obs=None):
-    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
-    
-    xname = dict_names['kfda_name']    
-    yname = dict_names['residuals_name']
-
-    
-    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
-    ax = axes[0]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='percent.mt',fig=fig,ax=ax,show_conditions=False,outliers_in_obs=outliers_in_obs)
-    ax.set_title(f'percent.mt',fontsize=30)#,y=1.04)
-
-   
-    ax = axes[1]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='nCount_RNA',fig=fig,ax=ax,show_conditions=False,
-                      outliers_in_obs=outliers_in_obs)
-    ax.set_title(f'nCount_RNA',fontsize=30)#,y=1.04)
-
-   
-    ax = axes[2]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='nFeature_RNA',fig=fig,ax=ax,show_conditions=False,
-                      outliers_in_obs=outliers_in_obs)
-    ax.set_title(f'nFeature_RNA',fontsize=30)#,y=1.04)
-
-    ax = axes[3]
-    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
-                      projection = [t,1],color='percent.ribo',marker='celltype',fig=fig,ax=ax,
-                      outliers_in_obs=outliers_in_obs)
-    ax.set_title(f'percent.ribo',fontsize=30)#,y=1.04)
-
-    
-    fig.tight_layout()
-    
  

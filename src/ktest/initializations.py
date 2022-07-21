@@ -9,14 +9,9 @@ from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
 
 
-
-# Désuet ? 
-# def init_testdata(self,x,y,x_index=None,y_index=None,variables=None,kernel=None,name=None):
-#     if name is None:
-#         name = 'data'+len(self.dict_data)
-#     if name in self.dict_data:
-#         print(f"{name} overwritten")
-#     self.dict_data[name] = TestData(x,y,x_index,y_index,variables,kernel)
+"""
+Les fonctions de ce scripts initialisent les informations liées au modèle ou aux données dans l'objet Tester(). 
+"""
 
 
 
@@ -25,6 +20,7 @@ def init_xy(self,x,y,data_name ='data',main=True ):
     This function initializes the attributes `x` and `y` of the Tester object 
     which contain the two datasets in torch.tensors format.
 
+    A faire : mieux gérer les noms de variables des données secondaires
 
     Parameters
     ----------
@@ -62,13 +58,11 @@ def init_xy(self,x,y,data_name ='data',main=True ):
             print(f'unknown data type {type(xy)}')
         if token:
             if sxy == 'x':
-                self.data['x'][data_name] = xy
+                self.data['x'][data_name] = {'X':xy,'p':xy.shape[1]}           
                 self.data['x']['n'] = xy.shape[0]                
-                self.data['x'][f'{data_name}_p'] = xy.shape[1]
             if sxy == 'y':
-                self.data['y'][data_name] = xy
+                self.data['y'][data_name] = {'X':xy,'p':xy.shape[1]}           
                 self.data['y']['n'] = xy.shape[0]                
-                self.data['y'][f'{data_name}_p'] = xy.shape[1]
                 
             self.has_data = True
         if main:
@@ -123,9 +117,11 @@ def init_variables(self,variables = None):
         variables : the list of variable names
 
     '''
-    self.variables = range(self.data['x']['data'].shape[1]) if variables is None else variables
+    self.variables = range(self.data['x'][self.main_data]['p']) if variables is None else variables
     self.var = pd.DataFrame(index=self.variables)
     self.vard = {v:{} for v in self.variables}
+
+    
 def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0):
     '''
     This function initializes all the information concerning the data of the Tester object.
@@ -349,7 +345,18 @@ def init_model(self,approximation_cov='standard',approximation_mmd='standard',
     
     Parameters
     ----------
-
+        approximation_cov : str in 'standard','nystrom1',nystrom2','nystrom3','quantization'. 
+                            In practice, we only use 'standard' and 'nystrom3'. 
+                            It is the method used to compute the covariance structures. 
+        approximation_mmd : str (same as approximation_cov), the method used to compute
+                            the difference between the mean embeddings. 
+        m : int, the total number of landmarks. 
+        r : int, the total number of anchors. 
+        landmark_method : str in 'random','kmeans', the method to determine the landmarks. 
+        anchors_basis : str in 'k','s','w'. The anchors are determined as the eigenvectors of:  
+                        'k' : the gram matrix of the landmarks. 
+                        's' : the centered covariance of the landmarks
+                        'w' : the within group covariance of the landmarks (possible only if 'landmark_method' is 'random'.
     Returns
     ------- 
     It is not possible to use nystrom for small datasets (n<100)
@@ -366,6 +373,8 @@ def init_model(self,approximation_cov='standard',approximation_mmd='standard',
     self.landmark_method = landmark_method
     self.anchors_basis = anchors_basis
     self.approximation_mmd = approximation_mmd
+
+    self.has_model = True
 
 def verbosity(self,function_name,dict_of_variables=None,start=True,verbose=0):
     '''

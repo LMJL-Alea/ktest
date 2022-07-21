@@ -2,6 +2,12 @@ import torch
 from torch import mv
 import pandas as pd
 
+"""
+Ces fonctions calculent les coordonnées des projections des embeddings sur des sous-espaces d'intérêt 
+dans le RKHS. Sauf la projection sur ce qu'on appelle pour l'instant l'espace des résidus, comme cette 
+projection nécessite de nombreux calculs intermédiaires, elle a été encodée dans un fichier à part. 
+"""
+
 def compute_proj_kfda(self,t=None,name=None,verbose=0,outliers_in_obs=None):
     # je n'ai plus besoin de trunc, seulement d'un t max 
     """ 
@@ -136,7 +142,6 @@ def compute_proj_kpca(self,t=None,approximation_cov='standard',sample='xy',name=
                 start=False,
                 verbose = verbose)
 
-
 def compute_proj_mmd(self,approximation='standard',name=None,verbose=0,outliers_in_obs=None):
     name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{approximation}' 
     if name in self.df_proj_mmd :
@@ -170,8 +175,6 @@ def compute_proj_mmd(self,approximation='standard',name=None,verbose=0,outliers_
                 'name':name},
                 start=False,
                 verbose = verbose)
-
-
 
 def init_df_proj(self,which,name=None,outliers_in_obs=None):
     # if name is None:

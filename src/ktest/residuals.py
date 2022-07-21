@@ -6,7 +6,11 @@ from numpy import sqrt
 from .utils import ordered_eigsy
 import pandas as pd
 
-
+"""
+Tout ce qui est en rapport avec le calcul des résidus. 
+Les résidus pour la troncature t sont définis comme les directions
+ d'une ACP sur l'orthogonal de l'axe discriminant correspondant à la troncature t.  
+"""
         ####
 def compute_discriminant_axis_qh(self,t=None,outliers_in_obs=None):
     '''
@@ -268,7 +272,7 @@ def get_between_covariance_projection_error(self,outliers_in_obs=None,return_tot
     delta = sqrt(dot(om,mv(K,om))) # || mu2 - mu1 || = wKw
 
     
-    if self.data['x'][f'data_p'] == 1:
+    if self.data['x'][self.main_data]['p'] == 1:
         # les abérations numériques semblent ne se produire que sur les données univariées. 
         # print('between reconstruction is not exact')
         delta = mmdt[-1]

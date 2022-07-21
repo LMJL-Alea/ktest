@@ -5,6 +5,9 @@ import scipy as sc
 # Pour tout plein de distributions clé en main
 # https://docs.scipy.org/doc/numpy-1.15.0/reference/routines.random.html
 
+"""
+Génération de variables aléatoires multivariées pour des simulations. 
+ """
 
 P,D,N,S = 10,50,10,0.01
 DI,DN = 5,5

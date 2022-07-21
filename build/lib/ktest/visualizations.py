@@ -574,6 +574,10 @@ def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=N
             x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
             y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
             
+            if highlight is not None and type(highlight)==str:
+                if highlight in self.obs and self.obs[highlight].dtype == bool:
+                    highlight = self.obs[self.obs[highlight]].index
+
             if highlight is not None and vprop['index'].isin(highlight).sum()>0:
                 
                 ihighlight = vprop['index'][vprop['index'].isin(highlight)]
@@ -953,7 +957,7 @@ def plot_pval_and_errors(self,column,outliers=None,truncations_of_interest=[1],t
     n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers)
     ax.set_title(f'n1={n1} vs n2={n2}',fontsize=30)
     pval = self.df_pval[column][1]
-    text=  f'{pval:.2f}' if pval >=.1 else f'{pval:1.0e}'
+    text=  f'{pval:.2f}' if pval >=.01 else f'{pval:1.0e}'
     replace_label(ax,0,f'p-value  (t=1:{text})')
     
     return(fig,ax)
@@ -989,8 +993,8 @@ def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',colum
     
     ax = axes[2]
     self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
-    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
-    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
     ax.legend()
     ax.set_xlabel('Truncation',fontsize=30)
     ax.set_ylabel('Errors or pval',fontsize=30)
@@ -999,8 +1003,8 @@ def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',colum
     
     ax = axes[3]
     self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
-    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
-    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=oname)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=oname)
     ax.legend()
     ax.set_xlabel('Truncation',fontsize=30)
     ax.set_ylabel('Errors or pval',fontsize=30)
@@ -1035,8 +1039,8 @@ def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_data
     
     ax = axes[1]
     self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
-    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
-    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=outliers_in_obs)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
     ax.legend()
     ax.set_xlabel('Truncation',fontsize=30)
     ax.set_ylabel('Errors or pval',fontsize=30)
@@ -1045,8 +1049,8 @@ def what_if_we_ignored_cells_by_outliers_list(self,outliers,oname,column_in_data
     
     ax = axes[2]
     self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
-    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,xmax=20,outliers_in_obs=oname)
-    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,xmax=20,outliers_in_obs=oname)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=oname)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=oname)
     ax.legend()
     ax.set_xlabel('Truncation',fontsize=30)
     ax.set_ylabel('Errors or pval',fontsize=30)
@@ -1075,4 +1079,99 @@ def prepare_visualization(self,t,outliers_in_obs=None):
             'proj_kfda_name':proj_kfda_name
             })
 
+def visualize_patient_celltypes_CRCL(self,t,title,outliers_in_obs=None):
+    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
     
+    xname = dict_names['kfda_name']    
+    yname = dict_names['residuals_name']
+    
+    
+    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
+    ax = axes[0]
+    self.density_proj(t=t,labels='MF',name=xname,fig=fig,ax=ax)
+    ax.set_title(f'{title}',fontsize=30)
+
+    ax = axes[1]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='celltype',fig=fig,ax=ax,show_conditions=False)
+    ax.set_title(f'{title} \n cell type',fontsize=30)
+
+
+    ax = axes[2]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='patient',fig=fig,ax=ax,show_conditions=False)
+    ax.set_title(f'{title} \n patient',fontsize=30)
+
+    ax = axes[3]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='patient',marker='celltype',fig=fig,ax=ax,)
+    ax.set_title(f'{title} \n patient and cell type',fontsize=30)
+
+    fig.tight_layout()
+    
+def visualize_quality_CRCL(self,t,outliers_in_obs=None):
+    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
+    
+    xname = dict_names['kfda_name']    
+    yname = dict_names['residuals_name']
+
+    
+    fig,axes = plt.subplots(ncols=4,figsize=(35,10))
+    ax = axes[0]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='percent.mt',fig=fig,ax=ax,show_conditions=False,outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'percent.mt',fontsize=30)#,y=1.04)
+
+   
+    ax = axes[1]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='nCount_RNA',fig=fig,ax=ax,show_conditions=False,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'nCount_RNA',fontsize=30)#,y=1.04)
+
+   
+    ax = axes[2]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='nFeature_RNA',fig=fig,ax=ax,show_conditions=False,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'nFeature_RNA',fontsize=30)#,y=1.04)
+
+    ax = axes[3]
+    self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color='percent.ribo',marker='celltype',fig=fig,ax=ax,
+                      outliers_in_obs=outliers_in_obs)
+    ax.set_title(f'percent.ribo',fontsize=30)#,y=1.04)
+
+    
+    fig.tight_layout()
+    
+def visualize_effect_graph_CRCL(self,t,title,
+                                effects=['celltype','patient',['patient','celltype']],
+                                outliers_in_obs=None,
+                                labels='MF'):
+    
+    dict_names = self.prepare_visualization(t=t,outliers_in_obs=outliers_in_obs)
+    
+    xname = dict_names['kfda_name']    
+    yname = dict_names['residuals_name']
+    
+    ncols = len(effects)+1
+    
+    fig,axes = plt.subplots(ncols=ncols,figsize=(10*ncols,10))
+    
+    
+    ax = axes[0]
+    self.density_proj(t=t,labels=labels,name=xname,fig=fig,ax=ax)
+    ax.set_title(f'{title}',fontsize=30)
+
+    for effect,ax in zip(effects,axes[1:]):
+        if type(effect) == str:
+            self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color=effect,fig=fig,ax=ax,show_conditions=False)
+            ax.set_title(f'{title} \n {effect}',fontsize=30)
+        elif type(effect)== list:
+            self.scatter_proj(xproj='proj_kfda',xname = xname,yproj='proj_residuals',yname =yname,
+                      projection = [t,1],color=effect[0],marker=effect[1],fig=fig,ax=ax,)
+            ax.set_title(f'{title} \n {effect[0]} and {effect[1]}',fontsize=30)
+    fig.tight_layout()
+

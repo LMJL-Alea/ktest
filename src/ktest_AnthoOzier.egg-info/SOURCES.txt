@@ -14,6 +14,7 @@ src/ktest/kernel_operations.py
 src/ktest/kernels.py
 src/ktest/nystrom_operations.py
 src/ktest/projection_operations.py
+src/ktest/pvalues.py
 src/ktest/residuals.py
 src/ktest/rv_gen.py
 src/ktest/scutils.py
