@@ -52,7 +52,7 @@ def init_xy(self,x,y,data_name ='data',main=True ):
         elif isinstance(xy, np.ndarray):
             xy = torch.from_numpy(xy).double()
         elif isinstance(xy,torch.Tensor):
-            xy = xy
+            xy = xy.double()
         else : 
             token = False
             print(f'unknown data type {type(xy)}')
@@ -365,8 +365,6 @@ def init_model(self,approximation_cov='standard',approximation_mmd='standard',
     
 
     n1,n2,n = self.get_n1n2n()
-    if "nystrom" in approximation_cov and (n1<100 or n2<100): 
-        self.approximation_cov = 'standard'
     self.approximation_cov = approximation_cov
     self.m = m
     self.r = r

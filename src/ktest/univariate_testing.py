@@ -203,10 +203,10 @@ def update_var_from_dataframe(self,df):
             token = True
             nbef = sum(self.var[c]==1)
         if c not in self.var:
-            self.var[c] = df[c].astype('float64')
+            self.var[c] = df[c].astype('float64').copy()
         else:
             print('update',end= '|')
-            self.var[c].update(df[c].astype('float64'))
+            self.var[c].update(df[c].astype('float64')).copy()
         if token:
             naft = sum(self.var[c]==1)
             print(f'\n tested from {nbef} to {naft}')

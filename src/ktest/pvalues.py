@@ -91,7 +91,7 @@ def correct_BenjaminiHochberg_pval_univariate(self,var_prefix,exceptions=[],focu
     pval = pval[~pval.index.isin(exceptions)]
     pval = pval[~pval.isna()]
     pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
-    self.var[f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH
+    self.var[f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
 
 def get_rejected_variables_univariate(self,var_prefix,BH=False):
     BH_str = 'BHc' if BH else ''

@@ -254,7 +254,6 @@ def get_between_covariance_projection_error(self,outliers_in_obs=None,return_tot
     
     if cov != 'standard':
         m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
-        r = self.r
         anchors_basis = self.anchors_basis
         suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
         anchor_name = f'{anchors_basis}{suffix_outliers}'
