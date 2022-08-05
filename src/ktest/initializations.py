@@ -122,7 +122,7 @@ def init_variables(self,variables = None):
     self.vard = {v:{} for v in self.variables}
 
     
-def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0):
+def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0,data_name='data'):
     '''
     This function initializes all the information concerning the data of the Tester object.
 
@@ -165,7 +165,8 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
             - the effects are separated by a '_'
             exemple : '#-celltype_+patient'
 
-
+        data_name (default : 'data') : str,
+            the name of the data in the structure data 
 
     Attributes Initialized
     ---------- ----------- 
@@ -195,7 +196,7 @@ def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,df
         dfy = dfy.to_frame(name='univariate')
     
     self.verbose = verbose
-    self.init_xy(dfx,dfy)
+    self.init_xy(dfx,dfy,data_name=data_name)
     self.init_index_xy(dfx.index,dfy.index)
     
     self.init_variables(dfx.columns)
