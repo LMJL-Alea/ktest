@@ -10,7 +10,7 @@ class Kfdat:
         compute_kmn,\
        compute_within_covariance_centered_gram,\
         compute_covariance_centering_matrix,\
-        diagonalize_centered_gram
+        diagonalize_within_covariance_centered_gram
     
 
     from .nystrom_operations import \

@@ -13,6 +13,17 @@ import torch
 from torch import mv,dot,sum,cat,tensor,float64
 from time import time
 
+
+def text_truncations_of_interest(truncations_of_interest,ax,values):
+    texts = []
+    for t in set(truncations_of_interest):
+        valt = values[t]
+        text = f'{valt:.2f}' if valt >=.01 else f'{valt:1.0e}'
+        ax.scatter(x=t,y=valt,s=20)
+        texts += [ax.text(t,valt,text,fontsize=20)]
+    adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+        
+
 def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None):
 
     assert(t is not None)
@@ -171,14 +182,16 @@ def plot_spectrum(self,fig=None,ax=None,t=None,title=None,sample='xy',anchors=Fa
         sp = self.spev[sample][name_spev]['sp']
 
     if truncations_of_interest is not None:
-        texts = []
-        for t in set(truncations_of_interest):
-            if len(sp)>t-1:
-                spt = sp[t-1]
-                text = f'{spt:.2f}' if spt >=.01 else f'{spt:1.0e}'
-                ax.scatter(x=t,y=spt,s=20)
-                texts += [ax.text(t,spt,text,fontsize=20)]
-        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+        values = cat(tensor(0),sp)
+        text_truncations_of_interest(truncations_of_interest,ax,values)
+        # texts = []
+        # for t in set(truncations_of_interest):
+        #     if len(sp)>t-1:
+        #         spt = sp[t-1]
+        #         text = f'{spt:.2f}' if spt >=.01 else f'{spt:1.0e}'
+        #         ax.scatter(x=t,y=spt,s=20)
+        #         texts += [ax.text(t,spt,text,fontsize=20)]
+        # adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
     
     t = len(sp) if t is None else min(t,len(sp))
     trunc = range(1,t)
@@ -876,14 +889,14 @@ def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,out
 
 
 
-def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
+def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name='explained variance',fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
     
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
 
     
     trace = self.get_trace(outliers_in_obs=outliers_in_obs)
-    label = f'{name} tr($\Sigma_W$) = {trace:.3e}'
+    label = name # tr($\Sigma_W$) = {trace:.3e}'
 
     explained_variance = self.get_explained_variance(outliers_in_obs=outliers_in_obs)
     explained_variance = cat([tensor([0],dtype=float64),explained_variance])
@@ -903,18 +916,19 @@ def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name,fig=
     xmax = len(expvar) if t is None else t
     
     ax.set_xlim(-1,xmax)
-    ax.set_xticks(np.arange(0,xmax))
+    xticks = np.arange(0,xmax) if xmax<20 else np.arange(0,xmax,2) if xmax<50 else np.arange(0,xmax,5) if xmax<200 else np.arange(0,xmax,10) if xmax < 500 else np.arange(0,xmax,20)
+    ax.set_xticks(xticks)
     return(fig,ax)
 
   
-def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
+def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
     if fig is None:
         fig,ax = plt.subplots(figsize=(7,7))
     projection_error,delta = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs,return_total=True)
     projection_error = cat([tensor([0],dtype=float64),projection_error])
     errorB = 1 - projection_error
     trunc = np.arange(0,len(errorB))
-    label = f'{name} of {delta:.3e}'
+    label = name #of {delta:.3e}'
     if scatter:
         ax.scatter(trunc,errorB)
         ax.plot(trunc,errorB,label=label,lw=.8,alpha=.5)
@@ -928,7 +942,8 @@ def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name,fig
     xmax = len(errorB) if t is None else t
     
     ax.set_xlim(-1,xmax)
-    ax.set_xticks(np.arange(0,xmax))
+    xticks = np.arange(0,xmax) if xmax<20 else np.arange(0,xmax,2) if xmax<50 else np.arange(0,xmax,5) if xmax<200 else np.arange(0,xmax,10) if xmax < 500 else np.arange(0,xmax,20)
+    ax.set_xticks(xticks)
     return(fig,ax)
 
 
@@ -938,18 +953,20 @@ def plot_pval_and_errors(self,column,outliers=None,truncations_of_interest=[1],t
     if fig is None:
         fig,ax = plt.subplots(ncols=1,figsize=(12,8))
     self.plot_pvalue(fig=fig,ax=ax,t=t,column = column,)
-    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',
-                                                                        fig,ax,t=t,outliers_in_obs=outliers)
-    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',
-                                                                       fig,ax,t=t,outliers_in_obs=outliers)
+    self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'explained difference',
+                                                                        fig,ax,t=t,outliers_in_obs=outliers,scatter=False)
+    self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'explained variance',
+                                                                       fig,ax,t=t,outliers_in_obs=outliers,scatter=False)
     if truncations_of_interest is not None:
-        texts = []
-        for t in set(truncations_of_interest):
-            pvalt = self.df_pval[column][t]
-            text = f'{pvalt:.2f}' if pvalt >=.01 else f'{pvalt:1.0e}'
-            ax.scatter(x=t,y=pvalt,s=20)
-            texts += [ax.text(t,pvalt,text,fontsize=20)]
-        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+        values = self.df_pval[column]
+        text_truncations_of_interest(truncations_of_interest,ax,values)
+        # texts = []
+        # for t in set(truncations_of_interest):
+        #     pvalt = self.df_pval[column][t]
+        #     text = f'{pvalt:.2f}' if pvalt >=.01 else f'{pvalt:1.0e}'
+        #     ax.scatter(x=t,y=pvalt,s=20)
+        #     texts += [ax.text(t,pvalt,text,fontsize=20)]
+        # adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
             
     ax.legend(fontsize=20)
     ax.set_xlabel('Truncation',fontsize=30)
@@ -958,7 +975,7 @@ def plot_pval_and_errors(self,column,outliers=None,truncations_of_interest=[1],t
     ax.set_title(f'n1={n1} vs n2={n2}',fontsize=30)
     pval = self.df_pval[column][1]
     text=  f'{pval:.2f}' if pval >=.01 else f'{pval:1.0e}'
-    replace_label(ax,0,f'p-value  (t=1:{text})')
+    replace_label(ax,0,f'p-value')
     
     return(fig,ax)
 

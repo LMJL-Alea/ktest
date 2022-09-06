@@ -5,7 +5,7 @@ from .kernel_operations import \
     center_gram_matrix_with_respect_to_some_effects, \
     compute_kmn, \
     center_kmn_matrix_with_respect_to_some_effects,\
-    diagonalize_centered_gram,\
+    diagonalize_within_covariance_centered_gram,\
     compute_within_covariance_centered_gram
 
 from .centering_operations import \
