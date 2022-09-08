@@ -2,7 +2,7 @@ Metadata-Version: 2.1
 Name: ktest-AnthoOzier
 Version: 0.0.1
 Summary: Package implementing efficient kernel tests such as MMD or mKFDR
-Home-page: https://github.com/AnthoOzier/ktest
+Home-page: https://github.com/AnthoOzier/ktest.git
 Author: Anthony Ozier-Lafontaine
 Author-email: anthony.ozier-lafontaine@ec-nantes.fr
 Project-URL: Bug Tracker, https://github.com/AnthoOzier/ktest/issues

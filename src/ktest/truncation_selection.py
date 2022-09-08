@@ -1,3 +1,4 @@
+from ktest.residuals import Residuals
 from torch import cat,tensor,float64
 import numpy as np
 from numpy import where
@@ -11,55 +12,59 @@ quelle troncature on peut aller avec une erreur de type I contrôllée.
 On choisit à terme la plus grande troncature qui contrôle cette erreur.  
 """
 
+class TruncationSelection(Residuals):
 
-def select_trunc_by_between_reconstruction_ratio(self,ratio,outliers_in_obs=None):
-    pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
-    pe = cat([tensor([0],dtype =float64),pe])
-    pe = 1-pe
-    return(where(pe<ratio)[0][0])
+    def __init__(self):
+        super(TruncationSelection,self).__init__()
 
-    
-def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max',outliers_in_obs=None):
-    pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
-    pe = cat([tensor([0],dtype =float64),pe])
-    pe = 1-pe
-    
-    pen = 1+ (kmax-1)* (pe[kmax]-pe)/(pe[kmax] - pe[1])
-    D2 = np.diff(np.diff(pen))
-    sel = np.where(D2>S)[0]
-    fil = sel[sel<kmax]
+    def select_trunc_by_between_reconstruction_ratio(self,ratio,outliers_in_obs=None):
+        pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
+        pe = cat([tensor([0],dtype =float64),pe])
+        pe = 1-pe
+        return(where(pe<ratio)[0][0])
 
-    if len(fil)>0:
-        if which_ressaut == 'max':
-            tressaut = fil[np.argmax(D2[fil])] +1
-            
-        elif which_ressaut == 'first':
-            tressaut = fil[0] +1
-        elif which_ressaut == 'second':
-            if len(fil)>1:
-                tressaut = fil[1] +1
-            else: 
+        
+    def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max',outliers_in_obs=None):
+        pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
+        pe = cat([tensor([0],dtype =float64),pe])
+        pe = 1-pe
+        
+        pen = 1+ (kmax-1)* (pe[kmax]-pe)/(pe[kmax] - pe[1])
+        D2 = np.diff(np.diff(pen))
+        sel = np.where(D2>S)[0]
+        fil = sel[sel<kmax]
+
+        if len(fil)>0:
+            if which_ressaut == 'max':
                 tressaut = fil[np.argmax(D2[fil])] +1
+                
+            elif which_ressaut == 'first':
+                tressaut = fil[0] +1
+            elif which_ressaut == 'second':
+                if len(fil)>1:
+                    tressaut = fil[1] +1
+                else: 
+                    tressaut = fil[np.argmax(D2[fil])] +1
 
-        elif which_ressaut == 'third':
-            if len(fil)>2:
-                tressaut = fil[2] +1
-            else: 
-                tressaut = fil[np.argmax(D2[fil])] +1                
-    else:
-        tressaut = 1
+            elif which_ressaut == 'third':
+                if len(fil)>2:
+                    tressaut = fil[2] +1
+                else: 
+                    tressaut = fil[np.argmax(D2[fil])] +1                
+        else:
+            tressaut = 1
 
-    #     print('pe',np.diff(pe)[:10])#     print('selected',sel)
-    #     print('filtered',fil)#     print('values',val)
-    
-    return(tressaut)
+        #     print('pe',np.diff(pe)[:10])#     print('selected',sel)
+        #     print('filtered',fil)#     print('values',val)
+        
+        return(tressaut)
 
 
-def select_trunc(self,selection_procedure='ressaut',selection_params={}):
-    if selection_procedure == 'ressaut':
-        self.t = self.select_trunc_by_between_reconstruction_ressaut(**selection_params)
-    if selection_procedure == 'ratio':
-        self.t = self.select_trunc_by_between_reconstruction_ratio(**selection_params)
+    def select_trunc(self,selection_procedure='ressaut',selection_params={}):
+        if selection_procedure == 'ressaut':
+            self.t = self.select_trunc_by_between_reconstruction_ressaut(**selection_params)
+        if selection_procedure == 'ratio':
+            self.t = self.select_trunc_by_between_reconstruction_ratio(**selection_params)
 
 
 # def get_trunc(self):

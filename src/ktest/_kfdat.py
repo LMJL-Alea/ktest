@@ -4,7 +4,7 @@ from ktest._testdata import TestData
 
 class Kfdat:
 
-    from .kernel_operations import \
+    from .gram_matrices import \
         compute_gram,\
         compute_omega,\
         compute_kmn,\
