@@ -1,7 +1,7 @@
 from .utils import ordered_eigsy
 import numpy as np
 import torch
-
+import pandas as pd
 # import apt.kmeans 
 from kmeans_pytorch import kmeans
 
@@ -10,6 +10,7 @@ from ktest.base import Data,Model
 from ktest.outliers_operations import OutliersOps
 from ktest.verbosity import Verbosity
 
+from .utils import get_landmarks_name,get_kmeans_landmarks_name_for_sample
 
 """
 Ces fonctions déterminent permettent de déterminer les landmarks puis les ancres dans le cas de l'utilisation
@@ -19,88 +20,164 @@ class NystromOps(Model,OutliersOps,Verbosity):
     def __init__(self):
         super(NystromOps,self).__init__()
 
-    def compute_nystrom_landmarks(self,outliers_in_obs=None,verbose=0):
-        # anciennement compute_nystrom_anchors(self,r,nystrom_method='kmeans',split_data=False,test_size=.8,on_other_data=False,x_other=None,y_other=None,verbose=0): # max_iter=1000, (pour kmeans de François)
-        
+    def compute_nystrom_landmarks(self,groups='sample',samples='all',outliers_in_obs=None,verbose=0,data_name=None):
         """
-        Problème des landmarks : on perd l'info 
-
-        We distinguish the nystrom landmarks and nystrom anchors.
-        The nystrom landmarks are the points from the observation space that will be used to compute the nystrom anchors. 
-        The nystrom anchors are the points in the RKHS computed from the nystrom landmarks on which we will apply the nystrom method. 
-
+        The nystrom landmarks are the vectors of the RKHS from which we determine the anchors in the nystrom method.  
+        
         Parameters
         ----------
-        m:    (1/10 * n if None)  number of landmarks in total (proportionnaly sampled according to the data)
-        landmark_method: 'kmeans' or 'random' (in the future : 'kmeans ++, greedy...)
+            groups (default:'sample') : str
+
+            samples (default:'all'): str or iterable
+
+            outliers_in_obs (default:None) : str 
+
+            data_name (default:None) : str
+
         """
 
         self.verbosity(function_name='compute_nystrom_landmarks',
-                        dict_of_variables={'m':self.m,'landmark_method':self.landmark_method},
+                        dict_of_variables={'groups':groups,'outliers_in_obs':outliers_in_obs},
                         start=True,
                         verbose = verbose)
-            
-        landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
-        x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
-        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
-        xratio,yratio = n1/n, n2/n
 
-        if self.m is None:
-            if verbose >0:
+        dict_index = self.get_index(groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
+        dict_nobs  =  self.get_nobs(groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
+        ntot = dict_nobs['ntot']
+        
+
+        if self.m is None and verbose >0:
                 print("m not specified, by default, m = (n1+n2)//10")
-            self.m = n//10
-
-        if self.landmark_method is None:
-            if verbose >0:
+        if self.landmark_method is None and verbose >0:
                 print("landmark_method not specified, by default, landmark_method='random'")
-            self.landmark_method = 'random'
+        self.m = ntot//10 if self.m is None else self.m
+        self.landmark_method = 'random' if self.landmark_method is None else self.landmark_method       
         
-        nxlandmarks=np.int(np.floor(xratio * self.m)) 
-        nylandmarks=np.int(np.floor(yratio * self.m))
+        dict_nlandmarks = {k:int(np.floor(n/ntot*self.m)) for k,n in dict_nobs.items() if k!='ntot'}
+        landmarks_name = get_landmarks_name(outliers_in_obs,groups,samples,self.landmark_method)
         
 
-        if self.landmark_method == 'kmeans':
-            xassignations,xlandmarks = kmeans(X=x, num_clusters=nxlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
-            yassignations,ylandmarks = kmeans(X=y, num_clusters=nylandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
-            xlandmarks = xlandmarks.double()
-            ylandmarks = ylandmarks.double()
-
-            self.data['x'][landmarks_name] = {'X':xlandmarks,'assignations':xassignations,'n':nxlandmarks}
-            self.data['y'][landmarks_name] = {'X':ylandmarks,'assignations':yassignations,'n':nylandmarks}
-
-            self.quantization_with_landmarks_possible = True
+        # for kmeans, a new dataset containing the centroïds is added to self.data 
+        if self.landmark_method =='kmeans':
+            # load data to determine kmeans centroids
+            if data_name is None:
+                data_name = self.current_data_name
+            dict_data = self.get_data(data_name,groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
             
+            # determine kmeans centroids and assignations
+            for sample in dict_data.keys():
+                # determine centroids
+                x,index,nlandmarks = dict_data[sample],dict_index[sample],dict_nlandmarks[sample]
+                
+                assignations,landmarks = kmeans(X=x, num_clusters=nlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+                landmarks = landmarks.double()
+                
+                # save results 
+                kmeans_landmarks_name = get_kmeans_landmarks_name_for_sample(outliers_in_obs,groups,samples,self.landmark_method,sample,data_name)
+                self._update_dict_data(landmarks,kmeans_landmarks_name)
+                self._update_index(nlandmarks,index=None,data_name=kmeans_landmarks_name)
 
+                self.obs[kmeans_landmarks_name] = pd.DataFrame(assignations,index=index)
+
+                self.quantization_with_landmarks_possible = True
+
+        # for random, we only add a column of booleans to identify the sampled landmarks  
         elif self.landmark_method == 'random':
-            
-            z1 = np.random.choice(n1, size=nxlandmarks, replace=False)
-            z2 = np.random.choice(n2, size=nylandmarks, replace=False)
-            
-            xindex = self.get_index(sample='x')
-            yindex = self.get_index(sample='y')
-
-            self.add_outliers_in_obs(xindex[z1],f'x{landmarks_name}')
-            self.add_outliers_in_obs(yindex[z2],f'y{landmarks_name}')
-
-            # on pourrait s'arrêter là et construire la matrice des landmarks a chaque fois qu'on appelle get_xy
-            # et calculer facilement nlandmarks quand on appelle get_n1n2n. 
-            # mais ça se généralise mal à l'approche kmeans donc pour l'instant je garde les deux versions.  
-
-            xlandmarks = x[z1]
-            ylandmarks = y[z2]
-            
-            self.data['x'][landmarks_name] = {'X':xlandmarks,'n':nxlandmarks}
-            self.data['y'][landmarks_name] = {'X':ylandmarks,'n':nylandmarks}
-
-            # Necessaire pour remettre a false au cas ou on a déjà utilisé 'kmeans' avant 
-            self.quantization_with_landmarks_possible = False
+            for sample in dict_index.keys():
+                ni,index,nlandmarks = dict_nobs[sample],dict_index[sample],dict_nlandmarks[sample]
+                if ni < nlandmarks:
+                    print(f'problem in nystrom landmarks : {sample} has {ni} obs for {nlandmarks} landmarks')
+                z = np.random.choice(ni,size=nlandmarks,replace=False)
+                
+                self.add_outliers_in_obs(index[z],f'{sample}_{landmarks_name}')
+                self.quantization_with_landmarks_possible = False
 
         self.has_landmarks= True
 
         self.verbosity(function_name='compute_nystrom_landmarks',
-                        dict_of_variables={'m':self.m,'landmark_method':self.landmark_method},
+                        dict_of_variables={'groups':groups,'outliers_in_obs':outliers_in_obs},
                         start=False,
                         verbose = verbose)
+
+    def compute_nystrom_landmarks_new(self,groups='sample',samples='all',outliers_in_obs=None,verbose=0,data_name=None):
+        """
+        The nystrom landmarks are the vectors of the RKHS from which we determine the anchors in the nystrom method.  
+        
+        Parameters
+        ----------
+            groups (default:'sample') : str
+
+            samples (default:'all'): str or iterable
+
+            outliers_in_obs (default:None) : str 
+
+            data_name (default:None) : str
+
+        """
+
+        self.verbosity(function_name='compute_nystrom_landmarks',
+                        dict_of_variables={'groups':groups,'outliers_in_obs':outliers_in_obs},
+                        start=True,
+                        verbose = verbose)
+
+        dict_index = self.get_index(groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
+        dict_nobs  =  self.get_nobs(groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
+        ntot = dict_nobs['ntot']
+        
+
+        if self.m is None and verbose >0:
+                print("m not specified, by default, m = (n1+n2)//10")
+        if self.landmark_method is None and verbose >0:
+                print("landmark_method not specified, by default, landmark_method='random'")
+        self.m = ntot//10 if self.m is None else self.m
+        self.landmark_method = 'random' if self.landmark_method is None else self.landmark_method       
+        
+        dict_nlandmarks = {k:int(np.floor(n/ntot*self.m)) for k,n in dict_nobs.items() if k!='ntot'}
+        landmarks_name = get_landmarks_name(outliers_in_obs,groups,samples,self.landmark_method)
+        
+
+        # for kmeans, a new dataset containing the centroïds is added to self.data 
+        if self.landmark_method =='kmeans':
+            # load data to determine kmeans centroids
+            if data_name is None:
+                data_name = self.current_data_name
+            dict_data = self.get_data(data_name,groups=groups,samples=samples,landmarks=False,outliers_in_obs=outliers_in_obs)
+            
+            # determine kmeans centroids and assignations
+            for sample in dict_data.keys():
+                # determine centroids
+                x,index,nlandmarks = dict_data[sample],dict_index[sample],dict_nlandmarks[sample]
+                
+                assignations,landmarks = kmeans(X=x, num_clusters=nlandmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
+                landmarks = landmarks.double()
+                
+                # save results 
+                kmeans_landmarks_name = get_kmeans_landmarks_name_for_sample(outliers_in_obs,groups,samples,self.landmark_method,sample,data_name)
+                self._update_dict_data(landmarks,kmeans_landmarks_name)
+                self._update_index(nlandmarks,index=None,data_name=kmeans_landmarks_name)
+
+                self.obs[kmeans_landmarks_name] = pd.DataFrame(assignations,index=index)
+
+                self.quantization_with_landmarks_possible = True
+
+        # for random, we only add a column of booleans to identify the sampled landmarks  
+        elif self.landmark_method == 'random':
+            for sample in dict_index.keys():
+                ni,index,nlandmarks = dict_nobs[sample],dict_index[sample],dict_nlandmarks[sample]
+                if ni < nlandmarks:
+                    print(f'problem in nystrom landmarks : {sample} has {ni} obs for {nlandmarks} landmarks')
+                z = np.random.choice(ni,size=nlandmarks,replace=False)
+                
+                self.add_outliers_in_obs(index[z],f'{sample}_{landmarks_name}')
+                self.quantization_with_landmarks_possible = False
+
+        self.has_landmarks= True
+
+        self.verbosity(function_name='compute_nystrom_landmarks',
+                        dict_of_variables={'groups':groups,'outliers_in_obs':outliers_in_obs},
+                        start=False,
+                        verbose = verbose)
+
 
     def compute_nystrom_anchors(self,sample='xy',verbose=0,outliers_in_obs=None):
         """
