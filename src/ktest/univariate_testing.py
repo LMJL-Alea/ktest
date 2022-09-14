@@ -18,6 +18,153 @@ class Univariate:
     def __init__(self):        
         super(Univariate, self).__init__()
 
+    def variable_eligible_for_univariate_testing(self,variable,max_dropout=.85):
+        # on suppose que la fonction add_zero_proportions_to_var_new a deja tourné
+        dn = self.data_name
+        sl = list(self.get_index().keys())
+        elligible = any([self.var[dn][f'{s}_pz'][variable]<=max_dropout for s in sl])
+        return(elligible)
+
+    def compute_zero_proportions_of_variable(self,variable):
+        
+        proj = self.init_df_proj(variable)
+        dict_index = self.get_index()
+        dict_zp = {}
+        for sample,index_sample in dict_index.items():
+            df = proj[proj.index.isin(index_sample)][variable]
+            n = len(df)
+            nz = len(df[df==0])
+            dict_zp[f'{sample}_pz'] = nz/n
+            dict_zp[f'{sample}_nz'] = nz
+            dict_zp[f'{sample}_n'] = n
+        return(dict_zp)
+
+    def add_zero_proportions_to_var_new(self):
+        '''
+        The pd.dataframe attribute var is filled with columns corresponding to the number of zero and the 
+        proportion of zero of the genes, with respect to the sample or a condition if informed. 
+        '''
+        variables = self.data[self.data_name]['variables']
+        zp = [self.compute_zero_proportions_of_variable(v) for v in variables]
+        dfzp = pd.DataFrame(zp,index=variables)
+        self.update_var_from_dataframe(dfzp)
+
+    def get_zero_proportions_of_variable(self,variable):
+        dn = self.data_name
+        dict_index = self.get_index()
+        dict_zp = {sample:self.var[dn][f'{sample}_pz'][variable] for sample in dict_index.keys()}
+        return(dict_zp)
+
+    def compute_univariate_kfda(self,variable,common_covariance=False):
+        from .tester import Tester
+        # récupérer la donnée
+        
+        # Get testing info from global object 
+        dfv = self.init_df_proj(variable)
+        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()
+        cov,mmd,lm,ab,m,r = self.get_model()
+        center_by = self.center_by
+        
+        # Initialize univariate tester with common covariance 
+        t = Tester()
+        
+        t.add_data_to_Tester_from_dataframe(dfv,sample='x',df_meta=self.obs,data_name=data_name)
+        t.obs['sample'] = self.obs['sample']
+        
+        t.set_test_data_info(data_name,condition,samples)
+        t.set_outliers_in_obs(outliers_in_obs)
+        t.set_center_by(center_by)
+        t.init_model(approximation_cov=cov,approximation_mmd=mmd,
+                    m=m,r=r,landmark_method=lm,anchors_basis=ab)
+        
+        # Infos for common covariance
+
+        if common_covariance:
+            
+            spc,evc = self.get_spev('covw')
+            spev_name = self.get_covw_spev_name()
+            t.spev['covw'][spev_name] = {'sp':spc,'ev':evc}
+
+            if 'nystrom' in cov or 'nystrom' in mmd:
+                spa,eva = self.get_spev('anchors')
+                anchors_name = self.get_anchors_name()
+                t.spev['anchors'][anchors_name] = {'sp':spa,'ev':eva}
+
+            kernel_bandwith = self.kernel_bandwidth
+            p = self.data[data_name]['p']
+            t.init_kernel(f'gauss_{kernel_bandwith/p}')
+
+
+            kfdat_name = t.compute_kfdat_new() # caclul de la stat         
+            t.select_trunc() # selection automatique de la troncature 
+            t.compute_pval() # calcul des troncatures asymptotiques 
+        else: 
+            t.init_kernel('gauss_median')
+            kfdat_name = t.kfdat()
+
+        # ccovw = 'ccovw' if common_covariance else ''
+        t.df_kfdat[variable] = t.df_kfdat[kfdat_name]
+        t.df_pval[variable] = t.df_pval[kfdat_name]
+        
+        return(t)
+        
+    def add_results_univariate_kfda_in_var(self,vtest,variable):
+        
+        kfdat_name = self.get_kfdat_name()
+        dn = self.data_name
+        zp = self.get_zero_proportions_of_variable(variable)
+        t1 = 1
+        tr1 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='first')
+        tr2 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='second')
+        tr3 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='third')
+        trm = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='max')
+
+        ts = [t1,tr1,tr2,tr3,trm]
+        tnames = ['1','r1','r2','r3','rmax']
+        for t,tname in zip(ts,tnames):
+            if t<100:
+
+                col = f'{kfdat_name}_t{tname}'
+                pval = vtest.df_pval[variable][t]
+                kfda = vtest.df_kfdat[variable][t]
+                errB = 1-vtest.get_between_covariance_projection_error_associated_to_t_new(t)
+
+                self.vard[dn][variable][f'{col}_pval'] = pval
+                self.vard[dn][variable][f'{col}_kfda'] = kfda 
+                self.vard[dn][variable][f'{col}_errB'] = errB
+                if tname != '1':
+                    self.vard[dn][variable][f'{col}_t'] = t
+
+        self.vard[dn][variable][f'{kfdat_name}_univariate'] = True
+                
+
+        tab = '\t' if len(variable)>6 else '\t\t'
+
+        tr1 = self.vard[dn][variable][f'{kfdat_name}_tr1_t']
+        tr2 = self.vard[dn][variable][f'{kfdat_name}_tr2_t']
+        errB1 = self.vard[dn][variable][f'{kfdat_name}_tr1_errB']
+        errB2 = self.vard[dn][variable][f'{kfdat_name}_tr2_errB']
+        pval1 = self.vard[dn][variable][f'{kfdat_name}_tr1_pval']
+        pval2 = self.vard[dn][variable][f'{kfdat_name}_tr2_pval']
+
+        zp_string = "zp: "+"".join([f'{s}{zp[s]:.2f}' for s in zp.keys()])
+        string = f'{variable} {tab} {zp_string} \t pval{tr1:1.0f}:{pval1:1.0e}  r{tr1:1.0f}:{errB1:.2f} \t pval{tr2:1.0f}:{pval2:1.0e}  r{tr2:1.0f}:{errB2:.2f}'
+        print(string)
+
+    def univariate_kfda(self,variable,common_covariance=True,parallel=False):
+        univariate_name = f'{self.get_kfdat_name}_univariate'
+        dn = self.data_name
+
+        if univariate_name in self.var[dn] and self.var[dn][univariate_name][variable]:
+            print(f'{univariate_name} already computed for {variable}')
+        else:
+            t=self.compute_univariate_kfda(variable,common_covariance=common_covariance)
+        self.add_results_univariate_kfda_in_var(t,variable)
+        if parallel:
+            return({'v':variable,**self.vard[variable]})
+        return(t) 
+        
+    # pas à jour 
     def parallel_univariate_kfda(self,params_model={},center_by=None,name='',n_jobs=1,lots=100,fromto=[0,-1],save_path=None):
         """
         parallel univariate testing.
@@ -106,93 +253,7 @@ class Univariate:
                     if file in os.listdir(save_path):
                         self.load_univariate_test_results_in_var(save_path,file,)
                     self.save_univariate_test_results_in_var(save_path)
-
-    def univariate_kfda(self,variable,params_model={},visualize_test=True,return_visualize=False,center_by=None,name='',parallel=False,patient=False):
-        from .tester import Tester
-        zp = self.get_zero_proportions_of_variable(variable)
-        # print(zp)
-        if zp['x_pz'] == 1 and zp['y_pz'] == 1:
-            print("gene not expressed in the dataset")
-        else:
-            dname = name
-            cb = '' if center_by is None else center_by
-
-            if 'approximation_cov' in params_model:
-                dname += params_model['approximation_cov']+cb
-                print(dname)
-            else:
-                dname += f'standard{cb}'
-                print(dname)
-
-            if f'{dname}_univariate' in self.var and self.var[f'{dname}_univariate'][variable] == True:
-                print(f'{dname} already computed for {variable}')
-
-            else : 
-
-                proj = self.init_df_proj(variable)
-                cond = self.obs['sample']
-                xv = proj[cond=='x'][variable]
-                yv = proj[cond=='y'][variable]
-            #     print(xv,yv)
-                vtest = Tester()
-                vtest.init_data(xv,yv,center_by=center_by)
-                vtest.init_model(**params_model)
-                vtest.obs = self.obs
-                vtest.initialize_kfdat()
-        #         sp = vtest.spev['xy']['anchors']['w']['sp']
-                column = vtest.kfdat(name='kfda')
-
-                t1 = 1
-        #         t50 = vtest.select_trunc_by_between_reconstruction_ratio(ratio=.5)
-                tr1 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='first')
-                tr2 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='second')
-                tr3 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='third')
-                trm = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='max')
-
-                ts = [t1,tr1,tr2,tr3,trm]
-                tnames = ['1','r1','r2','r3','rmax']
-                for t,tname in zip(ts,tnames):
-                    if t<100:
-
-                        col = f'{dname}_t{tname}'
-                        pval = vtest.df_pval[column][t]
-                        kfda = vtest.df_kfdat[column][t]
-                        errB = 1-vtest.get_between_covariance_projection_error_associated_to_t_new(t)
-
-                        self.vard[variable][f'{col}_pval'] = pval
-                        self.vard[variable][f'{col}_kfda'] = kfda 
-                        self.vard[variable][f'{col}_errB'] = errB
-                        if tname != '1':
-                            self.vard[variable][f'{col}_t'] = t
-
-                self.vard[variable][f'{dname}_univariate'] = True
-                
-
-                tab = '\t' if len(variable)>6 else '\t\t'
-                x_pz = zp['x_pz']
-                y_pz = zp['y_pz']
-                tr1 = self.vard[variable][f'{dname}_tr1_t']
-                tr2 = self.vard[variable][f'{dname}_tr2_t']
-                errB1 = self.vard[variable][f'{dname}_tr1_errB']
-                errB2 = self.vard[variable][f'{dname}_tr2_errB']
-                pval1 = self.vard[variable][f'{dname}_tr1_pval']
-                pval2 = self.vard[variable][f'{dname}_tr2_pval']
-
-                string = f'{variable} {tab} pz: x{x_pz:.2f} y{y_pz:.2f} \t pval{tr1:1.0f}:{pval1:1.0e}  r{tr1:1.0f}:{errB1:.2f} \t pval{tr2:1.0f}:{pval2:1.0e}  r{tr2:1.0f}:{errB2:.2f}'
-                print(string)
-                
-
-
-                if parallel:
-                    return({'v':variable,**self.vard[variable]})
-                
-                if visualize_test:
-                    fig,axes = self.visualize_univariate_test_CRCL(variable,vtest,column=column,patient=patient)
-                    if return_visualize:
-                        return(vtest,fig,axes)
-
-                return(vtest) 
-        
+     
     def update_var_from_dataframe(self,df,verbose = 0):
         dn = self.data_name
         for c in df.columns:
@@ -229,30 +290,6 @@ class Univariate:
         if verbose >0:
             print(file,len(df))
         self.update_var_from_dataframe(df)
-
-    def get_zero_proportions_of_variable(self,variable,condition=None):
-        condition = 'sample' if condition is None else condition
-        proj = self.init_df_proj(variable,name='counts')
-        proj[condition] = self.obs[condition].astype('category')
-        output = {}
-        for c in proj[condition].cat.categories:
-            df = proj[proj[condition]==c][variable]
-            n = len(df)
-            nz = len(df[df==0])
-            pz = nz/n
-            output[f'{c}_pz'] = pz
-            output[f'{c}_nz'] = nz
-            output[f'{c}_n'] = n
-        return(output)
-
-    def add_zero_proportions_to_var(self,condition=None):
-        '''
-        The pd.dataframe attribute var is filled with columns corresponding to the number of zero and the 
-        proportion of zero of the genes, with respect to the sample or a condition if informed. 
-        '''
-        variables = self.data[self.data_name]['variables']
-        zp = [self.get_zero_proportions_of_variable(v,condition) for v in variables]
-        self.update_var_from_dataframe(pd.DataFrame(zp,index=variables))
     
 
         
