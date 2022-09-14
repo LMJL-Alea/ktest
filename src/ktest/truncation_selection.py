@@ -17,15 +17,15 @@ class TruncationSelection(Residuals):
     def __init__(self):
         super(TruncationSelection,self).__init__()
 
-    def select_trunc_by_between_reconstruction_ratio(self,ratio,outliers_in_obs=None):
-        pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
+    def select_trunc_by_between_reconstruction_ratio(self,ratio):
+        pe = self.get_between_covariance_projection_error_new()
         pe = cat([tensor([0],dtype =float64),pe])
         pe = 1-pe
         return(where(pe<ratio)[0][0])
 
         
-    def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max',outliers_in_obs=None):
-        pe = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)
+    def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max'):
+        pe = self.get_between_covariance_projection_error_new()
         pe = cat([tensor([0],dtype =float64),pe])
         pe = 1-pe
         

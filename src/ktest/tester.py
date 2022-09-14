@@ -90,7 +90,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         if self.has_data:
             n1,n2,n = self.get_n1n2n()
             x,y = self.get_xy()
-            xindex,yindex = self.get_index(sample='x'),self.get_index(sample='y')
+            xindex,yindex = self.get_xy_index(sample='x'),self.get_xy_index(sample='y')
             s += f"View of Tester object with n1 = {n1}, n2 = {n2} (n={n})\n"
 
             s += f"x ({x.shape}), y ({y.shape})\n"
@@ -139,14 +139,15 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         s += f"corr ({len(self.corr)})\n\n"
         
         s += '--- Eigenvectors --- \n'
-        kx = self.spev['x'].keys()
-        ky = self.spev['y'].keys()
-        kxy = self.spev['xy'].keys()
-        kr = self.spev['residuals'].keys()
-        s+=f"spev['x']:({kx})\n"
-        s+=f"spev['y']:({ky})\n"
-        s+=f"spev['xy']:({kxy})\n"
-        s+=f"spev['residuals']:({kr})\n"
+        s += 'A completer'
+        # kx = self.spev['x'].keys()
+        # ky = self.spev['y'].keys()
+        # kxy = self.spev['xy'].keys()
+        # kr = self.spev['residuals'].keys()
+        # s+=f"spev['x']:({kx})\n"
+        # s+=f"spev['y']:({ky})\n"
+        # s+=f"spev['xy']:({kxy})\n"
+        # s+=f"spev['residuals']:({kr})\n"
 
         return(s) 
 
@@ -163,11 +164,11 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
     # def load_data(self,data_dict,):
     # def save_data():
     # def save_a_dataframe(self,path,which)
-    def get_dataframe_of_data(self,name_data=None):
+    def get_dataframe_of_data(self):
         " a mettre à jour"
-        x,y = self.get_xy(name_data=name_data)
-        xindex = self.get_index(sample='x')
-        yindex = self.get_index(sample='y')
+        x,y = self.get_xy()
+        xindex = self.get_xy_index(sample='x')
+        yindex = self.get_xy_index(sample='y')
         var = self.variables
         
         dfx = pd.DataFrame(x,index=xindex,columns=var)
@@ -175,7 +176,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         return(dfx,dfy)
 
 
-    def kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
+    def kfdat(self,t=None,verbose=0):
         """"
         This functions computes the truncated kfda statistic from scratch, if needed, it computes landmarks and 
         anchors for the nystrom approach and diagonalize the matrix of interest for the computation fo the statistic. 
@@ -204,61 +205,54 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         """
 
         # récupération des paramètres du modèle dans les attributs 
-        cov = self.approximation_cov # approximation de l'opérateur de covariance. 
-        mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
 
 
         # définition du nom de la colonne dans laquelle seront stockées les valeurs de la stat 
         # dans l'attribut df_kfdat (une DataFrame Pandas)   
         # je devrais définir une fonction spécifique pour ces lignes qui apparaissent dans plusieurs fonctions. 
-        name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
-        
+        # name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
+        kfdat_name = self.get_kfdat_name()
         # inutile de calculer la stat si elle est déjà calculée (le name doit la caractériser)
-        if name in self.df_kfdat :
+        if kfdat_name in self.df_kfdat :
             if verbose : 
-                print(f'kfdat {name} already computed')
+                print(f'kfdat {kfdat_name} already computed')
 
         else:
 
-            self.initialize_kfdat(sample='xy',verbose=verbose,outliers_in_obs=outliers_in_obs) # landmarks, ancres et diagonalisation           
-            self.compute_kfdat(t=t,name=name,verbose=verbose,outliers_in_obs=outliers_in_obs) # caclul de la stat 
+            self.initialize_kfdat(verbose=verbose) # landmarks, ancres et diagonalisation           
+            self.compute_kfdat_new(t=t,verbose=verbose) # caclul de la stat 
             self.select_trunc() # selection automatique de la troncature 
             self.compute_pval() # calcul des troncatures asymptotiques 
-            self.kfda_stat = self.df_kfdat[name][self.t] # stockage de la valeur de la stat pour la troncature selectionnées 
+            kfdat_name = self.get_kfdat_name()
+            self.kfda_stat = self.df_kfdat[kfdat_name][self.t] # stockage de la valeur de la stat pour la troncature selectionnées 
         
         # les valeurs de la statistique ont été stockées dans une colonne de la dataframe df_kfdat. 
         # pour ne pas avoir à chercher le nom de cette colonne difficilement, il est renvoyé ici
-        return(name)
+        return(kfdat_name)
 
     def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):
         """
         appelle la fonction initialize mmd puis la fonction compute_mmd si le mmd n'a pas deja ete calcule. 
         """
         approx = self.approximation_mmd
-        
-        if name is None:
-            name=f'{approx}'
-            if approx == 'nystrom':
-                name += 'shared' if shared_anchors else 'diff'
-        
-        if name in self.dict_mmd :
+        mmd_name = self.get_mmd_name()
+
+        if mmd_name in self.dict_mmd :
             if verbose : 
-                print(f'mmd {name} already computed')
+                print(f'mmd {mmd_name} already computed')
         else:
             self.initialize_mmd(shared_anchors=shared_anchors,verbose=verbose)
-            self.compute_mmd(shared_anchors=shared_anchors,
-                            name=name,unbiaised=unbiaised,verbose=0)
+            self.compute_mmd_new(shared_anchors=shared_anchors,unbiaised=unbiaised,verbose=0)
 
-    def kpca(self,t=None,approximation_cov='standard',sample='xy',name=None,verbose=0):
+    def kpca(self,t=None,verbose=0):
         
-        cov = approximation_cov
-        name = name if name is not None else f'{cov}{sample}' 
-        if name in self.df_proj_kpca :
+        proj_kpca_name = self.get_kfdat_name()
+        if proj_kpca_name in self.df_proj_kpca :
             if verbose : 
-                print(f'kfdat {name} already computed')
+                print(f'kfdat {proj_kpca_name} already computed')
         else:
-            self.initialize_kfda(approximation_cov=cov,sample=sample,verbose=verbose)            
-            self.compute_proj_kpca(t=t,approximation_cov=cov,sample=sample,name=name,verbose=verbose)
+            self.initialize_kfda(verbose=verbose)            
+            self.compute_proj_kpca(t=t,verbose=verbose)
 
 
 

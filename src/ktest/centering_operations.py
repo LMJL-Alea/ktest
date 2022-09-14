@@ -111,7 +111,7 @@ class CenteringOps(NystromOps):
     def __init__(self):
         super(CenteringOps,self).__init__()
 
-    def compute_centering_matrix_with_respect_to_some_effects(self,center_by=None,outliers_in_obs=None):
+    def compute_centering_matrix_with_respect_to_some_effects_new(self):
         '''
         Computes the projection matrix corresponding to center the data with respect to the 
         meta information of center_by. 
@@ -154,8 +154,10 @@ class CenteringOps(NystromOps):
         ------- 
             torch.tensor, the centering matrix corresponding to center_by
         '''
-        center_by = self.center_by if center_by is None else center_by
-        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs) 
+        
+        center_by = self.center_by
+        outliers_in_obs = self.outliers_in_obs
+        n = self.get_ntot()
         Pw = eye(n,dtype = torch.float64)
         obs = self.obs if outliers_in_obs is None else self.obs[~self.obs[outliers_in_obs]]
 
@@ -187,12 +189,11 @@ class CenteringOps(NystromOps):
 
         return Pw    
 
-    def compute_covariance_centering_matrix(self,sample='xy',quantization=False,landmarks=False,outliers_in_obs=None):
+    def compute_covariance_centering_matrix_new(self,quantization=False,landmarks=False):
         """
-        Computes the centering Gram matrix Pn such that Pn·K·Pn has the same spectrum than the 
-        covariance operator corresponding to the parameters. 
+        Computes a projection matrix usefull for the kernel trick. 
 
-        Example if sample = 'xy':
+        Example fir the within-group covariance :
             Let I1,I2 the identity matrix of size n1 and n2 (or nxanchors and nyanchors if nystrom).
             J1,J2 the squared matrix full of one of size n1 and n2 (or nxanchors and nyanchors if nystrom).
             012, 021 the matrix full of zeros of size n1 x n2 and n2 x n1 (or nxanchors x nyanchors and nyanchors x nxanchors if nystrom)
@@ -220,57 +221,31 @@ class CenteringOps(NystromOps):
         """
 
 
-        if landmarks:
-            m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs)
-            if self.anchors_basis.lower() == 'k':
-                m = m1 if sample=='x' else m2 if sample=='y' else m
-                Im = eye(m, dtype=torch.float64)
-                return(Im)
-            elif self.anchors_basis.lower() == 's':
-                m = m1 if sample=='x' else m2 if sample=='y' else m
-                Im = eye(m, dtype=torch.float64)
-                Jm = ones(m, m, dtype=torch.float64)
-                Pm = Im - 1/m * Jm
-                return(Pm)
-            elif self.anchors_basis.lower() == 'w':
-                assert(sample=='xy')
-                Im1,Im2 = eye(m1, dtype=torch.float64),eye(m2, dtype=torch.float64)
-                Jm1,Jm2 = ones(m1, m1, dtype=torch.float64),ones(m2, m2, dtype=torch.float64)
-                Pm1,Pm2 = Im1 - 1/m1 * Jm1, Im2 - 1/m2 * Jm2
-                z12 = zeros(m1, m2, dtype=torch.float64)
-                z21 = zeros(m2, m1, dtype=torch.float64)
-                return(cat((cat((Pm1, z12), dim=1), cat((z21, Pm2), dim=1)), dim=0)) 
-            else:
-                print('invalid anchor basis')  
+        dict_nobs = self.get_nobs(landmarks=landmarks)
+        n = dict_nobs['ntot']
+        ab = self.anchors_basis.lower() if landmarks else 'w'
 
-        n1,n2,n = self.get_n1n2n(landmarks=quantization,outliers_in_obs=outliers_in_obs)
-        if 'x' in sample:
-            In1 = eye(n1, dtype=torch.float64)
-            Jn1 = ones(n1, n1, dtype=torch.float64)
-            if quantization: 
-                a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
-                Pn1 = (In1 - 1/n * torch.ger(a1,a1)) # a vérifier si c'est 1/n ou 1/n1
-            else:
-                Pn1 = In1 - 1/n1 * Jn1
-
-        if 'y' in sample:
-            In2 = eye(n2, dtype=torch.float64)
-            Jn2 = ones(n2, n2, dtype=torch.float64)
-            if quantization: 
-                a2 = self.compute_quantization_weights(sample='y',power=.5,diag=False)
-                Pn2 = (In2 - 1/n * torch.ger(a2,a2)) # a vérifier si c'est 1/n ou 1/n2
-            else:
-                Pn2 = In2 - 1/n2 * Jn2
-
-        if sample == 'xy':
-            z12 = zeros(n1, n2, dtype=torch.float64)
-            z21 = zeros(n2, n1, dtype=torch.float64)
-            return(cat((cat((Pn1, z12), dim=1), cat(
-            (z21, Pn2), dim=1)), dim=0))  # bloc diagonal
+        if quantization and not landmarks:
+            print('quantization not implemented yet')
+#                 a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
+#                 Pn1 = (In1 - 1/n * torch.ger(a1,a1)) # a vérifier si c'est 1/n ou 1/n1
+            
+        
+        if ab == 'k':
+            return(eye(n,dtype=torch.float64))
+        if ab == 's':
+            In = eye(n, dtype=torch.float64)
+            Jn = ones(n, n, dtype=torch.float64)
+            return(In - 1/n * Jn)
+        if ab == 'w':
+            In = eye(n)
+            effectifs = [v for k,v in dict_nobs.items() if k != 'ntot'] 
+            diag_Jn_by_n = compute_diag_Jn_by_n(effectifs)
+            return(In - diag_Jn_by_n)
         else:
-            return(Pn1 if sample=='x' else Pn2)  
+            print('invalid anchor basis') 
 
-    def compute_omega(self,sample='xy',quantization=False,outliers_in_obs=None):
+    def compute_omega_new(self,quantization=False):
         '''
         Returns the weights vector to compute a mean. 
         
@@ -292,19 +267,19 @@ class CenteringOps(NystromOps):
             omega : torch.tensor 
             a vector of size corresponding to the group of which we compute the mean. 
         '''
-        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
-        if sample =='xy':
-            if quantization:
-                return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
-            else:
-                m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
-                m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 
-                return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
-        elif sample=='x':
-            return(1/n1 * ones(n1, dtype=torch.float64))
-        elif sample=='y':
-            return(1/n2 * ones(n2, dtype=torch.float64))
 
+        # Avant cette fonction était plus générique mais je ne l'utilise que pour le vecteur omega de deux groupes
+        n1,n2,n = self.get_n1n2n()
+        if quantization:
+            return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
+        else:
+            m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
+            m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 
+            return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
+
+        
+        
+        
 
 # Test application 
 # a = Tester()

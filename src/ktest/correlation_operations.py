@@ -25,7 +25,7 @@ def compute_corr_proj_var(self,t=None,sample='xy',which='proj_kfda',name_corr=No
     x,y = self.get_xy()
 
     array = torch.cat((x,y),dim=0).numpy() if sample == 'xy' else x.numpy() if sample=='x' else y.numpy()
-    index = self.get_index(sample=sample)
+    index = self.get_xy_index(sample=sample)
   
     
     df_array = pd.DataFrame(array,index=index,columns=self.variables)

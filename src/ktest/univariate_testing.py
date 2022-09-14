@@ -34,10 +34,11 @@ class Univariate:
         print(dname)
             
         fromto[1] = len(voi) if fromto[1]==-1 else fromto[1]
-        voi = self.variables[fromto[0]:fromto[1]]
+        variables = self.data[self.data_name]['variables']
+        voi = variables[fromto[0]:fromto[1]]
         
         
-        ntot = len(self.variables)
+        ntot = len(variables)
         ntested = 0
         nnot_tested = len(voi)
         if f'{dname}_univariate' in self.var:
@@ -156,7 +157,7 @@ class Univariate:
                         col = f'{dname}_t{tname}'
                         pval = vtest.df_pval[column][t]
                         kfda = vtest.df_kfdat[column][t]
-                        errB = 1-vtest.get_between_covariance_projection_error_associated_to_t(t)
+                        errB = 1-vtest.get_between_covariance_projection_error_associated_to_t_new(t)
 
                         self.vard[variable][f'{col}_pval'] = pval
                         self.vard[variable][f'{col}_kfda'] = kfda 
@@ -193,22 +194,22 @@ class Univariate:
                 return(vtest) 
         
     def update_var_from_dataframe(self,df,verbose = 0):
-
+        dn = self.data_name
         for c in df.columns:
             if verbose>1:
                 print(c,end=' ')
             token = False
-            if 'univariate' in c and c in self.var:
+            if 'univariate' in c and c in self.var[dn]:
                 token = True
-                nbef = sum(self.var[c]==1)
-            if c not in self.var:
-                self.var[c] = df[c].astype('float64').copy()
+                nbef = sum(self.var[dn][c]==1)
+            if c not in self.var[dn]:
+                self.var[dn][c] = df[c].astype('float64').copy()
             else:
                 if verbose>1:
                     print('update',end= '|')
-                self.var[c].update(df[c].astype('float64'))
+                self.var[dn][c].update(df[c].astype('float64'))
             if token:
-                naft = sum(self.var[c]==1)
+                naft = sum(self.var[dn][c]==1)
                 if verbose >0:
                     print(f'\n tested from {nbef} to {naft}')
 
@@ -249,8 +250,9 @@ class Univariate:
         The pd.dataframe attribute var is filled with columns corresponding to the number of zero and the 
         proportion of zero of the genes, with respect to the sample or a condition if informed. 
         '''
-        zp = [self.get_zero_proportions_of_variable(v,condition) for v in self.variables]
-        self.update_var_from_dataframe(pd.DataFrame(zp,index=self.variables))
+        variables = self.data[self.data_name]['variables']
+        zp = [self.get_zero_proportions_of_variable(v,condition) for v in variables]
+        self.update_var_from_dataframe(pd.DataFrame(zp,index=variables))
     
 
         

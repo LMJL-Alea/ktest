@@ -3,7 +3,7 @@ import pandas as pd
 from torch import mv,diag,chain_matmul,dot,sum
 
 from .kernel_trick import KernelTrick
-
+from .projection_operations import ProjectionOps
 """
 
 Ce fichier contient toutes les fonctions nécessaires au calcul des statistiques,
@@ -15,13 +15,13 @@ Les fonctions initialize_kfdat et kfdat font simplement appel a plusieurs foncti
 """
 
 
-class Statistics(KernelTrick):
+class Statistics(ProjectionOps):
 
     def __init__(self):
         super(Statistics,self).__init__()
 
 
-    def get_explained_variance(self,sample='xy',outliers_in_obs=None):
+    def get_explained_variance(self):
         '''
         This function returns a list of percentages of supported variance, the ith element contain the 
         variance supported by the first i eigenvectors of the covariance operator of interest. 
@@ -40,21 +40,15 @@ class Statistics(KernelTrick):
 
         '''
 
-        cov = self.approximation_cov
-        suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-        suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-        sp = self.spev[sample][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
+        sp,_ = self.get_spev('covw')
         spp = (sp/torch.sum(sp)).cumsum(0)
         return(spp)
 
-    def get_trace(self,sample='xy',outliers_in_obs=None):
-        cov = self.approximation_cov
-        suffix_nystrom = self.anchors_basis if 'nystrom' in self.approximation_cov else ''
-        suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-        sp = self.spev[sample][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp']
+    def get_trace(self):
+        sp,_ = self.get_spev('covw')
         return(sum(sp))
  
-    def compute_kfdat(self,t=None,name=None,verbose=0,outliers_in_obs=None):
+    def compute_kfdat_new(self,t=None,verbose=0):
         
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -80,10 +74,6 @@ class Statistics(KernelTrick):
             les valeurs de la statistique pour les différentes troncatures calculées de 1 à t 
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
-
-            outliers_in_obs : None ou string,
-            nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
-
 
         Description 
         -----------
@@ -146,7 +136,6 @@ class Statistics(KernelTrick):
         # récupération des paramètres du modèle dans les attributs 
         cov = self.approximation_cov # approximation de l'opérateur de covariance. 
         mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
-        anchors_basis = self.anchors_basis # 'nystrom) quel opérateur de covariance des landmarks est utilisé pour calculer les ancres 
         
         # à un moment, j'ai exploré plusieurs façons de définir les ancres, 
         # shared correspond à des ancres partagées pour les deux échantillons 
@@ -159,16 +148,16 @@ class Statistics(KernelTrick):
 
         # Récupération des vecteurs propres et valeurs propres calculés par la fonction de classe 
         # diagonalize_within_covariance_centered_gram 
-        suffix_nystrom = anchors_basis if 'nystrom' in cov else ''
-        suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-        sp,ev = self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['sp'],self.spev['xy'][f'{cov}{suffix_nystrom}{suffix_outliers}']['ev']
+        sp,ev = self.get_spev('covw')
 
 
         # définition du nom de la colonne dans laquelle seront stockées les valeurs de la stat 
         # dans l'attribut df_kfdat (une DataFrame Pandas)   
-        name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
-        if name in self.df_kfdat:
-            print(f"écrasement de {name} dans df_kfdat and df_kfdat_contributions")
+        
+        kfdat_name = self.get_kfdat_name()
+        
+        if kfdat_name in self.df_kfdat:
+            print(f"écrasement de {kfdat_name} dans df_kfdat and df_kfdat_contributions")
 
 
         # détermination de la troncature maximale à calculer 
@@ -179,8 +168,7 @@ class Statistics(KernelTrick):
                 dict_of_variables={
                 't':t,
                 'approximation_cov':cov,
-                'approximation_mmd':mmd,
-                'name':name},
+                'approximation_mmd':mmd,},
                 start=True,
                 verbose = verbose)
 
@@ -192,8 +180,8 @@ class Statistics(KernelTrick):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # calcul de la statistique pour chaque troncature 
-        pkm = self.compute_pkm(outliers_in_obs=outliers_in_obs) # partie de la stat qui ne dépend pas de la troncature mais du modèle
-        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs) # nombres d'observations dans les échantillons
+        pkm = self.compute_pkm_new() # partie de la stat qui ne dépend pas de la troncature mais du modèle
+        n1,n2,n = self.get_n1n2n() # nombres d'observations dans les échantillons
         exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant' # l'exposant dépend du modèle
         kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy() # calcule la contribution de chaque troncature 
         kfda = kfda_contributions.cumsum(axis=0) #somme les contributions pour avoir la stat correspondant à chaque troncature 
@@ -203,8 +191,8 @@ class Statistics(KernelTrick):
 
         # stockage des vecteurs propres et valeurs propres dans l'attribut spev
         trunc = range(1,t+1) # liste des troncatures possibles de 1 à t 
-        self.df_kfdat[name] = pd.Series(kfda,index=trunc)
-        self.df_kfdat_contributions[name] = pd.Series(kfda_contributions,index=trunc)
+        self.df_kfdat[kfdat_name] = pd.Series(kfda,index=trunc)
+        self.df_kfdat_contributions[kfdat_name] = pd.Series(kfda_contributions,index=trunc)
         
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
         self.verbosity(function_name='compute_kfdat',
@@ -212,34 +200,36 @@ class Statistics(KernelTrick):
                 't':t,
                 'approximation_cov':cov,
                 'approximation_mmd':mmd,
-                'name':name},
+                },
                 start=False,
                 verbose = verbose)
         
         # les valeurs de la statistique ont été stockées dans une colonne de la dataframe df_kfdat. 
         # pour ne pas avoir à chercher le nom de cette colonne difficilement, il est renvoyé ici
-        return(name)
-    
+        return(kfdat_name)
+
+
     def compute_kfdat_contrib(self,t):    
-        cov = self.approximation_cov    
-        sp,ev = self.spev['xy'][cov]['sp'],self.spev['xy'][cov]['ev']
+        
+        sp,ev = self.get_spev('covw')
         n1,n2,n = self.get_n1n2n() 
         
-        pkom = self.compute_pkm()
-        om = self.compute_omega()
-        K = self.compute_gram()
+        pkom = self.compute_pkm_new()
+        om = self.compute_omega_new()
+        K = self.compute_gram_new()
         mmd = dot(mv(K,om),om)
     
         # yp = n1*n2/n * 1/(sp[:t]*n) * mv(ev.T[:t],pkom)**2 #1/np.sqrt(n*sp[:t])*
         # ysp = sp[:t]    
-
+        t = len(sp) if t is None else t
         xp = range(1,t+1)
         yspnorm = sp[:t]/torch.sum(sp)
         ypnorm = 1/(sp[:t]*n) * mv(ev.T[:t],pkom)**2 /mmd
         # il y a des erreurs numériques sur les f donc je n'ai pas une somme totale égale au MMD
 
         return(xp,yspnorm,ypnorm)
-    def initialize_kfdat(self,sample='xy',verbose=0,outliers_in_obs=None,**kwargs):
+    
+    def initialize_kfdat(self,verbose=0,**kwargs):
         """
         This function prepares the computation of the kfda statistic by precomputing everithing that 
         should be needed. 
@@ -257,18 +247,18 @@ class Statistics(KernelTrick):
         # son coût computationnel est faible mais ses performances le sont aussi. 
         # cette approche a besoin d'avoir un poids associé aux landmarks pour savoir combien ils représentent d'observations. 
         if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin d'avoir des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks(outliers_in_obs=outliers_in_obs,verbose=verbose) 
+            self.compute_nystrom_landmarks_new(verbose=verbose) 
 
         #calcul des landmarks et des ancres 
-        if any([ny in [cov,mmd] for ny in ['nystrom1','nystrom2','nystrom3']]):
+        if any([ny in [cov,mmd] for ny in ['nystrom','nystrom1','nystrom2','nystrom3']]):
             print('nystrom detected')
-            self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs)
-            self.compute_nystrom_anchors(sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs) 
+            self.compute_nystrom_landmarks_new(verbose=verbose)
+            self.compute_nystrom_anchors_new(verbose=verbose) 
 
         # diagonalisation de la matrice d'intérêt pour calculer la statistique 
-        self.diagonalize_within_covariance_centered_gram(approximation=cov,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
+        self.diagonalize_within_covariance_centered_gram_new(approximation=cov,verbose=verbose)
 
-    def initialize_mmd(self,shared_anchors=True,verbose=0,outliers_in_obs=None):
+    def initialize_mmd(self,shared_anchors=True,verbose=0):
 
         """
         Calculs preliminaires pour lancer le MMD.
@@ -290,97 +280,90 @@ class Statistics(KernelTrick):
         approx = self.approximation_mmd
 
         if approx == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs)
+            self.compute_nystrom_landmarks_new(verbose=verbose)
         
         if approx == 'nystrom':
             if not self.has_landmarks:
-                    self.compute_nystrom_landmarks(verbose=verbose,outliers_in_obs=outliers_in_obs)
+                    self.compute_nystrom_landmarks_new(verbose=verbose)
             
             if shared_anchors:
-                if "anchors" not in self.spev['xy']:
-                    self.compute_nystrom_anchors(sample='xy',verbose=verbose,outliers_in_obs=outliers_in_obs)
+                if self.get_anchors_name() not in self.spev['anchors']:
+                    self.compute_nystrom_anchors_new(verbose=verbose)
+            # pas à jour 
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
                         assert(self.r is not None,"r not specified")
-                        self.compute_nystrom_anchors(sample=xy,verbose=verbose,outliers_in_obs=outliers_in_obs)
+                        self.compute_nystrom_anchors_new(verbose=verbose)
  
-    def compute_mmd(self,unbiaised=False,shared_anchors=True,name=None,verbose=0,outliers_in_obs=None):
+    def compute_mmd_new(self,unbiaised=False,shared_anchors=True,verbose=0):
         
         approx = self.approximation_mmd
-        anchors_basis=self.anchors_basis
-        suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
-        anchors_name = f'{anchors_basis}{suffix_outliers}'
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
                                     'approximation':approx,
                                     'shared_anchors':shared_anchors,
-                                    'name':name},
+                                    },
                 start=True,
                 verbose = verbose)
 
         if approx == 'standard':
-            m = self.compute_omega(sample='xy',quantization=False,outliers_in_obs=outliers_in_obs)
-            K = self.compute_gram(outliers_in_obs=outliers_in_obs)
+            m = self.compute_omega_new(quantization=False)
+            K = self.compute_gram_new()
             if unbiaised:
                 K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
             mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
         
         if approx == 'nystrom' and shared_anchors:
-            anchors_basis=self.anchors_basis
-            suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
-            anchors_name = f'{anchors_basis}{suffix_outliers}'
-            m = self.compute_omega(sample='xy',quantization=False,outliers_in_obs=outliers_in_obs)
-            Up = self.spev['xy']['anchors'][anchors_name]['ev']
-            Lp_inv2 = diag(self.spev['xy']['anchors'][anchors_name]['sp']**-(1/2))
-            Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
-            Kmn = self.compute_kmn(sample='xy',outliers_in_obs=outliers_in_obs)
-            psi_m = mv(Lp_inv2,mv(Up.T,mv(Pm,mv(Kmn,m))))
+
+            m = self.compute_omega_new(quantization=False)
+            Lp,Up = self.get_spev(slot='anchors')
+            Lp12 = diag(Lp**-(1/2))
+            Pm = self.compute_covariance_centering_matrix_new(landmarks=True)
+            Kmn = self.compute_kmn_new()
+            psi_m = mv(Lp12,mv(Up.T,mv(Pm,mv(Kmn,m))))
             mmd = dot(psi_m,psi_m)**2
         
         if approx == 'nystrom' and not shared_anchors:
             # utile ? a mettre à jour
-            mx = self.compute_omega(sample='x',quantization=False)
-            my = self.compute_omega(sample='y',quantization=False)
-            Upx = self.spev['x']['anchors'][anchors_basis]['ev']
-            Upy = self.spev['y']['anchors'][anchors_basis]['ev']
-            Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
-            Lpy_inv2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
-            Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
-            Pmx = self.compute_covariance_centering_matrix(sample='x',landmarks=True)
-            Pmy = self.compute_covariance_centering_matrix(sample='y',landmarks=True)
-            Kmnx = self.compute_kmn(sample='x',outliers_in_obs=outliers_in_obs)
-            Kmny = self.compute_kmn(sample='y',outliers_in_obs=outliers_in_obs)
+            a=0
+            # mx = self.compute_omega(sample='x',quantization=False)
+            # my = self.compute_omega(sample='y',quantization=False)
+            # Upx = self.spev['x']['anchors'][anchors_basis]['ev']
+            # Upy = self.spev['y']['anchors'][anchors_basis]['ev']
+            # Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
+            # Lpy_inv2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
+            # Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
+            # Pmx = self.compute_covariance_centering_matrix(sample='x',landmarks=True)
+            # Pmy = self.compute_covariance_centering_matrix(sample='y',landmarks=True)
+            # Kmnx = self.compute_kmn(sample='x')
+            # Kmny = self.compute_kmn(sample='y')
             
-            Km = self.compute_gram(sample='xy',landmarks=True)
-            m1 = Kmnx.shape[0]
-            m2 = Kmny.shape[0]
-            Kmxmy = Km[:m1,m2:]
+            # Km = self.compute_gram(sample='xy',landmarks=True)
+            # m1 = Kmnx.shape[0]
+            # m2 = Kmny.shape[0]
+            # Kmxmy = Km[:m1,m2:]
 
-            psix_mx = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmnx,mx))))
-            psiy_my = mv(Lpy_inv2,mv(Upy.T,mv(Pmy,mv(Kmny,my))))
-            Cpsiy_my = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmxmy,\
-                mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
-            mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
+            # psix_mx = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmnx,mx))))
+            # psiy_my = mv(Lpy_inv2,mv(Upy.T,mv(Pmy,mv(Kmny,my))))
+            # Cpsiy_my = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmxmy,\
+            #     mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
+            # mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
         
         if approx == 'quantization':
-            mq = self.compute_omega(sample='xy',quantization=True)
-            Km = self.compute_gram(sample='xy',landmarks=True)
+            mq = self.compute_omega_new(quantization=True)
+            Km = self.compute_gram_new(landmarks=True)
             mmd = dot(mv(Km,mq),mq) **2
 
-
-        if name is None:
-            name=f'{approx}'
-            if approx == 'nystrom':
-                name += 'shared' if shared_anchors else 'diff'
+        mmd_name = self.get_mmd_name()
         
-        self.dict_mmd[name] = mmd.item()
+        self.dict_mmd[mmd_name] = mmd.item()
         
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
                                     'approximation':approx,
                                     'shared_anchors':shared_anchors,
-                                    'name':name},
+                                    },
                 start=False,
                 verbose = verbose)
         return(mmd.item())

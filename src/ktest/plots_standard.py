@@ -8,6 +8,7 @@ from .utils_plot import init_plot_kfdat,init_plot_pvalue,text_truncations_of_int
 
 from .statistics import Statistics
 
+
 # from functions import get_between_covariance_projection_error
 
 from adjustText import adjust_text
@@ -48,6 +49,7 @@ class Plot_Standard(Statistics):
             if ylim is None and not no_data_to_plot:
                 # probleme je voulais pas yas dans cette fonction 
                 yas = [chi2.ppf(0.95,t) for t in trunc] 
+                
                 ymax = np.max([yas[-1], np.nanmax(np.isfinite(kfdat[kfdat.index == trunc[-1]]))]) # .max(numeric_only=True)
                 ylim = (-5,ymax)
                 ax.set_ylim(ylim)
@@ -56,7 +58,6 @@ class Plot_Standard(Statistics):
             if legend:
                 ax.legend()  
             return(fig,ax)
-
 
     def plot_kfdat_contrib(self,fig=None,ax=None,t=None,name=None):
         xp,yspnorm,ypnorm = self.compute_kfdat_contrib(t)
@@ -91,29 +92,25 @@ class Plot_Standard(Statistics):
             ax.legend()
         
         return(fig,ax)
-  
-    def plot_spectrum(self,fig=None,ax=None,t=None,title=None,sample='xy',anchors=False,label=None,outliers_in_obs=None,truncations_of_interest = None ):
+
+    def plot_spectrum_new(self,fig=None,ax=None,t=None,title=None,anchors=False,label=None,truncations_of_interest = None ):
         if ax is None:
             fig,ax = plt.subplots(figsize=(10,10))
         if title is not None:
             ax.set_title(title,fontsize=40)
         
-
+        
         cov = self.approximation_cov
 
         if anchors:
             if 'nystrom' not in cov:
                 print('impossible to plot anchor spectrum')
             else:
-                suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs 
-                anchors_basis = self.anchors_basis
-                name_spev = f'{anchors_basis}{suffix_outliers}'
-                sp = self.spev[sample]['anchors'][name_spev]['sp']
+
+                sp,_ = self.get_spev(slot='anchors')
+                
         else:
-            suffix_nystrom = self.anchors_basis if 'nystrom' in cov else ''
-            suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-            name_spev = f'{cov}{suffix_nystrom}{suffix_outliers}'
-            sp = self.spev[sample][name_spev]['sp']
+            sp,_ = self.get_spev(slot='covw')
 
         if truncations_of_interest is not None:
             values = cat(tensor(0),sp)
@@ -133,13 +130,13 @@ class Plot_Standard(Statistics):
         ax.set_xlabel('t',fontsize= 20)
 
         return(fig,ax)
-    #
-    def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',labels='MW',color=None,fig=None,ax=None,show_conditions=True,outliers_in_obs=None):
+
+    def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',labels='MW',color=None,fig=None,ax=None,show_conditions=True):
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
         properties = self.get_plot_properties(color=color,labels=labels,show_conditions=show_conditions)
-        df_proj= self.init_df_proj(which,name,outliers_in_obs=outliers_in_obs)
+        df_proj= self.init_df_proj(which,name)
         
         # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
         
@@ -169,9 +166,10 @@ class Plot_Standard(Statistics):
                     ax.axhline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
                     
 
-        xlabel = which if which in self.variables else which.split(sep='_')[1]+f': t={t}'
-        xlabel += f'  pval={self.df_pval[name].loc[t]:.3e}' if which == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[name].loc[t]:.3e}' if which == 'proj_kfda' else \
+        name_pval = self.get_kfdat_name()
+        xlabel = which if which in self.data[self.data_name]['variables'] else which.split(sep='_')[1]+f': t={t}'
+        xlabel += f'  pval={self.df_pval[name_pval].loc[t]:.3e}' if which == 'proj_kfda' else \
+                f'  pval={self.df_pval_contributions[name_pval].loc[t]:.3e}' if which == 'proj_kfda' else \
                 ''
         if orientation == 'vertical':
             ax.set_xlabel(xlabel,fontsize=25)
@@ -186,7 +184,7 @@ class Plot_Standard(Statistics):
     def get_plot_properties(self,marker=None,color=None,show_conditions=True,labels='CT',
                             marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
                             big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                            outliers_in_obs=None
+                            
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
 
@@ -195,10 +193,12 @@ class Plot_Standard(Statistics):
         cy_ = 'xkcd:light orange'
         mx_ = 'o'
         my_ = 's'
-        
+        variables = self.data[self.data_name]['variables']
+        outliers_in_obs = self.outliers_in_obs
+
         if marker is None and color is None : 
-            ipopx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs)
-            ipopy = self.get_index(sample='y',outliers_in_obs=outliers_in_obs)
+            ipopx = self.get_xy_index(sample='x')
+            ipopy = self.get_xy_index(sample='y')
 
             labx = f'{labels[0]}({len(ipopx)})'
             laby = f'{labels[1]}({len(ipopy)})'
@@ -218,14 +218,14 @@ class Plot_Standard(Statistics):
                             
         
         elif isinstance(color,str) and marker is None:
-            if color in list(self.variables):
-                x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
+            if color in list(variables):
+                x,y = self.get_xy()
                 
-                ipopx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs)
-                ipopy = self.get_index(sample='y',outliers_in_obs=outliers_in_obs)
+                ipopx = self.get_xy_index(sample='x')
+                ipopy = self.get_xy_index(sample='y')
 
-                cx = x[:,self.variables.get_loc(color)]
-                cy = y[:,self.variables.get_loc(color)]
+                cx = x[:,variables.get_loc(color)]
+                cy = y[:,variables.get_loc(color)]
                 
                 labx = f'{labels[0]}({len(ipopx)})'
                 laby = f'{labels[1]}({len(ipopy)})'
@@ -316,7 +316,7 @@ class Plot_Standard(Statistics):
         
         elif isinstance(color,str) and isinstance(marker,str):
             if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
-                if color in list(self.variables):
+                if color in list(variables):
                     print('variable')
                     x,y = self.get_xy()
 
@@ -334,11 +334,11 @@ class Plot_Standard(Statistics):
                             ipopy = ipopy[~ipopy.isin(outliers)]
 
 
-                        maskx = self.get_index(sample='x',outliers_in_obs=outliers_in_obs).isin(ipopx)
-                        masky = self.get_index(sample='y',outliers_in_obs=outliers_in_obs).isin(ipopy)
+                        maskx = self.get_xy_index(sample='x').isin(ipopx)
+                        masky = self.get_xy_index(sample='y').isin(ipopy)
                         
-                        cx = x[maskx,self.variables.get_loc(color)]
-                        cy = y[masky,self.variables.get_loc(color)]
+                        cx = x[maskx,variables.get_loc(color)]
+                        cy = y[masky,variables.get_loc(color)]
                         
                         labx = f'{labels[0]} {popm} ({len(ipopx)})'
                         laby = f'{labels[1]} {popm} ({len(ipopy)})'
@@ -458,8 +458,7 @@ class Plot_Standard(Statistics):
         return(properties)
 
     def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,
-                    highlight=None,color=None,marker=None,show_conditions=True,labels='CT',text=False,fig=None,ax=None,
-                    outliers_in_obs=None):
+                    highlight=None,color=None,marker=None,show_conditions=True,labels='CT',text=False,fig=None,ax=None,):
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -467,9 +466,9 @@ class Plot_Standard(Statistics):
         yproj = xproj if yproj is None else yproj
         if xproj == yproj and yname is None:
             yname = xname
-        df_abscisse = self.init_df_proj(xproj,xname,outliers_in_obs=outliers_in_obs)
-        df_ordonnee = self.init_df_proj(yproj,yname,outliers_in_obs=outliers_in_obs)
-        properties = self.get_plot_properties(marker=marker,color=color,labels=labels,show_conditions=show_conditions,outliers_in_obs=outliers_in_obs)
+        df_abscisse = self.init_df_proj(xproj,xname,)
+        df_ordonnee = self.init_df_proj(yproj,yname,)
+        properties = self.get_plot_properties(marker=marker,color=color,labels=labels,show_conditions=show_conditions,)
         texts = []
         
         for kprop,vprop in properties.items():
@@ -518,15 +517,21 @@ class Plot_Standard(Statistics):
         if 'title' in properties :
             ax.set_title(properties['title'],fontsize=20)
 
-
-        xlabel = xproj if xproj in self.variables else xproj.split(sep='_')[1]+f': t={p1}'
-        xlabel += f'  pval={self.df_pval[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
+        name_pval = self.get_kfdat_name()
+        xlabel = xproj if xproj in self.data[self.data_name]['variables'] else xproj.split(sep='_')[1]+f': t={p1}'
+        # xlabel += f'  pval={self.df_pval[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
+        #         f'  pval={self.df_pval_contributions[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
+        #         ''
+        xlabel += f'  pval={self.df_pval[name_pval].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
+                f'  pval={self.df_pval_contributions[name_pval].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
                 ''
 
-        ylabel = yproj if yproj in self.variables else yproj.split(sep='_')[1]+f': t={p2}'
-        ylabel += f'  pval={self.df_pval[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
+        ylabel = yproj if yproj in self.data[self.data_name]['variables'] else yproj.split(sep='_')[1]+f': t={p2}'
+        # ylabel += f'  pval={self.df_pval[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
+        #         f'  pval={self.df_pval_contributions[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
+        #         ''
+        ylabel += f'  pval={self.df_pval[name_pval].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
+                f'  pval={self.df_pval_contributions[name_pval].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
                 ''
 
         ax.set_xlabel(xlabel,fontsize=25)                    

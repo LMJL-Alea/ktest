@@ -52,7 +52,7 @@ class Plot_WBerrors(Residuals,Statistics):
 
         log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
         log10pval = np.array(log10pval[log10pval<10**10])
-        expvar = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
+        expvar = np.array(self.get_explained_variance()[:len(log10pval)])
         
         threshold = -np.log(0.05)/np.log(10)
         ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
@@ -126,7 +126,7 @@ class Plot_WBerrors(Residuals,Statistics):
         threshold = -np.log(0.05)/np.log(10)
 
         errorB = np.array(self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs))
-        errorW = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs))
+        errorW = np.array(self.get_explained_variance())
 
         errorB_acc = errorB[:len(log10pval)][log10pval<=threshold]
         errorW_acc = errorW[:len(log10pval)][log10pval<=threshold]
@@ -168,8 +168,8 @@ class Plot_WBerrors(Residuals,Statistics):
     #     errorB = np.array(get_between_covariance_projection_error(self))
     #     errorW = np.array(self.get_explained_variance())
 
-        errorB = np.array(self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
-        errorW = np.array(self.get_explained_variance(outliers_in_obs=outliers_in_obs)[:len(log10pval)])
+        errorB = np.array(self.get_between_covariance_projection_error_new()[:len(log10pval)])
+        errorW = np.array(self.get_explained_variance()[:len(log10pval)])
 
         
         errorB_acc = errorB[log10pval<=threshold]
@@ -200,7 +200,7 @@ class Plot_WBerrors(Residuals,Statistics):
 
         label = name # tr($\Sigma_W$) = {trace:.3e}'
 
-        explained_variance = self.get_explained_variance(outliers_in_obs=outliers_in_obs)
+        explained_variance = self.get_explained_variance()
         explained_variance = cat([tensor([0],dtype=float64),explained_variance])
         expvar = 1 - explained_variance
         trunc = np.arange(0,len(expvar))
@@ -222,10 +222,10 @@ class Plot_WBerrors(Residuals,Statistics):
         ax.set_xticks(xticks)
         return(fig,ax)
 
-    def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
+    def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None):
         if fig is None:
             fig,ax = plt.subplots(figsize=(7,7))
-        projection_error,delta = self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs,return_total=True)
+        projection_error,delta = self.get_between_covariance_projection_error_new(return_total=True)
         projection_error = cat([tensor([0],dtype=float64),projection_error])
         errorB = 1 - projection_error
         trunc = np.arange(0,len(errorB))

@@ -4,6 +4,30 @@ import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
 from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel
+from torch import cat
+
+
+def convert_to_torch_tensor(X):
+    token = True
+    if isinstance(X,pd.Series):
+        X = torch.from_numpy(X.to_numpy().reshape(-1,1)).double()
+    if isinstance(X,pd.DataFrame):
+        X = torch.from_numpy(X.to_numpy()).double()
+    elif isinstance(X, np.ndarray):
+        X = torch.from_numpy(X).double()
+    elif isinstance(X,torch.Tensor):
+        X = X.double()
+    else : 
+        token = False
+        print(f'unknown data type {type(X)}')            
+
+    return(X)
+
+def convert_to_pandas_index(index):
+    if isinstance(index,list) or isinstance(index,range):
+        return(pd.Index(index))
+    else:
+        return(index)
 
 class Model:
     def __init__(self):        
@@ -35,16 +59,24 @@ class Model:
         '''
 
         self.approximation_cov = approximation_cov
+        # m_specified permet d'éviter une erreur d'arrondi sur m quand on initialise nystrom plusieurs fois et fait diminuer m
+        self.m_initial = m 
         self.m = m
+
         self.r = r
         self.landmark_method = landmark_method
         self.anchors_basis = anchors_basis
         self.approximation_mmd = approximation_mmd
         self.has_model = True
+        self.nystrom_initialized = False
+
+    def get_model(self):
+        return(self.approximation_cov,self.approximation_mmd,self.landmark_method,self.anchors_basis,self.m,self.r)
+
 
 class Data:
 
-    def __init__(self):        
+    def __init__(self,verbose=0):        
         super(Data, self).__init__()
         self.center_by = None        
         self.has_data = False   
@@ -52,7 +84,18 @@ class Data:
         self.quantization_with_landmarks_possible = False
 
         # attributs initialisés 
-        self.data = {'x':{},'y':{}}
+        self.data = {}
+        self.obs = pd.DataFrame(columns=['sample'])
+        self.obs['sample'] = self.obs['sample'].astype('category')
+        self.verbose=verbose
+        self.var = {}
+        self.vard = {}
+        
+        self.data_name = None
+        self.condition = 'sample'
+        self.samples = 'all'
+        self.outliers_in_obs = None
+        # self.data = {'x':{},'y':{}}
         self.main_data=None
 
         # Results
@@ -66,64 +109,11 @@ class Data:
         self.df_proj_residuals = {}
         self.corr = {}     
         self.dict_mmd = {}
-        self.spev = {'x':{'anchors':{}},'y':{'anchors':{}},'xy':{'anchors':{}},'residuals':{}} # dict containing every result of diagonalization
+        self.spev = {'covw':{},'anchors':{},'residuals':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
         self.start_times = {}
-
-    def init_xy(self,x,y,data_name ='data',main=True ):
-        '''
-        This function initializes the attributes `x` and `y` of the Tester object 
-        which contain the two datasets in torch.tensors format.
-
-        A faire : mieux gérer les noms de variables des données secondaires
-
-        Parameters
-        ----------
-            x : pandas.Series (univariate testing), pandas.DataFrame, numpy.ndarray or torch.Tensor
-            The dataset corresponding to the first sample 
-
-            y : pandas.Series (univariate testing), pandas.DataFrame, numpy.ndarray or torch.Tensor
-            The dataset corresponding to the second sample
-
-        Attributes Initialized
-        ---------- ----------- 
-            x : torch.Tensor, the first dataset
-            y : torch.Tensor, the second dataset 
-            n1_initial : int, the original size of `x`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
-            n2_initial : int, the original size of `y`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
-            n1 : int, size of `x`
-            n2 : int, size of `y` 
-            has_data : boolean, True if the Tester object has data (deprecated ?)
-
-        '''
-        # Tester works with torch tensor objects 
-
-        for xy,sxy in zip([x,y],'xy'):
-            token = True
-            if isinstance(xy,pd.Series):
-                xy = torch.from_numpy(xy.to_numpy().reshape(-1,1)).double()
-            if isinstance(xy,pd.DataFrame):
-                xy = torch.from_numpy(xy.to_numpy()).double()
-            elif isinstance(xy, np.ndarray):
-                xy = torch.from_numpy(xy).double()
-            elif isinstance(xy,torch.Tensor):
-                xy = xy.double()
-            else : 
-                token = False
-                print(f'unknown data type {type(xy)}')
-            if token:
-                if sxy == 'x':
-                    self.data['x'][data_name] = {'X':xy,'p':xy.shape[1]}           
-                    self.data['x']['n'] = xy.shape[0]                
-                if sxy == 'y':
-                    self.data['y'][data_name] = {'X':xy,'p':xy.shape[1]}           
-                    self.data['y']['n'] = xy.shape[0]                
-                    
-                self.has_data = True
-            if main:
-                self.main_data = data_name
 
     def init_index_xy(self,x_index = None,y_index = None):
         '''
@@ -259,33 +249,6 @@ class Data:
         self.init_metadata(dfx_meta,dfy_meta) 
         self.set_center_by(center_by)
         
-    def set_center_by(self,center_by=None):
-        '''
-        Initializes the attribute `center_by` which allow to automatically center the data with respect 
-        to a stratification of the datasets informed in the meta information dataframe `obs`. 
-        This centering is independant from the centering applied to the data to compute statistic-related centerings. 
-        
-        Parameters
-        ----------
-            center_by (default = None) : None or str, 
-                if None, the attribute center_by is set to None 
-                and no centering will be done during the computations of the Gram matrix. 
-                else, either a column of self.obs or a combination of columns with the following syntax
-                - starts with '#' to specify that it is a combination of effects
-                - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
-                - the effects are separated by a '_'
-                exemple : '#-celltype_+patient'
-
-
-        Attributes Initialized
-        ---------- ----------- 
-            center_by : str,
-                is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
-
-        '''
-        
-        if center_by is not None and hasattr(self,'obs'):
-            self.center_by = center_by       
 
     def init_metadata(self,dfx_meta=None,dfy_meta=None):
         '''
@@ -314,9 +277,9 @@ class Data:
             dfx_meta['sample'] = ['x']*len(dfx_meta)
             dfy_meta['sample'] = ['y']*len(dfy_meta)
             self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
-            self.obs.index = self.get_index()
+            self.obs.index = self.get_xy_index()
         else:
-            self.obs= pd.DataFrame(index=self.get_index())
+            self.obs= pd.DataFrame(index=self.get_xy_index())
 
     def init_data(self,
             x:Union[np.array,torch.tensor]=None,
@@ -391,15 +354,418 @@ class Data:
             self.kernel = kernel
             self.kernel_name = 'specified by user'
 
-    def init_df_proj(self,which,name=None,outliers_in_obs=None):
-        # if name is None:
-        #     name = self.main_name
+
+    # new version 
+
+    def _update_dict_data(self,x,data_name,update_current_data_name=True): 
+        '''
+        Add the new data x to the torch.tensor of data `self.data[data_name]` after converting 
+        x to a torch.tensor if needed.  
+
+        Parameters
+        ----------
+            x : numpy.array, pandas.DataFrame, pandas.Series or torch.Tensor
+                A table of any type containing the data
+            
+            data_name : str
+                The data structure to update in the dict of data `self.data`.
+                This name refers to the pretreatments and normalization steps applied to the data.
+
+
+        Attributes Initialized
+        ---------- ----------- 
+            data : dict
+                this dict structure contains data informations for each data_name
+                    - 'X' : `torch.tensor` of data
+                    - 'p' : dimension of the data, number of variables
+                    - 'index' : `pandas.Index` of the observations
+                    - 'variables' : `pandas.Index` of the variables
+            
+            current_data_name : this attributes take the value of the last `data_name` updated with this function.
+                this attribute is used as default `data_name` when `data_name` is not informed in other functions.                    
+        '''
         
+        x = convert_to_torch_tensor(x)        
+        if self.data_name is None:
+            self.data_name = data_name
+
+        if data_name not in self.data:
+            self.data[data_name] = {'X':x,'index':pd.Index([]),'p':x.shape[1]}
+        else:
+            self.data[data_name]['X'] = cat((self.data[data_name]['X'],x),axis=0)
+        
+        if update_current_data_name:
+            self.current_data_name = data_name
+
+    def _update_index(self,nobs,index,data_name):
+        '''
+        This function updates the value of the key 'index' in the attribute `self.data[data_name]`
+        If there is no index, the index is set as a range of integer.
+
+        Parameters
+        ----------
+            nobs : int
+                number of observation to update the index
+                this argument is used only if index is None to set the index as a range of integers
+
+            index : list, pandas.index, iterable
+                a list of value indexes which refers to the observations. 
+
+            data_name : str
+                The data structure to update in the dict of data `self.data`.
+                This name refers to the pretreatments and normalization steps applied to the data.
+
+        Attributes Initialized
+        ---------- -----------
+            data : Only the value of `self.data[data_name]['index']` is updated. 
+
+        '''
+
+
+        if index is None:
+            i0 = 1 if len(self.data[data_name]['index'])==0 else self.data[data_name]['index'][-1] + 1
+            index = range(i0,i0+nobs)
+
+        index = convert_to_pandas_index(index)
+        self.data[data_name]['index'] = self.data[data_name]['index'].append(index)
+
+        return(index)
+
+    def _update_meta_data(self,nobs,df_meta,index,sample):
+        '''
+        This function update the meta information about the data contained in the pandas.DataFrame 
+        attribute `self.obs`
+
+        The column 'sample' of `self.obs` is updated even if there is no meta data. 
+        This column refers to the sample of origin of the data. 
+
+
+        Parameters
+        ----------
+            nobs : int 
+                number of observation concerned by the update
+
+            df_meta : pandas.DataFrame
+                table of metadata
+
+            index : list, pandas.index, iterable
+                a list of value indexes which refers to the observations. 
+
+            sample: str
+                a label for the observations corresponding to the observations updated
+
+
+        Attributes Initialized
+        ---------- -----------
+            obs: pandas.DataFrame
+                a structure containing every meta information of each observation
+
+        '''
+        if df_meta is None:
+            df_meta = pd.DataFrame([sample]*nobs,columns=['sample'],index=index)
+        else:
+            df_meta['sample'] = [sample]*nobs
+        self.obs = pd.concat([self.obs,df_meta])
+        self.obs['sample'] = self.obs['sample'].astype('category')
+
+    def _update_variables(self,variables,data_name):
+        '''
+        This function updates the variables information 
+
+        Parameters
+        ----------
+            variables : list, pandas.index, iterable
+                a list of value indexes which refers to the variables.
+
+            data_name : str
+                The data structure to update in the dict of data `self.data`.
+                This name refers to the pretreatments and normalization steps applied to the data.
+
+        Attributes Initialized
+        ---------- -----------            
+             data : dict
+                 this dict structure contains data informations for each data_name
+                    - 'X' : `torch.tensor` of data
+                    - 'p' : dimension of the data, number of variables
+                    - 'index' : `pandas.Index` of the observations
+                    - 'variables' : `pandas.Index` of the variables    
+
+            var : dict of pandas.DataFrame 
+                a structure containing every meta information of each variable for each data_name
+
+            vard : dict of dict
+                a temporary structure containing every meta information of each variable for each data_name
+                this structure is only used when it is not optimal to update the attribute `var`
+
+
+        '''
+
+        if variables is None:
+            p = self.data[data_name]['p']
+            variables = pd.Index(range(p))
+        self.data[data_name]['variables']=variables
+        self.var[data_name] = pd.DataFrame(index=variables)
+        self.vard[data_name] = {v:{} for v in variables}
+
+    def add_data_to_Tester(self,x,
+                           sample,                               
+                           data_name,
+                           index=None,
+                           variables=None,
+                           df_meta=None,
+                           ):
+        nobs = len(x)
+        if index is None and df_meta is not None:
+            index = df_meta.index
+
+        self._update_dict_data(x,data_name)
+        index = self._update_index(nobs,index,data_name)
+        self._update_meta_data(nobs,df_meta,index,sample)
+        self._update_variables(variables,data_name)
+
+    def add_data_to_Tester_from_dataframe(self,df,sample,df_meta=None,data_name='data'):
+        '''
+        
+        '''
+        x = df.to_numpy()
+        index = df.index
+        variables = df.columns
+
+        self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta)
+
+    def get_index(self,landmarks=False):
+
+        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()        
+        samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
+
+        dict_index = {}
+
+        for sample in samples_list: 
+            ooi = self.obs[self.obs[condition]==sample].index
+            if outliers_in_obs is not None:
+                outliers = self.obs[self.obs[outliers_in_obs]].index             
+                ooi = ooi[~ooi.isin(outliers)]
+            if landmarks:            
+                
+                # When kmeans is used, the indexes do not refer to observations but to centroids
+                if self.landmark_method == 'kmeans':
+                    
+                    kmeans_lm_name = self.get_kmeans_landmarks_name_for_sample(sample=sample)
+                    try:
+                        lm_index = self.data[kmeans_lm_name]['index']
+                    except KeyError:
+                        print(f'KeyError : {kmeans_lm_name} not in {list(self.data.keys())}')
+                        
+                    ooi = lm_index
+
+                else:
+                    landmarks_name = self.get_landmarks_name() 
+                    try :
+                        lm_index = self.obs[self.obs[f'{sample}_{landmarks_name}']==True].index
+                    except KeyError:
+                        print(f'KeyError : {sample}_{landmarks_name} not in {self.obs.columns.to_list()}')
+                    ooi = ooi[ooi.isin(lm_index)]
+            dict_index[sample] = ooi
+        return(dict_index) 
+
+    def get_kmeans_landmarks(self):
+        
+        condition = self.condition
+        samples = self.samples
+        
+        samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
+        dict_data = {}
+        for sample in samples_list:
+            kmeans_landmarks_name = self.get_kmeans_landmarks_name_for_sample(sample)
+            dict_data[sample] = self.data[kmeans_landmarks_name]['X']
+        return(dict_data)
+    
+    def get_data(self,landmarks=False):
+        
+        data_name = self.data_name
+    
+        if landmarks and self.landmark_method =='kmeans':
+            dict_data = self.get_kmeans_landmarks()
+            
+        else:
+            dict_index = self.get_index(landmarks=landmarks)
+            if landmarks and self.landmark_method=='kmeans':
+                dict_data = {k:self.data[data_name]['X'] for k in dict_index.keys()}
+            else:
+                dict_data = {k:self.data[data_name]['X'][self.obs.index.isin(v),:] for k,v in dict_index.items()}
+        return(dict_data)
+    
+    def get_nobs(self,landmarks=False):
+        
+        dict_index = self.get_index(landmarks=landmarks)
+        if landmarks and self.landmark_method == 'kmeans':
+            dict_nobs = {k:len(v) for k,v in dict_index.items()}
+        else:
+            dict_nobs = {k:int(self.obs.index.isin(v).sum()) for k,v in dict_index.items()}
+        dict_nobs['ntot'] = sum(list(dict_nobs.values()))
+        return(dict_nobs)
+
+    def get_ntot(self,landmarks=False):
+        dict_nobs = self.get_nobs(landmarks=landmarks)
+        return(dict_nobs['ntot'])
+
+    # Two sample 
+    def init_xy(self,x,y,data_name,
+                x_index=None,y_index=None,variables=None,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
+        '''
+        This function adds two dataset in the data_structure and name them 'x' and 'y'. 
+        It is used when performing two-smaple test. 
+
+        Parameters
+        ----------
+            x,y : numpy.array, pandas.DataFrame, pandas.Series or torch.Tensor
+                A table of any type containing the data
+            
+            data_name : str
+                The data structure to update in the dict of data `self.data`.
+                This name refers to the pretreatments and normalization steps applied to the data.
+
+            x_index,y_index : list, pandas.index, iterable
+                a list of value indexes which refers to the observations. 
+
+            variables : list, pandas.index, iterable
+                a list of value indexes which refers to the variables.
+
+            dfx_meta, dfy_meta : pandas.DataFrame
+                table of metadata
+
+            kernel : str
+                Refers to the kernel function to use for testing
+
+        Attributes Initialized
+        ---------- ----------- 
+            data : dict
+                this dict structure contains data informations for each data_name
+                    - 'X' : `torch.tensor` of data
+                    - 'p' : dimension of the data, number of variables
+                    - 'index' : `pandas.Index` of the observations
+                    - 'variables' : `pandas.Index` of the variables
+            
+            obs: pandas.DataFrame
+                a structure containing every meta information of each observation
+
+            kernel : function
+                kernel function to be used
+
+        '''
+            
+        self.add_data_to_Tester(x,'x',data_name,x_index,variables,dfx_meta)
+        self.add_data_to_Tester(y,'y',data_name,y_index,variables,dfy_meta)
+
+        self.init_kernel(kernel)   
+
+    def init_xy_from_dataframe(self,dfx,dfy,data_name,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
+
+        self.add_data_to_Tester_from_dataframe(df=dfx,sample='x',df_meta=dfx_meta,data_name=data_name)
+        self.add_data_to_Tester_from_dataframe(df=dfy,sample='y',df_meta=dfy_meta,data_name=data_name)
+
+        self.init_kernel(kernel)
+
+    def get_n1n2n(self,landmarks=False):
+        nobs = self.get_nobs(landmarks=landmarks)
+        return(list(nobs.values()))
+
+    def get_xy_index(self,sample='xy',landmarks=False):
+        dict_index = self.get_index(landmarks=landmarks)
+        indexes = list(dict_index.values())
+        if sample=='xy':
+            return(indexes[0].append(indexes[1]))
+        if sample=='x':
+            return(indexes[0])
+        if sample=='y':
+            return(indexes[1])
+
+    def get_xy(self,landmarks=False):
+
+        data = self.get_data(landmarks=landmarks)
+        return(list(data.values()))
+
+    # L sample 
+    def init_L_groups(self,data_list,data_name,sample_list=None,index_list=None,
+    variables=None,df_meta_list=None,kernel='gauss_median'):
+        '''
+        This function adds L dataset in the data_structure and name them according to
+        `sample_list`. 
+        It is used when performing L-sample test or kernel-MANOVA. 
+
+        Parameters
+        ----------
+            data_list : list of numpy.array, pandas.DataFrame, pandas.Series or torch.Tensor
+                A list of L tables of any type containing the data
+
+            data_name : str
+                The data structure to update in the dict of data `self.data`.
+                This name refers to the pretreatments and normalization steps applied to the data.
+
+            sample_list (default : None) : list of str
+                The names to refer to each sample.
+                If None, the samples are called 'x1', ... , 'xL'
+
+            index_list : list of list, pandas.index, iterable
+                a list of L lists of value indexes which refers to the observations. 
+
+            variables : list, pandas.index, iterable
+                a list of value indexes which refers to the variables.
+
+            df_meta_list :  list of pandas.DataFrame
+                list of L tables of metadata
+
+            kernel : str
+                Refers to the kernel function to use for testing
+
+        Attributes Initialized
+        ---------- ----------- 
+            data : dict
+                this dict structure contains data informations for each data_name
+                    - 'X' : `torch.tensor` of data
+                    - 'p' : dimension of the data, number of variables
+                    - 'index' : `pandas.Index` of the observations
+                    - 'variables' : `pandas.Index` of the variables
+
+            obs: pandas.DataFrame
+                a structure containing every meta information of each observation
+
+            kernel : function
+                kernel function to be used
+
+        '''        
+        
+        L = len(data_list)
+        if index_list is None:
+            index_list = [None]*L
+        if df_meta_list is None:
+            df_meta_list = [None]*L
+        if sample_list is None:
+            sample_list = [f'x{l}' for l in range(1,L+1)]
+
+        for x,sample,index,df_meta in zip(data_list,sample_list,index_list,df_meta_list):
+            self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta)
+ 
+    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,df_meta_list=None,kernel='gauss_median'):
+        L = len(df_list)
+        if df_meta_list is None:
+            df_meta_list = [None]*L
+        if sample_list is None:
+            sample_list = [f'x{l}' for l in range(1,L+1)]
+        for df,sample,df_meta in zip(df_list,sample_list,df_meta_list):
+            self.add_data_to_Tester_from_dataframe(df,sample,df_meta,data_name)
+
+    # Access data 
+    def init_df_proj(self,which,name=None,data_name=None):
+        if data_name is None:
+            data_name = self.current_data_name
+
         proj_options = {'proj_kfda':self.df_proj_kfda,
                 'proj_kpca':self.df_proj_kpca,
                 'proj_mmd':self.df_proj_mmd,
                 'proj_residuals':self.df_proj_residuals # faire en sorte d'ajouter ça
                 }
+
         if which in proj_options:
             dict_df_proj = proj_options[which]
             nproj = len(dict_df_proj)
@@ -420,92 +786,148 @@ class Data:
                     df_proj = dict_df_proj[names[0]]
                 else: 
                     df_proj = dict_df_proj[name]
-        elif which in self.variables:
-            n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
-            datax,datay = self.get_xy(outliers_in_obs=outliers_in_obs,name_data=name)
-            loc_variable = self.variables.get_loc(which)
-            index = self.get_index(outliers_in_obs=outliers_in_obs)
+        elif which in self.var[data_name].index:
+            variables = self.var[data_name].index
+            n1,n2,n = self.get_n1n2n(landmarks=False)
+            datax,datay = self.get_xy()
+            loc_variable = variables.get_loc(which)
+            index = self.get_xy_index()
+
             df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=index,columns=[which])
             # df_proj['sample']=['x']*n1 + ['y']*n2
         else:
             print(f'{which} not recognized')
-            
+
         return(df_proj)
 
-    def get_xy(self,landmarks=False,outliers_in_obs=None,name_data=None):
-        if name_data is None:
-            name_data = self.main_data
-        if landmarks: # l'attribut name_data n'a pas été adatpé aux landmarks car je n'en ai pas encore vu l'utilité 
-            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
-            x = self.data['x'][landmarks_name]['X'] 
-            y = self.data['y'][landmarks_name]['X']
-            
-        else:
-            if outliers_in_obs is None:
-                x = self.data['x'][name_data]['X']
-                y = self.data['y'][name_data]['X']
-            else:         
-                xindex = self.data['x']['index'] 
-                yindex = self.data['y']['index']
-                
-                outliers    = self.obs[self.obs[outliers_in_obs]].index
-                xmask       = ~xindex.isin(outliers)
-                ymask       = ~yindex.isin(outliers)
-                
-                x = self.data['x'][name_data]['X'][xmask,:]
-                y = self.data['y'][name_data]['X'][ymask,:]
+    def make_groups_from_gene_presence(self,gene,data_name):
 
-        return(x,y)
+        dfg = self.init_df_proj(which=gene,data_name=data_name)
+        self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
+        self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
-    def get_index(self,sample='xy',landmarks=False,outliers_in_obs=None):
-        if landmarks: 
-            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
-            xindex = self.obs[self.obs[f'x{landmarks_name}']].index
-            yindex = self.obs[self.obs[f'y{landmarks_name}']].index
-            
-        else:
-            if outliers_in_obs is None:
-                xindex = self.data['x']['index'] 
-                yindex = self.data['y']['index']
-            else:
-                xindex = self.data['x']['index'] 
-                yindex = self.data['y']['index']
-                
-                outliers    = self.obs[self.obs[outliers_in_obs]].index
-                xmask       = ~xindex.isin(outliers)
-                ymask       = ~yindex.isin(outliers)
+    def set_outliers_in_obs(self,outliers_in_obs):
+        if outliers_in_obs in self.obs.columns or outliers_in_obs is None:
+            self.outliers_in_obs = outliers_in_obs
 
-                xindex = self.data['x']['index'][xmask]
-                yindex = self.data['y']['index'][ymask]
-
-        return(xindex.append(yindex) if sample =='xy' else xindex if sample =='x' else yindex)
-                
-    def get_n1n2n(self,landmarks=False,outliers_in_obs=None):
-        if landmarks: 
-            landmarks_name = 'landmarks' if outliers_in_obs is None else f'landmarks{outliers_in_obs}'
-            n1 = self.data['x'][landmarks_name]['n'] 
-            n2 = self.data['y'][landmarks_name]['n']
-
-        else:
-            if outliers_in_obs is None:
-                n1 = self.data['x']['n'] 
-                n2 = self.data['y']['n']
-            else:
-                xindex = self.data['x']['index'] 
-                yindex = self.data['y']['index']
-                
-                outliers    = self.obs[self.obs[outliers_in_obs]].index
-                xmask       = ~xindex.isin(outliers)
-                ymask       = ~yindex.isin(outliers)
-
-                n1 = len(self.data['x']['index'][xmask])
-                n2 = len(self.data['y']['index'][ymask])
-
-        return(n1,n2,n1+n2)
+    def set_center_by(self,center_by=None):
+        '''
+        Initializes the attribute `center_by` which allow to automatically center the data with respect 
+        to a stratification of the datasets informed in the meta information dataframe `obs`. 
+        This centering is independant from the centering applied to the data to compute statistic-related centerings. 
         
+        Parameters
+        ----------
+            center_by (default = None) : None or str, 
+                if None, the attribute center_by is set to None 
+                and no centering will be done during the computations of the Gram matrix. 
+                else, either a column of self.obs or a combination of columns with the following syntax
+                - starts with '#' to specify that it is a combination of effects
+                - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
+                - the effects are separated by a '_'
+                exemple : '#-celltype_+patient'
 
 
+        Attributes Initialized
+        ---------- ----------- 
+            center_by : str,
+                is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
 
-
-
+        '''
         
+        if center_by is not None and hasattr(self,'obs'):
+            self.center_by = center_by       
+           
+    def set_test_data_info(self,data_name,condition,samples):
+        self.data_name = data_name
+        self.condition = condition
+        self.samples = samples
+        
+    def get_data_name_condition_samples_outliers(self):
+        return(self.data_name,self.condition,self.samples,self.outliers_in_obs)
+        
+    def get_spev(self,slot='covw',t=None,center=None):
+        spev_name = self.get_covw_spev_name() if slot=='covw' else \
+                    self.get_anchors_name() if slot=='anchors' else \
+                    self.get_residuals_name(t=t,center=center)
+        
+        try:
+            return(self.spev[slot][spev_name]['sp'],self.spev[slot][spev_name]['ev'])
+        except KeyError:
+            print(f'KeyError : spev {spev_name} not in {slot} {self.spev[slot].keys()}')
+                    
+    # Names 
+
+    def get_landmarks_name(self):
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}' # cellules à ignorer 
+        c = self.condition
+        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        lm = self.landmark_method
+        dn = self.data_name
+        m = f'_m{self.m}'
+        return(f'lm{lm}{m}_{dn}{c}{smpl}{out}')
+
+    def get_kmeans_landmarks_name_for_sample(self,sample):
+        landmarks_name = self.get_landmarks_name()
+        return(f'{sample}_{landmarks_name}')
+
+    def get_anchors_name(self,):
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+        dn = self.data_name
+        c = self.condition
+        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        lm = self.landmark_method
+        ab = self.anchors_basis
+        m = f'_m{self.m}'
+        # r = f'_r{self.r}' # je ne le mets pas car il change en fonction des abérations du spectre
+        return(f'lm{lm}{m}_basis{ab}_{dn}{c}{smpl}{out}')
+
+    def get_covw_spev_name(self):
+
+        cov = self.approximation_cov
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+        dn = self.data_name
+        c = self.condition
+        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        ab = f'_basis{self.anchors_basis}' if 'nystrom' in cov else ''
+        lm = f'_lm{self.landmark_method}_m{self.m}' if 'nystrom' in cov else ''
+        return(f'{cov}{lm}{ab}{out}_{dn}{c}{smpl}{out}')
+
+    def get_kfdat_name(self):
+
+            cov = self.approximation_cov
+            mmd = self.approximation_mmd
+            out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+            dn = self.data_name
+            c = self.condition
+            smpl = '' if self.samples == 'all' else "".join(self.samples)
+            ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
+            lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
+
+            return(f'{cov}{mmd}{ab}{lm}_{dn}{c}{smpl}{out}')
+
+    def get_residuals_name(self,t,center):
+
+        cov = self.approximation_cov
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+        dn = self.data_name
+        c = self.condition
+        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
+        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
+
+        c = center
+        return(f'{c}{t}_{cov}{ab}{lm}_{dn}{c}{smpl}{out}')
+        
+    def get_mmd_name(self):
+        cov = self.approximation_cov
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+        dn = self.data_name
+        c = self.condition
+        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
+        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
+
+        return(f'{cov}{ab}{lm}_{dn}{c}{smpl}{out}')
+
+

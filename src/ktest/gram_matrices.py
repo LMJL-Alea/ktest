@@ -16,7 +16,7 @@ class GramMatrices(CenteringOps):
     def __init__(self):
         super(GramMatrices,self).__init__()
 
-    def compute_gram(self,sample='xy',landmarks=False,outliers_in_obs=None): 
+    def compute_gram_new(self,landmarks=False): 
         """
         Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 
         
@@ -30,19 +30,7 @@ class GramMatrices(CenteringOps):
 
         Parameters
         ----------
-            sample (default = 'xy') : str,
-                if 'x' : Returns the Gram matrix corresponding to the first sample.
-                if 'y' : Returns the Gram matrix corresponding to the second sample. 
-                if 'xy': Returns the Gram matrix corresponding to both samples concatenated. 
-                        Such that the Gram is a bloc matrix with diagonal blocks corresponding to 
-                        the gram matrix of each sample and the non-diagonal block correspond to the 
-                        crossed-gram matrix between both samples. 
 
-            landmarks (default = False) : boolean,
-                if False : Returns the Gram matrix of the observation samples. 
-                if True : Returns the Gram matrix of a set of landmarks stored in the attributes
-                    `xlandmarks`, `ylandmarks` or both. It is used in the nystrom approach. 
-                    ( The landmarks can be initialized with the method compute_nystrom_landmarks())
 
         Returns
         -------
@@ -50,26 +38,16 @@ class GramMatrices(CenteringOps):
                 Gram matrix corresponding to the parameters centered with respect to the attribute `center_by`
         """
 
-        kernel = self.kernel
-    
-        x,y = self.get_xy(landmarks=landmarks,outliers_in_obs=outliers_in_obs)
+
+        dict_data = self.get_data(landmarks=landmarks)
         
-        if 'x' in sample:
-            kxx = kernel(x,x)
-        if 'y' in sample:
-            kyy = kernel(y,y)
+        data = torch.cat([x for x in dict_data.values()],axis=0)
+        K = self.kernel(data,data)
+        if not landmarks : 
+            K = self.center_gram_matrix_with_respect_to_some_effects_new(K)
+        return(K)
 
-        if sample == 'xy':
-            kxy = kernel(x, y)
-            K = torch.cat((torch.cat((kxx, kxy), dim=1),
-                            torch.cat((kxy.t(), kyy), dim=1)), dim=0)
-            if not landmarks: 
-                K = self.center_gram_matrix_with_respect_to_some_effects(K,outliers_in_obs=outliers_in_obs)
-            return(K)
-        else:
-            return(kxx if sample =='x' else kyy)
-
-    def center_gram_matrix_with_respect_to_some_effects(self,K,outliers_in_obs=None):
+    def center_gram_matrix_with_respect_to_some_effects_new(self,K):
         '''
         Faire ce calcul au moment de calculer la gram n'est pas optimal car il ajoute un produit de matrice
         qui peut être cher, surtout quand n est grand. 
@@ -83,46 +61,38 @@ class GramMatrices(CenteringOps):
         if self.center_by is None:
             return(K)
         else:
-            P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=outliers_in_obs)
+            P = self.compute_centering_matrix_with_respect_to_some_effects_new()
             return(torch.chain_matmul(P,K,P))
             # retutn(torch.linalg.multi_dot([P,K,P]))
 
-    def compute_kmn(self,sample='xy',outliers_in_obs=None):
+    def compute_kmn_new(self):
         """
         Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
         """
         assert(self.has_landmarks)
-        kernel = self.kernel
         
-        x,y = self.get_xy(outliers_in_obs=outliers_in_obs)
-        z1,z2 = self.get_xy(landmarks=True,outliers_in_obs=outliers_in_obs)
-        if 'x' in sample:
-            kz1x = kernel(z1,x)
-        if 'y' in sample:
-            kz2y = kernel(z2,y)
+        dict_data = self.get_data(landmarks=False)
+        dict_landmarks = self.get_data(landmarks=True)
         
-        if sample =='xy':
-            kz2x = kernel(z2,x)
-            kz1y = kernel(z1,y)
-            
-            kmn = cat((cat((kz1x, kz1y), dim=1),cat((kz2x, kz2y), dim=1)), dim=0)
-            kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn,outliers_in_obs=outliers_in_obs)
-            return(kmn)
-        else:
-            return(kz1x if sample =='x' else kz2y)
+        data = torch.cat([x for x in dict_data.values()],axis=0)
+        landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
+        
+        kmn = self.kernel(landmarks,data)        
+        kmn = self.center_kmn_matrix_with_respect_to_some_effects_new(kmn)
+        return(kmn)
 
-    def center_kmn_matrix_with_respect_to_some_effects(self,kmn,outliers_in_obs=None):
+    def center_kmn_matrix_with_respect_to_some_effects_new(self,kmn):
         '''
         Cf commentaire dans center_gram_matrix_with_respect_to_some_effects 
         '''
         if self.center_by is None:
             return(kmn)
         else:
-            P = self.compute_centering_matrix_with_respect_to_some_effects(outliers_in_obs=outliers_in_obs)
+            P = self.compute_centering_matrix_with_respect_to_some_effects()
             return(torch.matmul(kmn,P))
             # retutn(torch.linalg.multi_dot([K,P]))
 
-    def compute_within_covariance_centered_gram(self,approximation='standard',sample='xy',verbose=0,outliers_in_obs=None):
+    def compute_within_covariance_centered_gram_new(self,approximation='standard',verbose=0):
         """ 
         Computes and returns the bicentered Gram matrix which shares its spectrum with the 
         within covariance operator. 
@@ -143,37 +113,34 @@ class GramMatrices(CenteringOps):
 
         # fonction qui gère la verbosité de la fonction si verbose >0 
         self.verbosity(function_name='compute_centered_gram',
-                dict_of_variables={'approximation':approximation,
-                                'sample':sample},
+                dict_of_variables={},
                 start=True,
                 verbose = verbose)    
-        
+
         # Instantiation de la matrice de centrage P 
         quantization = approximation == 'quantization'
-        P = self.compute_covariance_centering_matrix(sample=sample,quantization=quantization,outliers_in_obs=outliers_in_obs).double()
+        P = self.compute_covariance_centering_matrix_new(quantization=quantization,landmarks=False)
 
         # Ici n ne correspond pas au nombre d'observations total 
         # mais au nombre d'observations sur lequel est calculé la matrice, déterminé par 
         # le paramètre sample. C'est le 1/n devant la structure de covariance. 
-        n=0
-        n1,n2,_ = self.get_n1n2n(outliers_in_obs=outliers_in_obs)
-        if 'x' in sample:
-            n+=n1     
-        if 'y' in sample:
-            n+=n2
+        dict_nobs = self.get_nobs(landmarks=False)
+        
+        n = dict_nobs['ntot']
 
         # récupération des paramètres du modèle spécifique à l'approximation de nystrom (infos sur les ancres)    
         if 'nystrom' in approximation:
-            m1,m2,m = self.get_n1n2n(landmarks=True,outliers_in_obs=outliers_in_obs) # nombre de landmarks
-            suffix_outliers = '' if outliers_in_obs is None else outliers_in_obs # cellules à ignorer 
-            anchors_basis = self.anchors_basis # quel opérateur de covariance des landmarks est utilisé pour calculer les ancres 
-            anchor_name = f'{anchors_basis}{suffix_outliers}' # où sont rangés les objets dans spev
+            dict_nlandmarks = self.get_nobs(landmarks=True)
 
+            m = dict_nlandmarks['ntot']
+            anchor_name = self.get_anchors_name()
+            
         # plus utilisé 
         # récupération des paramètres du modèle spécifique à l'approximation par quantization (infos sur les landmarks et les poids associés)    
+        # pas à jour
         if approximation == 'quantization':
             if self.quantization_with_landmarks_possible:
-                Kmm = self.compute_gram(sample=sample,landmarks=True,outliers_in_obs=outliers_in_obs)
+                Kmm = self.compute_gram_new(landmarks=True)
                 A = self.compute_quantization_weights(sample=sample,power=.5)
                 Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
                 # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
@@ -184,11 +151,12 @@ class GramMatrices(CenteringOps):
         # plus utilisé, aucun gain de temps car matrice n x n 
         elif approximation == 'nystrom1':
             # version brute mais a terme utiliser la svd ?? 
-            if self.has_landmarks and "anchors" in self.spev[sample]:
-                Kmn = self.compute_kmn(sample=sample,outliers_in_obs=outliers_in_obs)
-                Lp_inv = torch.diag(self.spev[sample]['anchors'][anchor_name]['sp']**(-1))
-                Up = self.spev[sample]['anchors'][anchor_name]['ev']
-                Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+            if self.has_landmarks: 
+                Kmn = self.compute_kmn_new()
+                Lp,Up = self.get_spev(slot='anchors')
+                Lp_inv = torch.diag(Lp**(-1))
+                
+                Pm = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
                 Kw = 1/(n*m*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
                 # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
@@ -198,16 +166,20 @@ class GramMatrices(CenteringOps):
         
         # calcul de la matrice correspondant à l'approximation de nystrm. 
         elif approximation in ['nystrom2','nystrom3']:
-            if self.has_landmarks and "anchors" in self.spev[sample]:
-                Kmn = self.compute_kmn(sample=sample,outliers_in_obs=outliers_in_obs)
-                Lp_inv_12 = torch.diag(self.spev[sample]['anchors'][anchor_name]['sp']**(-(1/2)))
+            if self.has_landmarks:
+                Kmn = self.compute_kmn_new()
+
+                Lp,Up = self.get_spev(slot='anchors')
+
+                Lp_inv_12 = torch.diag(Lp**(-(1/2)))
 
                 # on est pas censé avoir de nan, il y en avait quand les ancres donnaient des spectres négatifs à cause des abérations numérique,
                 # problème réglé en amont 
                 # assert(not any(torch.isnan(Lp_inv_12)))
 
-                Up = self.spev[sample]['anchors'][anchor_name]['ev']
-                Pm = self.compute_covariance_centering_matrix(sample='xy',landmarks=True,outliers_in_obs=outliers_in_obs)
+                
+                
+                Pm = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
                 # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
                 
                 
@@ -223,19 +195,19 @@ class GramMatrices(CenteringOps):
 
         # version standard 
         elif approximation == 'standard':
-            K = self.compute_gram(landmarks=False,sample=sample,outliers_in_obs=outliers_in_obs)
+            K = self.compute_gram_new(landmarks=False)
             Kw = 1/n * torch.chain_matmul(P,K,P)
             # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
         self.verbosity(function_name='compute_centered_gram',
-                dict_of_variables={'approximation':approximation,'sample':sample},
+                dict_of_variables={},
                 start=False,
                 verbose = verbose)    
 
         return Kw
 
-    def diagonalize_within_covariance_centered_gram(self,approximation='standard',sample='xy',verbose=0,outliers_in_obs=None):
+    def diagonalize_within_covariance_centered_gram_new(self,approximation='standard',verbose=0):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues and eigenvectors in the dict spev 
@@ -253,16 +225,14 @@ class GramMatrices(CenteringOps):
             nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
 
         """
-        
 
         self.verbosity(function_name='diagonalize_within_covariance_centered_gram',
-                dict_of_variables={'approximation':approximation,
-                'sample':sample},
+                dict_of_variables={},
                 start=True,
                 verbose = verbose)
         
         # calcul de la matrice a diagonaliser
-        Kw = self.compute_within_covariance_centered_gram(approximation=approximation,sample=sample,verbose=verbose,outliers_in_obs=outliers_in_obs)
+        Kw = self.compute_within_covariance_centered_gram_new(approximation=approximation,verbose=verbose)
         
         # diagonalisation par la fonction C++ codée par François puis tri décroissant des valeurs propres 
         # et vecteurs prores
@@ -277,17 +247,15 @@ class GramMatrices(CenteringOps):
 
 
         # enregistrement des vecteurs propres et valeurs propres dans l'attribut spev
-        suffix_nystrom = self.anchors_basis if 'nystrom' in approximation else ''
-        suffix_outliers = outliers_in_obs if outliers_in_obs is not None else ''
-        name_spev = f'{approximation}{suffix_nystrom}{suffix_outliers}'
-        self.spev[sample][name_spev] = {'sp':sp,'ev':ev}
+        spev_name = self.get_covw_spev_name()
+        
+
+        self.spev['covw'][spev_name] = {'sp':sp,'ev':ev}
         
         self.verbosity(function_name='diagonalize_within_covariance_centered_gram',
-                dict_of_variables={'approximation':approximation,
-                                    'sample':sample,
-                                    'outliers_in_obs':outliers_in_obs},
+                dict_of_variables={},
                 start=False,
                 verbose = verbose)
-
+        
 
 

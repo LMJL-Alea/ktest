@@ -20,9 +20,9 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
             fig,ax = plt.subplots(ncols=1,figsize=(12,8))
         self.plot_pvalue(fig=fig,ax=ax,t=t,column = column,)
         self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'explained difference',
-                                                                            fig,ax,t=t,outliers_in_obs=outliers,scatter=False)
+                                                                            fig,ax,t=t,scatter=False)
         self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'explained variance',
-                                                                        fig,ax,t=t,outliers_in_obs=outliers,scatter=False)
+                                                                        fig,ax,t=t,scatter=False)
         if truncations_of_interest is not None:
             values = self.df_pval[column]
             text_truncations_of_interest(truncations_of_interest,ax,values)
@@ -37,7 +37,7 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         ax.legend(fontsize=20)
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
-        n1,n2,n = self.get_n1n2n(outliers_in_obs=outliers)
+        n1,n2,n = self.get_n1n2n()
         ax.set_title(f'n1={n1} vs n2={n2}',fontsize=30)
         pval = self.df_pval[column][1]
         text=  f'{pval:.2f}' if pval >=.01 else f'{pval:1.0e}'
@@ -75,8 +75,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         
         ax = axes[2]
         self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
-        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
-        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
+        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20)
+        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20)
         ax.legend()
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
@@ -85,8 +85,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         
         ax = axes[3]
         self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
-        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=oname)
-        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=oname)
+        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20)
+        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20)
         ax.legend()
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
@@ -120,8 +120,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         
         ax = axes[1]
         self.plot_pvalue(fig=fig,ax=ax,t=20,column = column_in_dataframe,)
-        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
-        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=outliers_in_obs)
+        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20)
+        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20)
         ax.legend()
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
@@ -130,8 +130,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         
         ax = axes[2]
         self.plot_pvalue(fig=fig,ax=ax,t=20,column = oname,)
-        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20,outliers_in_obs=oname)
-        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20,outliers_in_obs=oname)
+        self.plot_between_covariance_reconstruction_error_with_respect_to_t(r'$\mu_2 - \mu_1$ error',fig,ax,t=20)
+        self.plot_within_covariance_reconstruction_error_with_respect_to_t(r'$\Sigma_W$ error',fig,ax,t=20)
         ax.legend()
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
