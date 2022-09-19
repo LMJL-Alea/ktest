@@ -5,7 +5,7 @@ from .gram_matrices import GramMatrices
 
 class KernelTrick(GramMatrices):
            
-    def compute_pkm_new(self):
+    def compute_pkm(self):
         '''
 
         This function computes the term corresponding to the matrix-matrix-vector product PK omega
@@ -45,14 +45,14 @@ class KernelTrick(GramMatrices):
             Lz = diag(Lz1**-1) # matrice diagonale des inverses des valeurs propres associées aux ancres. 
 
         # instantiation du vecteur de bi-centrage omega et de la matrice de centrage Pbi 
-        omega = self.compute_omega_new(quantization=(mmd=='quantization')) # vecteur de 1/n1 et de -1/n2 
-        Pbi = self.compute_covariance_centering_matrix_new(quantization=(cov=='quantization')) # matrice de centrage par block
+        omega = self.compute_omega(quantization=(mmd=='quantization')) # vecteur de 1/n1 et de -1/n2 
+        Pbi = self.compute_covariance_centering_matrix(quantization=(cov=='quantization')) # matrice de centrage par block
         
         # instantiation de la matrice de passage des landmarks aux observations 
         # (ne sert pas que pour nystrom, aussi pour la statistique par quantification qu'on
         # a définie à un moment mais abandonnée pour ses mauvaises performances)
         if not (mmd == cov) or mmd == 'nystrom':
-            Kzx = self.compute_kmn_new()
+            Kzx = self.compute_kmn()
         
 
         # calcul de la statistique correspondant aux valeurs de cov et mmd.
@@ -67,11 +67,11 @@ class KernelTrick(GramMatrices):
         if cov == 'standard': 
             # cas standard 
             if mmd == 'standard': 
-                Kx = self.compute_gram_new(landmarks=False) # matrice de gram 
+                Kx = self.compute_gram(landmarks=False) # matrice de gram 
                 pkm = mv(Pbi,mv(Kx,omega)) # le vecteur que renvoie cette fonction 
             # aucun avantage
             elif mmd == 'nystrom': 
-                Pi = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
                 # print(f'Pbi{Pbi.shape}Kxz{Kzx.T.shape}Pi{Pi.shape}Uz{Uz.shape}Lz{Lz.shape}omega{omega.shape}')
                 pkm = 1/m * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
                 # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
@@ -82,12 +82,12 @@ class KernelTrick(GramMatrices):
         if cov == 'nystrom1' and cov_anchors == 'shared':
             # aucun avantage
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-                Pi = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
                 pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
                 # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
             # aucun avantage
             elif mmd == 'quantization':
-                Kz = self.compute_gram_new(landmarks=True)
+                Kz = self.compute_gram(landmarks=True)
                 pkm = 1/m**2 * mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
                 # pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
         
@@ -96,13 +96,13 @@ class KernelTrick(GramMatrices):
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-                Pi = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
                 pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
                 # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
             # aucun avantage
             elif mmd == 'quantization': # pas à jour
                 # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
-                Kz = self.compute_gram_new(landmarks=True)
+                Kz = self.compute_gram(landmarks=True)
                 pkm = 1/m**3 * mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
                 # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
@@ -110,7 +110,7 @@ class KernelTrick(GramMatrices):
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
-            Pi = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             # cas nystrom 
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
                 
@@ -122,7 +122,7 @@ class KernelTrick(GramMatrices):
 
             elif mmd == 'quantization': # pas à jour 
                 # il faut ajouter Pi ici . 
-                Kz = self.compute_gram_new(landmarks=True)
+                Kz = self.compute_gram(landmarks=True)
                 pkm = 1/m**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
                 # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
@@ -157,12 +157,12 @@ class KernelTrick(GramMatrices):
                 pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
 
             elif mmd == 'nystrom':
-                Pi = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
-                Kz = self.compute_gram_new(landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Kz = self.compute_gram(landmarks=True)
                 pkm = 1/m * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
 
             elif mmd == 'quantization':
-                Kz = self.compute_gram_new(landmarks=True)
+                Kz = self.compute_gram(landmarks=True)
                 pkm = mv(Pbi,mv(A,mv(Kz,omega)))
         
         try:
@@ -170,7 +170,7 @@ class KernelTrick(GramMatrices):
         except UnboundLocalError:
             print(f'UnboundLocalError: pkm was not computed for cov:{cov},mmd:{mmd}')
 
-    def compute_upk_new(self,t):
+    def compute_upk(self,t):
         """
         epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
         This functions computes the corresponding block with respect to the model parameters. 
@@ -186,10 +186,10 @@ class KernelTrick(GramMatrices):
         
         sp,ev = self.get_spev('covw')
             
-        Pbi = self.compute_covariance_centering_matrix_new(quantization=quantization,landmarks=False)
+        Pbi = self.compute_covariance_centering_matrix(quantization=quantization,landmarks=False)
         
         if 'nystrom' in cov: 
-            Kzx = self.compute_kmn_new()
+            Kzx = self.compute_kmn()
             
             
             m = self.get_ntot(landmarks=True)
@@ -197,7 +197,7 @@ class KernelTrick(GramMatrices):
             
         
         if cov == 'standard':
-            Kx = self.compute_gram_new(landmarks=False)
+            Kx = self.compute_gram(landmarks=False)
             epk = chain_matmul(ev.T[:t],Pbi,Kx).T
             # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
         if cov == 'nystrom3':
@@ -214,7 +214,7 @@ class KernelTrick(GramMatrices):
             # epk = 1/r*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx]).T
         # pas à jour 
         if cov == 'quantization':
-            Kzx = self.compute_kmn_new()
+            Kzx = self.compute_kmn()
             A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
             epk = chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
             # epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T

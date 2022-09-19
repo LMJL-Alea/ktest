@@ -35,17 +35,13 @@ class Model:
         self.has_model = False
         
 
-    def init_model(self,approximation_cov='standard',approximation_mmd='standard',
-                    m=None,r=None,landmark_method='random',anchors_basis='w'):
+    def init_model(self,nystrom=False,m=None,r=None,landmark_method='random',anchors_basis='w'):
         '''
         
         Parameters
         ----------
-            approximation_cov : str in 'standard','nystrom1',nystrom2','nystrom3','quantization'. 
-                                In practice, we only use 'standard' and 'nystrom3'. 
-                                It is the method used to compute the covariance structures. 
-            approximation_mmd : str (same as approximation_cov), the method used to compute
-                                the difference between the mean embeddings. 
+            nystrom (default = False) : bool
+                Whether to use the nystrom approximation or not.
             m : int, the total number of landmarks. 
             r : int, the total number of anchors. 
             landmark_method : str in 'random','kmeans', the method to determine the landmarks. 
@@ -58,20 +54,26 @@ class Model:
         It is not possible to use nystrom for small datasets (n<100)
         '''
 
-        self.approximation_cov = approximation_cov
+        self.nystrom = nystrom
+        if nystrom:
+            self.approximation_cov = 'nystrom3'
+            self.approximation_mmd = 'standard'
+        else:
+            self.approximation_cov = 'standard'
+            self.approximation_mmd = 'standard'
+
         # m_specified permet d'éviter une erreur d'arrondi sur m quand on initialise nystrom plusieurs fois et fait diminuer m
         self.m_initial = m 
         self.m = m
-
         self.r = r
         self.landmark_method = landmark_method
         self.anchors_basis = anchors_basis
-        self.approximation_mmd = approximation_mmd
+
         self.has_model = True
         self.nystrom_initialized = False
 
     def get_model(self):
-        return(self.approximation_cov,self.approximation_mmd,self.landmark_method,self.anchors_basis,self.m,self.r)
+        return(self.nystrom,self.landmark_method,self.anchors_basis,self.m_initial,self.r)
 
 
 class Data:
@@ -595,6 +597,13 @@ class Data:
                 dict_data = {k:self.data[data_name]['X'][self.obs.index.isin(v),:] for k,v in dict_index.items()}
         return(dict_data)
     
+    def get_all_data(self,landmarks=False):
+        if landmarks:
+            print(f'get all data for landmarks is not mplemented yet')
+        else: 
+            return(self.data[self.data_name]['X'])
+
+
     def get_nobs(self,landmarks=False):
         
         dict_index = self.get_index(landmarks=landmarks)
@@ -609,6 +618,23 @@ class Data:
         dict_nobs = self.get_nobs(landmarks=landmarks)
         return(dict_nobs['ntot'])
 
+    def get_dataframes_of_data(self,landmarks=False):
+        dict_data = self.get_data(landmarks=landmarks)
+        dict_index = self.get_index(landmarks=landmarks)
+        variables = self.data[self.data_name]['variables']
+
+        dict_df = {}
+        for s in dict_data.keys():
+            x,i,v = dict_data[s],dict_index[s],variables
+            dict_df[s] = pd.DataFrame(x,i,v)
+        return(dict_df)
+    
+    def get_dataframe_of_all_data(self,landmarks=False):
+        x = self.data[self.data_name]['X']
+        i = self.obs.index
+        v = self.data[self.data_name]['variables']
+        return(pd.DataFrame(x,i,v))
+        
     # Two sample 
     def init_xy(self,x,y,data_name,
                 x_index=None,y_index=None,variables=None,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
@@ -841,6 +867,8 @@ class Data:
     def set_test_data_info(self,data_name,condition,samples):
         self.data_name = data_name
         self.condition = condition
+        if condition in self.obs:
+            self.obs[condition] = self.obs[condition].astype('category')
         self.samples = samples
         
     def get_data_name_condition_samples_outliers(self):
@@ -858,76 +886,72 @@ class Data:
                     
     # Names 
 
-    def get_landmarks_name(self):
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}' # cellules à ignorer 
+    def get_data_to_test_str(self):
+        dn = self.data_name
         c = self.condition
         smpl = '' if self.samples == 'all' else "".join(self.samples)
+        cb = '' if self.center_by is None else f'_cb_{self.center_by}'    
+        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
+        return(f'{dn}{c}{smpl}{cb}{out}')
+
+    def get_landmarks_name(self):
+        dtn = self.get_data_to_test_str()
+
         lm = self.landmark_method
-        dn = self.data_name
         m = f'_m{self.m}'
-        return(f'lm{lm}{m}_{dn}{c}{smpl}{out}')
+        
+        return(f'lm{lm}{m}_{dtn}')
 
     def get_kmeans_landmarks_name_for_sample(self,sample):
         landmarks_name = self.get_landmarks_name()
         return(f'{sample}_{landmarks_name}')
 
+
     def get_anchors_name(self,):
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        dn = self.data_name
-        c = self.condition
-        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        dtn = self.get_data_to_test_str()
+
         lm = self.landmark_method
         ab = self.anchors_basis
         m = f'_m{self.m}'
         # r = f'_r{self.r}' # je ne le mets pas car il change en fonction des abérations du spectre
-        return(f'lm{lm}{m}_basis{ab}_{dn}{c}{smpl}{out}')
+        return(f'lm{lm}{m}_basis{ab}_{dtn}')
 
     def get_covw_spev_name(self):
-
+        dtn = self.get_data_to_test_str()
+        
         cov = self.approximation_cov
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        dn = self.data_name
-        c = self.condition
-        smpl = '' if self.samples == 'all' else "".join(self.samples)
         ab = f'_basis{self.anchors_basis}' if 'nystrom' in cov else ''
         lm = f'_lm{self.landmark_method}_m{self.m}' if 'nystrom' in cov else ''
-        return(f'{cov}{lm}{ab}{out}_{dn}{c}{smpl}{out}')
+
+        return(f'{cov}{lm}{ab}_{dtn}')
 
     def get_kfdat_name(self):
-
-            cov = self.approximation_cov
-            mmd = self.approximation_mmd
-            out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-            dn = self.data_name
-            c = self.condition
-            smpl = '' if self.samples == 'all' else "".join(self.samples)
-            ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
-            lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
-
-            return(f'{cov}{mmd}{ab}{lm}_{dn}{c}{smpl}{out}')
-
-    def get_residuals_name(self,t,center):
+        dtn = self.get_data_to_test_str()
 
         cov = self.approximation_cov
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        dn = self.data_name
-        c = self.condition
-        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        mmd = self.approximation_mmd
+        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
+        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
+
+        return(f'{cov}{mmd}{ab}{lm}_{dtn}')
+
+    def get_residuals_name(self,t,center):
+        dtn = self.get_data_to_test_str()
+        
         ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
+        cov = self.approximation_cov
         lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
 
         c = center
-        return(f'{c}{t}_{cov}{ab}{lm}_{dn}{c}{smpl}{out}')
+        return(f'{c}{t}_{cov}{ab}{lm}_{dtn}')
         
     def get_mmd_name(self):
+        dtn = self.get_data_to_test_str()
+
         cov = self.approximation_cov
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        dn = self.data_name
-        c = self.condition
-        smpl = '' if self.samples == 'all' else "".join(self.samples)
         ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
         lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
 
-        return(f'{cov}{ab}{lm}_{dn}{c}{smpl}{out}')
+        return(f'{cov}{ab}{lm}_{dtn}')
 
 

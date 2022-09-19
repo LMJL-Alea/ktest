@@ -16,7 +16,7 @@ class GramMatrices(CenteringOps):
     def __init__(self):
         super(GramMatrices,self).__init__()
 
-    def compute_gram_new(self,landmarks=False): 
+    def compute_gram(self,landmarks=False): 
         """
         Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 
         
@@ -44,10 +44,10 @@ class GramMatrices(CenteringOps):
         data = torch.cat([x for x in dict_data.values()],axis=0)
         K = self.kernel(data,data)
         if not landmarks : 
-            K = self.center_gram_matrix_with_respect_to_some_effects_new(K)
+            K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
 
-    def center_gram_matrix_with_respect_to_some_effects_new(self,K):
+    def center_gram_matrix_with_respect_to_some_effects(self,K):
         '''
         Faire ce calcul au moment de calculer la gram n'est pas optimal car il ajoute un produit de matrice
         qui peut être cher, surtout quand n est grand. 
@@ -61,11 +61,11 @@ class GramMatrices(CenteringOps):
         if self.center_by is None:
             return(K)
         else:
-            P = self.compute_centering_matrix_with_respect_to_some_effects_new()
+            P = self.compute_centering_matrix_with_respect_to_some_effects()
             return(torch.chain_matmul(P,K,P))
             # retutn(torch.linalg.multi_dot([P,K,P]))
 
-    def compute_kmn_new(self):
+    def compute_kmn(self):
         """
         Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
         """
@@ -78,10 +78,10 @@ class GramMatrices(CenteringOps):
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
         
         kmn = self.kernel(landmarks,data)        
-        kmn = self.center_kmn_matrix_with_respect_to_some_effects_new(kmn)
+        kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn)
         return(kmn)
 
-    def center_kmn_matrix_with_respect_to_some_effects_new(self,kmn):
+    def center_kmn_matrix_with_respect_to_some_effects(self,kmn):
         '''
         Cf commentaire dans center_gram_matrix_with_respect_to_some_effects 
         '''
@@ -92,7 +92,7 @@ class GramMatrices(CenteringOps):
             return(torch.matmul(kmn,P))
             # retutn(torch.linalg.multi_dot([K,P]))
 
-    def compute_within_covariance_centered_gram_new(self,approximation='standard',verbose=0):
+    def compute_within_covariance_centered_gram(self,approximation='standard',verbose=0):
         """ 
         Computes and returns the bicentered Gram matrix which shares its spectrum with the 
         within covariance operator. 
@@ -119,7 +119,7 @@ class GramMatrices(CenteringOps):
 
         # Instantiation de la matrice de centrage P 
         quantization = approximation == 'quantization'
-        P = self.compute_covariance_centering_matrix_new(quantization=quantization,landmarks=False)
+        P = self.compute_covariance_centering_matrix(quantization=quantization,landmarks=False)
 
         # Ici n ne correspond pas au nombre d'observations total 
         # mais au nombre d'observations sur lequel est calculé la matrice, déterminé par 
@@ -140,7 +140,7 @@ class GramMatrices(CenteringOps):
         # pas à jour
         if approximation == 'quantization':
             if self.quantization_with_landmarks_possible:
-                Kmm = self.compute_gram_new(landmarks=True)
+                Kmm = self.compute_gram(landmarks=True)
                 A = self.compute_quantization_weights(sample=sample,power=.5)
                 Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
                 # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
@@ -152,11 +152,11 @@ class GramMatrices(CenteringOps):
         elif approximation == 'nystrom1':
             # version brute mais a terme utiliser la svd ?? 
             if self.has_landmarks: 
-                Kmn = self.compute_kmn_new()
+                Kmn = self.compute_kmn()
                 Lp,Up = self.get_spev(slot='anchors')
                 Lp_inv = torch.diag(Lp**(-1))
                 
-                Pm = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+                Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
                 Kw = 1/(n*m*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
                 # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
@@ -167,7 +167,7 @@ class GramMatrices(CenteringOps):
         # calcul de la matrice correspondant à l'approximation de nystrm. 
         elif approximation in ['nystrom2','nystrom3']:
             if self.has_landmarks:
-                Kmn = self.compute_kmn_new()
+                Kmn = self.compute_kmn()
 
                 Lp,Up = self.get_spev(slot='anchors')
 
@@ -179,7 +179,7 @@ class GramMatrices(CenteringOps):
 
                 
                 
-                Pm = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True)
+                Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
                 # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
                 
                 
@@ -195,7 +195,7 @@ class GramMatrices(CenteringOps):
 
         # version standard 
         elif approximation == 'standard':
-            K = self.compute_gram_new(landmarks=False)
+            K = self.compute_gram(landmarks=False)
             Kw = 1/n * torch.chain_matmul(P,K,P)
             # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
@@ -207,7 +207,7 @@ class GramMatrices(CenteringOps):
 
         return Kw
 
-    def diagonalize_within_covariance_centered_gram_new(self,approximation='standard',verbose=0):
+    def diagonalize_within_covariance_centered_gram(self,approximation='standard',verbose=0):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum with the Withon covariance operator in the RKHS.
         Stores eigenvalues and eigenvectors in the dict spev 
@@ -232,7 +232,7 @@ class GramMatrices(CenteringOps):
                 verbose = verbose)
         
         # calcul de la matrice a diagonaliser
-        Kw = self.compute_within_covariance_centered_gram_new(approximation=approximation,verbose=verbose)
+        Kw = self.compute_within_covariance_centered_gram(approximation=approximation,verbose=verbose)
         
         # diagonalisation par la fonction C++ codée par François puis tri décroissant des valeurs propres 
         # et vecteurs prores

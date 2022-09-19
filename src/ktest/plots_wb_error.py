@@ -168,7 +168,7 @@ class Plot_WBerrors(Residuals,Statistics):
     #     errorB = np.array(get_between_covariance_projection_error(self))
     #     errorW = np.array(self.get_explained_variance())
 
-        errorB = np.array(self.get_between_covariance_projection_error_new()[:len(log10pval)])
+        errorB = np.array(self.get_between_covariance_projection_error()[:len(log10pval)])
         errorW = np.array(self.get_explained_variance()[:len(log10pval)])
 
         
@@ -225,7 +225,7 @@ class Plot_WBerrors(Residuals,Statistics):
     def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None):
         if fig is None:
             fig,ax = plt.subplots(figsize=(7,7))
-        projection_error,delta = self.get_between_covariance_projection_error_new(return_total=True)
+        projection_error,delta = self.get_between_covariance_projection_error(return_total=True)
         projection_error = cat([tensor([0],dtype=float64),projection_error])
         errorB = 1 - projection_error
         trunc = np.arange(0,len(errorB))

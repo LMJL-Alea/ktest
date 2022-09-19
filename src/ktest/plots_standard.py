@@ -93,7 +93,7 @@ class Plot_Standard(Statistics):
         
         return(fig,ax)
 
-    def plot_spectrum_new(self,fig=None,ax=None,t=None,title=None,anchors=False,label=None,truncations_of_interest = None ):
+    def plot_spectrum(self,fig=None,ax=None,t=None,title=None,anchors=False,label=None,truncations_of_interest = None ):
         if ax is None:
             fig,ax = plt.subplots(figsize=(10,10))
         if title is not None:
@@ -131,7 +131,9 @@ class Plot_Standard(Statistics):
 
         return(fig,ax)
 
-    def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',labels='MW',color=None,fig=None,ax=None,show_conditions=True):
+    def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',color=None,fig=None,ax=None,show_conditions=True):
+        labels = list(self.get_index().keys())
+
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -195,7 +197,7 @@ class Plot_Standard(Statistics):
         my_ = 's'
         variables = self.data[self.data_name]['variables']
         outliers_in_obs = self.outliers_in_obs
-
+        coef_bins = 3
         if marker is None and color is None : 
             ipopx = self.get_xy_index(sample='x')
             ipopy = self.get_xy_index(sample='y')
@@ -203,8 +205,8 @@ class Plot_Standard(Statistics):
             labx = f'{labels[0]}({len(ipopx)})'
             laby = f'{labels[1]}({len(ipopy)})'
             
-            binsx=int(np.floor(np.sqrt(len(ipopx))))
-            binsy=int(np.floor(np.sqrt(len(ipopy))))
+            binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
+            binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
                             
             properties['x'] = {'index':ipopx,
                             'plot_args':{'marker':'x','color':cx_},
@@ -256,8 +258,8 @@ class Plot_Standard(Statistics):
                             labx = f'{labels[0]} {pop} ({len(ipopx)})'
                             laby = f'{labels[1]} {pop} ({len(ipopy)})'
                             
-                            binsx=int(np.floor(np.sqrt(len(ipopx))))
-                            binsy=int(np.floor(np.sqrt(len(ipopy))))
+                            binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
+                            binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
                             
                             properties[f'{pop}x'] = {'index':ipopx,
                                                     'plot_args':{'marker':'x'},
@@ -276,7 +278,7 @@ class Plot_Standard(Statistics):
                                 ipop = ipop[~ipop.isin(outliers)]
 
                             lab = f'{pop} ({len(ipop)})'
-                            bins=int(np.floor(np.sqrt(len(ipop))))
+                            bins=coef_bins*int(np.floor(np.sqrt(len(ipop))))
                             
                             
                             properties[pop] = {'index':ipop,
@@ -457,8 +459,10 @@ class Plot_Standard(Statistics):
 
         return(properties)
 
-    def scatter_proj(self,projection,xproj='proj_kfda',yproj=None,xname=None,yname=None,
-                    highlight=None,color=None,marker=None,show_conditions=True,labels='CT',text=False,fig=None,ax=None,):
+    def scatter_proj(self,projection,xproj='proj_kpca',yproj=None,xname=None,yname=None,
+                    highlight=None,color=None,marker=None,show_conditions=True,text=False,fig=None,ax=None,):
+        labels = list(self.get_index().keys())
+        
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -544,7 +548,7 @@ class Plot_Standard(Statistics):
 
 
     # désuet ? 
-    def init_axes_projs(self,fig,axes,projections,sample,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
+    def init_axes_projs(self,fig,axes,projections,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
         if axes is None:
             rows=1;cols=len(projections) + kfda + spectrum
             fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
@@ -557,35 +561,36 @@ class Plot_Standard(Statistics):
             self.plot_kfdat(fig=fig,ax = axes[0],ylim=kfda_ylim,t = t,title=kfda_title)
             axes = axes[1:]
         if spectrum:
-            self.plot_spectrum(fig=fig,ax=axes[0],t=t,title='spectrum',sample=sample,label=spectrum_label)
+            self.plot_spectrum(fig=fig,ax=axes[0],t=t,title='spectrum',label=spectrum_label)
             axes = axes[1:]
         return(fig,axes)
 
-    def density_projs(self,fig=None,axes=None,which='proj_kfda',sample='xy',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,labels='CT'):
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,sample=sample,suptitle=suptitle,kfda=kfda,
+
+    def density_projs(self,fig=None,axes=None,which='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,labels='CT'):
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,proj in zip(axes,projections):
-            self.density_proj(t=proj,which=which,name=name,labels=labels,sample=sample,fig=fig,ax=ax)
+            self.density_proj(t=proj,which=which,name=name,fig=fig,ax=ax)
         fig.tight_layout()
         return(fig,axes)
 
-    def scatter_projs(self,fig=None,axes=None,xproj='proj_kfda',sample='xy',yproj=None,xname=None,yname=None,projections=[(1,i+2) for i in range(10)],suptitle=None,
+    def scatter_projs(self,fig=None,axes=None,xproj='proj_kpca',yproj=None,xname=None,yname=None,projections=[(i*2,i*2+1) for i in range(4)],suptitle=None,
                         highlight=None,color=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',labels='CT'):
         to_iterate = projections if iterate_over == 'projections' else color
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,sample=sample,suptitle=suptitle,kfda=kfda,
+        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,obj in zip(axes,to_iterate):
             if iterate_over == 'projections':
-                self.scatter_proj(ax,obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,labels=labels,sample=sample)
+                self.scatter_proj(obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,fig=fig,ax=ax)
             elif iterate_over == 'color':
-                self.scatter_proj(ax,projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,labels=labels,sample=sample)
+                self.scatter_proj(projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,fig=fig,ax=ax)
         fig.tight_layout()
         return(fig,axes)
-
+    
     def plot_correlation_proj_var(self,fig=None,ax=None,name=None,nvar=30,projections=range(1,10),title=None,prefix_col=''):
         if name is None:
             name = self.get_names()['correlations'][0]

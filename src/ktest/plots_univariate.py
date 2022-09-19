@@ -4,6 +4,7 @@ from .plots_summarized import Plot_Summarized
 from .truncation_selection import TruncationSelection
 from .univariate_testing import Univariate
 
+from .utils_univariate import filter_genes_wrt_pval
 
 
 class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
@@ -39,48 +40,19 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             ax.axvline(t,ls='--',alpha=.8)
         return(fig,axes)
 
-    def plot_density_of_variable(self,variable,fig=None,ax=None,data_name ='data',color=None,condition_mean=True,threshold=None,labels='MF'):
+    def plot_density_of_variable(self,variable,fig=None,ax=None,color=None):
         if fig is None:
             fig,ax =plt.subplots(figsize=(10,6))
             
-        proj = self.init_df_proj(variable,name=data_name)
-        cond = self.obs['sample']
-        xv = proj[cond=='x'][variable]
-        yv = proj[cond=='y'][variable]
+        self.density_proj(t=0,which=variable,fig=fig,ax=ax,color=color)
         
-        
-        # je crois que j'ai déjà une fonction qui fait ça 
-        outliers = None
-        
-        if threshold is not None: 
-            print(f'{len(xv[xv>threshold])} and {len(yv[yv>threshold])} cells excluded')
-            outliers = self.determine_outliers_from_condition(threshold = threshold,
-                                            which=variable,
-                                            column_in_dataframe=data_name,
-                                            t=0,
-                                            orientation='>')
-        
-            outliers_name=  f'{variable}>{threshold}'
-            self.add_outliers_in_obs(outliers,outliers_name )
-            
-        self.density_proj(t=0,which=variable,name=data_name,fig=fig,ax=ax,color=color,labels=labels)
-        
-        
-        # pas vraiment utile 
-        if condition_mean:
-            ax.axvline(xv.mean(),c='blue')
-            ax.axvline(yv.mean(),c='orange')
-
-            ax.axvline(xv[xv>0].mean(),c='blue',ls='--',alpha=.5)
-            ax.axvline(yv[yv>0].mean(),c='orange',ls='--',alpha=.5)
-        
-        
-        title = f'{variable} {data_name}\n'
-        zero_proportions = self.get_zero_proportions_of_variable(variable,color)
+        title = f'{variable}\n'
+        zero_proportions = self.compute_zero_proportions_of_variable(variable)
         for c in zero_proportions.keys():
             if '_nz' in c:
                 nz = zero_proportions[c]
-                title += f' {c}:{nz}z'
+                c_ = c.split(sep='_nz')[0]
+                title += f' {c_}: {nz}z '
         
         ax.set_title(title,fontsize=20)
         return(fig,ax)

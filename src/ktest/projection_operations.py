@@ -30,8 +30,8 @@ class ProjectionOps(KernelTrick):
         tmax = 200
         t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
 
-        pkm=self.compute_pkm_new()
-        upk=self.compute_upk_new(t)
+        pkm=self.compute_pkm()
+        upk=self.compute_upk(t)
         n1,n2,n = self.get_n1n2n()
 
         if cov == 'standard' or 'nystrom' in cov: 
@@ -49,7 +49,7 @@ class ProjectionOps(KernelTrick):
                     verbose = verbose)
         return(proj,t)
 
-    def compute_proj_kfda_new(self,t=None,verbose=0):
+    def compute_proj_kfda(self,t=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
@@ -80,7 +80,7 @@ class ProjectionOps(KernelTrick):
         return(proj_kfda_name)
 
 
-    def compute_proj_kpca_new(self,t=None,verbose=0):
+    def compute_proj_kpca(self,t=None,verbose=0):
         """ 
         
         """
@@ -100,7 +100,7 @@ class ProjectionOps(KernelTrick):
             self.df_proj_kpca[proj_kpca_name] = pd.DataFrame(proj_kfda,index= self.get_xy_index(),columns=[str(t) for t in trunc])
         return(proj_kpca_name)
 
-    def compute_proj_mmd_new(self,verbose=0):
+    def compute_proj_mmd(self,verbose=0):
         mmd_name = self.get_mmd_name()
         mmd = self.approximation_mmd
         if mmd_name in self.df_proj_mmd :
@@ -117,9 +117,9 @@ class ProjectionOps(KernelTrick):
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             n1,n2,n = self.get_n1n2n()
 
-            m = self.compute_omega_new(quantization=(mmd=='quantization'))
+            m = self.compute_omega(quantization=(mmd=='quantization'))
             if mmd == 'standard':
-                K = self.compute_gram_new()
+                K = self.compute_gram()
             
             
             proj = torch.matmul(K,m)

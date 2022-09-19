@@ -220,7 +220,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         else:
 
             self.initialize_kfdat(verbose=verbose) # landmarks, ancres et diagonalisation           
-            self.compute_kfdat_new(t=t,verbose=verbose) # caclul de la stat 
+            self.compute_kfdat(t=t,verbose=verbose) # caclul de la stat 
             self.select_trunc() # selection automatique de la troncature 
             self.compute_pval() # calcul des troncatures asymptotiques 
             kfdat_name = self.get_kfdat_name()
@@ -242,7 +242,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
                 print(f'mmd {mmd_name} already computed')
         else:
             self.initialize_mmd(shared_anchors=shared_anchors,verbose=verbose)
-            self.compute_mmd_new(shared_anchors=shared_anchors,unbiaised=unbiaised,verbose=0)
+            self.compute_mmd(shared_anchors=shared_anchors,unbiaised=unbiaised,verbose=0)
 
     def kpca(self,t=None,verbose=0):
         

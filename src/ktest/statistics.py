@@ -48,7 +48,7 @@ class Statistics(ProjectionOps):
         sp,_ = self.get_spev('covw')
         return(sum(sp))
  
-    def compute_kfdat_new(self,t=None,verbose=0):
+    def compute_kfdat(self,t=None,verbose=0):
         
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -180,7 +180,7 @@ class Statistics(ProjectionOps):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         # calcul de la statistique pour chaque troncature 
-        pkm = self.compute_pkm_new() # partie de la stat qui ne dépend pas de la troncature mais du modèle
+        pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
         n1,n2,n = self.get_n1n2n() # nombres d'observations dans les échantillons
         exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant' # l'exposant dépend du modèle
         kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy() # calcule la contribution de chaque troncature 
@@ -214,9 +214,9 @@ class Statistics(ProjectionOps):
         sp,ev = self.get_spev('covw')
         n1,n2,n = self.get_n1n2n() 
         
-        pkom = self.compute_pkm_new()
-        om = self.compute_omega_new()
-        K = self.compute_gram_new()
+        pkom = self.compute_pkm()
+        om = self.compute_omega()
+        K = self.compute_gram()
         mmd = dot(mv(K,om),om)
     
         # yp = n1*n2/n * 1/(sp[:t]*n) * mv(ev.T[:t],pkom)**2 #1/np.sqrt(n*sp[:t])*
@@ -247,16 +247,16 @@ class Statistics(ProjectionOps):
         # son coût computationnel est faible mais ses performances le sont aussi. 
         # cette approche a besoin d'avoir un poids associé aux landmarks pour savoir combien ils représentent d'observations. 
         if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin d'avoir des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks_new(verbose=verbose) 
+            self.compute_nystrom_landmarks(verbose=verbose) 
 
         #calcul des landmarks et des ancres 
         if any([ny in [cov,mmd] for ny in ['nystrom','nystrom1','nystrom2','nystrom3']]):
             print('nystrom detected')
-            self.compute_nystrom_landmarks_new(verbose=verbose)
-            self.compute_nystrom_anchors_new(verbose=verbose) 
+            self.compute_nystrom_landmarks(verbose=verbose)
+            self.compute_nystrom_anchors(verbose=verbose) 
 
         # diagonalisation de la matrice d'intérêt pour calculer la statistique 
-        self.diagonalize_within_covariance_centered_gram_new(approximation=cov,verbose=verbose)
+        self.diagonalize_within_covariance_centered_gram(approximation=cov,verbose=verbose)
 
     def initialize_mmd(self,shared_anchors=True,verbose=0):
 
@@ -280,23 +280,23 @@ class Statistics(ProjectionOps):
         approx = self.approximation_mmd
 
         if approx == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks_new(verbose=verbose)
+            self.compute_nystrom_landmarks(verbose=verbose)
         
         if approx == 'nystrom':
             if not self.has_landmarks:
-                    self.compute_nystrom_landmarks_new(verbose=verbose)
+                    self.compute_nystrom_landmarks(verbose=verbose)
             
             if shared_anchors:
                 if self.get_anchors_name() not in self.spev['anchors']:
-                    self.compute_nystrom_anchors_new(verbose=verbose)
+                    self.compute_nystrom_anchors(verbose=verbose)
             # pas à jour 
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
                         assert(self.r is not None,"r not specified")
-                        self.compute_nystrom_anchors_new(verbose=verbose)
+                        self.compute_nystrom_anchors(verbose=verbose)
  
-    def compute_mmd_new(self,unbiaised=False,shared_anchors=True,verbose=0):
+    def compute_mmd(self,unbiaised=False,shared_anchors=True,verbose=0):
         
         approx = self.approximation_mmd
         self.verbosity(function_name='compute_mmd',
@@ -308,19 +308,19 @@ class Statistics(ProjectionOps):
                 verbose = verbose)
 
         if approx == 'standard':
-            m = self.compute_omega_new(quantization=False)
-            K = self.compute_gram_new()
+            m = self.compute_omega(quantization=False)
+            K = self.compute_gram()
             if unbiaised:
                 K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
             mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
         
         if approx == 'nystrom' and shared_anchors:
 
-            m = self.compute_omega_new(quantization=False)
+            m = self.compute_omega(quantization=False)
             Lp,Up = self.get_spev(slot='anchors')
             Lp12 = diag(Lp**-(1/2))
-            Pm = self.compute_covariance_centering_matrix_new(landmarks=True)
-            Kmn = self.compute_kmn_new()
+            Pm = self.compute_covariance_centering_matrix(landmarks=True)
+            Kmn = self.compute_kmn()
             psi_m = mv(Lp12,mv(Up.T,mv(Pm,mv(Kmn,m))))
             mmd = dot(psi_m,psi_m)**2
         
@@ -351,8 +351,8 @@ class Statistics(ProjectionOps):
             # mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
         
         if approx == 'quantization':
-            mq = self.compute_omega_new(quantization=True)
-            Km = self.compute_gram_new(landmarks=True)
+            mq = self.compute_omega(quantization=True)
+            Km = self.compute_gram(landmarks=True)
             mmd = dot(mv(Km,mq),mq) **2
 
         mmd_name = self.get_mmd_name()

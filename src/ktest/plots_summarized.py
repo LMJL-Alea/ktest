@@ -14,8 +14,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
 
 
     # reconstructions error 
-    def plot_pval_and_errors(self,column,outliers=None,truncations_of_interest=[1],t=20,fig=None,ax=None):
-
+    def plot_pval_and_errors(self,truncations_of_interest=[1],t=20,fig=None,ax=None):
+        column = self.get_kfdat_name()
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,8))
         self.plot_pvalue(fig=fig,ax=ax,t=t,column = column,)

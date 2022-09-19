@@ -50,7 +50,7 @@ class NystromOps(Model,OutliersOps,Verbosity):
             assert(self.r <= self.m)
             self.nystrom_initialized = True
     
-    def compute_nystrom_landmarks_new(self,verbose=0):
+    def compute_nystrom_landmarks(self,verbose=0):
         """
         The nystrom landmarks are the vectors of the RKHS from which we determine the anchors in the nystrom method.  
         
@@ -117,7 +117,7 @@ class NystromOps(Model,OutliersOps,Verbosity):
                         start=False,
                         verbose = verbose)
 
-    def compute_nystrom_anchors_new(self,verbose=0):
+    def compute_nystrom_anchors(self,verbose=0):
         """
         Determines the nystrom anchors using 
         Stores the results as a list of eigenvalues and the 
@@ -144,8 +144,8 @@ class NystromOps(Model,OutliersOps,Verbosity):
 
             r = self.r 
             m = self.m
-            Km = self.compute_gram_new(landmarks=True)
-            P = self.compute_covariance_centering_matrix_new(quantization=False,landmarks=True,)
+            Km = self.compute_gram(landmarks=True)
+            P = self.compute_covariance_centering_matrix(quantization=False,landmarks=True,)
             
             # print('nystrom anchors',r,m,Km.shape,P.shape)
             assert(len(P)==m)

@@ -111,7 +111,7 @@ class CenteringOps(NystromOps):
     def __init__(self):
         super(CenteringOps,self).__init__()
 
-    def compute_centering_matrix_with_respect_to_some_effects_new(self):
+    def compute_centering_matrix_with_respect_to_some_effects(self):
         '''
         Computes the projection matrix corresponding to center the data with respect to the 
         meta information of center_by. 
@@ -189,7 +189,7 @@ class CenteringOps(NystromOps):
 
         return Pw    
 
-    def compute_covariance_centering_matrix_new(self,quantization=False,landmarks=False):
+    def compute_covariance_centering_matrix(self,quantization=False,landmarks=False):
         """
         Computes a projection matrix usefull for the kernel trick. 
 
@@ -245,7 +245,7 @@ class CenteringOps(NystromOps):
         else:
             print('invalid anchor basis') 
 
-    def compute_omega_new(self,quantization=False):
+    def compute_omega(self,quantization=False):
         '''
         Returns the weights vector to compute a mean. 
         
