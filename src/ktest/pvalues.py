@@ -3,31 +3,11 @@ from scipy.stats import chi2
 import pandas as pd
 from joblib import parallel_backend
 from joblib import Parallel, delayed
-from .univariate_testing import filter_genes_wrt_pval
 
 """
 Ces fonctions gèrent tout ce qui est relatif aux pvaleurs. 
 Je n'ai jamais pris le temps d'ajouter des fonctions spécifiques à des pvaleurs obtenues par permutation.
 """
-
-def compute_pval(self,t=None):
-    """
-    Computes the asymptotic pvalues of the kfda statistic. 
-    
-    Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
-    Attention, la présence de Nan augmente considérablement le temps de calcul. 
-    """
-    pvals = {}
-    pvals_contrib = {}
-    t = min(100,len(self.df_kfdat)) if t is None else min(t,len(self.df_kfdat))
-    trunc=range(1,t+1)
-
-    for t_ in trunc:
-        pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
-        pvals_contrib[t_] = self.df_kfdat_contributions.T[t_].apply(lambda x: chi2.sf(x,1))
-
-    self.df_pval = pd.DataFrame(pvals).T 
-    self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
 
 def correct_BenjaminiHochberg_pval_of_dfcolumn(df):
     df = pd.concat([df,df.rank()],keys=['pval','rank'],axis=1)
@@ -75,31 +55,6 @@ def correct_BenjaminiHochberg_pval_of_dataframe(df_pval,t=20):
         corrected_pvals += [correct_BenjaminiHochberg_pval_of_dfcolumn(df_pval.T[t],t=t)]   
     return(pd.concat(corrected_pvals,axis=1).T)
 
-def correct_BenjaminiHochberg_pval(self,t=20):
-    """
-    Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
-    This is to use when the different tests correspond to multiple testing. 
-    The results are stored in self.df_BH_corrected_pval 
-    The pvalues are adjusted for each truncation lower or equal to t. 
-    """
-    
-    self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
-
-def correct_BenjaminiHochberg_pval_univariate(self,var_prefix,exceptions=[],focus=None,add_to_prefix=''):
-    pval = self.var[f'{var_prefix}_pval']
-    pval = pval if focus is None else pval[pval.index.isin(focus)]
-    pval = pval[~pval.index.isin(exceptions)]
-    pval = pval[~pval.isna()]
-    pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
-    self.var[f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
-
-def get_rejected_variables_univariate(self,var_prefix,BH=False):
-    BH_str = 'BHc' if BH else ''
-    pval = self.var[f'{var_prefix}_pval{BH_str}']
-    pval = pval[~pval.isna()]
-    pval = pval[pval<.05]
-    return(pval.sort_values())
-
 # je sais pas si cette fonction est encore utile 
 def parallel_BH_correction(dict_of_df_pval,stat,t=20,n_jobs=6):
     iter_param = list(dict_of_df_pval.keys())
@@ -112,3 +67,53 @@ def parallel_BH_correction(dict_of_df_pval,stat,t=20,n_jobs=6):
     return({k:df for k,df in zip(iter_param,a)})
 
 
+class Pvalues:
+        
+    def __init__(self):        
+        super(Pvalues, self).__init__()
+
+    def compute_pval(self,t=None):
+        """
+        Computes the asymptotic pvalues of the kfda statistic. 
+        
+        Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
+        Attention, la présence de Nan augmente considérablement le temps de calcul. 
+        """
+        pvals = {}
+        pvals_contrib = {}
+        t = min(100,len(self.df_kfdat)) if t is None else min(t,len(self.df_kfdat))
+        trunc=range(1,t+1)
+
+        for t_ in trunc:
+            pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
+            pvals_contrib[t_] = self.df_kfdat_contributions.T[t_].apply(lambda x: chi2.sf(x,1))
+
+        self.df_pval = pd.DataFrame(pvals).T 
+        self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
+  
+    def correct_BenjaminiHochberg_pval(self,t=20):
+        """
+        Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
+        This is to use when the different tests correspond to multiple testing. 
+        The results are stored in self.df_BH_corrected_pval 
+        The pvalues are adjusted for each truncation lower or equal to t. 
+        """
+        
+        self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
+
+    def correct_BenjaminiHochberg_pval_univariate(self,var_prefix,exceptions=[],focus=None,add_to_prefix=''):
+        pval = self.var[f'{var_prefix}_pval']
+        pval = pval if focus is None else pval[pval.index.isin(focus)]
+        pval = pval[~pval.index.isin(exceptions)]
+        pval = pval[~pval.isna()]
+        pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
+        self.var[f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
+
+    # def get_rejected_variables_univariate(self,var_prefix,BH=False):
+    #     BH_str = 'BHc' if BH else ''
+    #     pval = self.var[f'{var_prefix}_pval{BH_str}']
+    #     pval = pval[~pval.isna()]
+    #     pval = pval[pval<.05]
+    #     return(pval.sort_values())
+
+ 
