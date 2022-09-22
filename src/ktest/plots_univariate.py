@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from .plots_summarized import Plot_Summarized
 from .truncation_selection import TruncationSelection
@@ -57,29 +59,87 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         ax.set_title(title,fontsize=20)
         return(fig,ax)
 
+    # def volcano_plot(self,var_prefix,color=None,exceptions=[],focus=None,zero_pvals=False,fig=None,ax=None,BH=False,threshold=1):
+    #     # quand la stat est trop grande, la fonction chi2 de scipy.stat renvoie une pval nulle
+    #     # on ne peut pas placer ces gènes dans le volcano plot alors ils ont leur propre graphe
+        
+    #     if fig is None:
+    #         fig,ax = plt.subplots(figsize=(9,15))
+    #     BH_str = 'BHc' if BH else ''
+    #     zpval_str = '= 0' if zero_pvals else '>0'
+        
+    #     pval_name = f'{var_prefix}_pval{BH_str}' 
+    #     pval = filter_genes_wrt_pval(self.var[pval_name],exceptions,focus,zero_pvals,threshold)
+    #     print(f'{var_prefix} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
+    #     genes = []
+    #     if len(pval) != 0:
+    #         kfda = self.var[f'{var_prefix}_kfda']
+    #         errB = self.var[f'{var_prefix}_errB']
+    #         kfda = kfda[kfda.index.isin(pval.index)]
+    #         errB = errB[errB.index.isin(pval.index)]
+
+    #         logkfda = np.log(kfda)
+
+    #         xlim = (logkfda.min()-1,logkfda.max()+1)
+    #         c = self.color_volcano_plot(var_prefix,pval.index,color=color)
+
+    #         if zero_pvals:
+    #     #         print('zero')
+    #             ax.set_title(f'{var_prefix} \ng enes strongly rejected',fontsize=30)
+    #             ax.set_xlabel(f'log(kfda)',fontsize=20)
+    #             ax.set_ylabel(f'errB',fontsize=20)
+
+    #             for g in pval.index.tolist():
+    #     #             print(g,logkfda[g],errB[g],c[g])
+    #                 ax.text(logkfda[g],errB[g],g,color=c[g])
+    #                 ax.set_xlim(xlim)
+    #                 ax.set_ylim(0,1)
+    #                 genes += [g]
+
+
+    #         else:
+    #     #         print('nz')
+    #             ax.set_title(f'{var_prefix}\n non zero pvals',fontsize=30)
+    #             ax.set_xlabel(f'log(kfda)',fontsize=20)
+    #             ax.set_ylabel(f'-log(pval)',fontsize=20)
+    #             logpval = -np.log(pval)
+
+
+    #             for g in pval.index.tolist():
+    #     #             print(g,logkfda[g],logpval[g],c[g])
+    #                 ax.text(logkfda[g],logpval[g],g,color=c[g])
+    #                 ax.set_xlim(xlim)
+    #                 ax.set_ylim(0,logpval.max()*1.1)
+    #                 genes += [g]
+
+
+    #     return(genes,fig,ax)
+
     def volcano_plot(self,var_prefix,color=None,exceptions=[],focus=None,zero_pvals=False,fig=None,ax=None,BH=False,threshold=1):
         # quand la stat est trop grande, la fonction chi2 de scipy.stat renvoie une pval nulle
         # on ne peut pas placer ces gènes dans le volcano plot alors ils ont leur propre graphe
-        
+
         if fig is None:
             fig,ax = plt.subplots(figsize=(9,15))
+
         BH_str = 'BHc' if BH else ''
         zpval_str = '= 0' if zero_pvals else '>0'
-        
+        dn = self.data_name
+
         pval_name = f'{var_prefix}_pval{BH_str}' 
-        pval = filter_genes_wrt_pval(self.var[pval_name],exceptions,focus,zero_pvals,threshold)
+        pval = filter_genes_wrt_pval(self.var[dn][pval_name],exceptions,focus,zero_pvals,threshold)
         print(f'{var_prefix} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
         genes = []
         if len(pval) != 0:
-            kfda = self.var[f'{var_prefix}_kfda']
-            errB = self.var[f'{var_prefix}_errB']
+            kfda = self.var[dn][f'{var_prefix}_kfda']
+            errB = self.var[dn][f'{var_prefix}_errB']
             kfda = kfda[kfda.index.isin(pval.index)]
             errB = errB[errB.index.isin(pval.index)]
 
             logkfda = np.log(kfda)
 
             xlim = (logkfda.min()-1,logkfda.max()+1)
-            c = self.color_volcano_plot(var_prefix,pval.index,color=color)
+    #             c = self.color_volcano_plot(var_prefix,pval.index,color=color)
 
             if zero_pvals:
         #         print('zero')
@@ -89,7 +149,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
                 for g in pval.index.tolist():
         #             print(g,logkfda[g],errB[g],c[g])
-                    ax.text(logkfda[g],errB[g],g,color=c[g])
+                    ax.text(logkfda[g],errB[g],g)#,color=c[g])
                     ax.set_xlim(xlim)
                     ax.set_ylim(0,1)
                     genes += [g]
@@ -105,7 +165,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
                 for g in pval.index.tolist():
         #             print(g,logkfda[g],logpval[g],c[g])
-                    ax.text(logkfda[g],logpval[g],g,color=c[g])
+                    ax.text(logkfda[g],logpval[g],g)#,color=c[g])
                     ax.set_xlim(xlim)
                     ax.set_ylim(0,logpval.max()*1.1)
                     genes += [g]
@@ -113,11 +173,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         return(genes,fig,ax)
 
+
     def volcano_plot_zero_pvals_and_non_zero_pvals(self,var_prefix,color_nz='errB',color_z='t',
                                                 exceptions=[],focus=None,BH=False,threshold=1):
         fig,axes = plt.subplots(ncols=2,figsize=(18,15))
         
-        genes_nzpval,_,_ = volcano_plot(self,
+        genes_nzpval,_,_ = self.olcano_plot(self,
                                     var_prefix,
                                     color=color_nz,
                                     exceptions=exceptions,
@@ -127,7 +188,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                     BH=BH,
                                     threshold=threshold)
         
-        genes_zpval,_,_ = volcano_plot(self,
+        genes_zpval,_,_ = self.volcano_plot(self,
                                 var_prefix,
                                 color=color_z,
                                 exceptions=exceptions,

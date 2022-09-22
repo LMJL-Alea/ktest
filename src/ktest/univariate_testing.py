@@ -4,7 +4,7 @@ from time import time
 from joblib import Parallel, delayed, parallel_backend
 import os
 
-from .outliers_operations import OutliersOps
+from .utils_univariate import filter_genes_wrt_pval
 
 '''
 La question du test univarié sur des données univariées est difficile notamment par rapport à ce qu'on veut
@@ -50,20 +50,26 @@ class Univariate:
         return(df.var().sort_values(ascending=False)[:k].index)
 
     def create_tester_of_goi(self,goi):
-        from .tester import Tester
+        from .tester import Tester,create_and_fit_tester_for_two_sample_test_kfdat
+
+
         df = self.get_dataframe_of_all_data()
         df = df[goi]
         data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()
         nystrom,lm,ab,m,r = self.get_model()
         center_by = self.center_by
             
-        
-        t = Tester()
-        t.add_data_to_Tester_from_dataframe(df,sample='x',df_meta=self.obs.copy(),data_name=data_name)
-        t.obs['sample'] = self.obs['sample']
-        
-        t.set_test_data_info(data_name,condition,samples)
-        t.set_outliers_in_obs(outliers_in_obs)
+
+        t = create_and_fit_tester_for_two_sample_test_kfdat(df=df,
+                                                            meta=self.obs.copy(),
+                                                            data_name=data_name,
+                                                            condition=condition,
+                                                            nystrom=nystrom,
+                                                            lm=lm,ab=ab,m=m,r=r,
+                                                            center_by=center_by,
+                                                            outliers_in_obs=outliers_in_obs,
+                                                            viz=False)  
+
         t.set_center_by(center_by)
         t.init_model(nystrom=nystrom,m=m,r=r,landmark_method=lm,anchors_basis=ab)
         t.init_kernel('gauss_median')
@@ -117,8 +123,8 @@ class Univariate:
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
 
-    def compute_univariate_kfda(self,variable,common_covariance=False):
-        from .tester import Tester
+    def compute_univariate_kfda(self,variable):
+        from .tester import Tester,create_and_fit_tester_for_two_sample_test_kfdat
         # récupérer la donnée
         
         # Get testing info from global object 
@@ -128,39 +134,18 @@ class Univariate:
         center_by = self.center_by
         
         # Initialize univariate tester with common covariance 
-        t = Tester()
         
-        t.add_data_to_Tester_from_dataframe(dfv,sample='x',df_meta=self.obs.copy(),data_name=data_name)
-        t.obs['sample'] = self.obs['sample']
         
-        t.set_test_data_info(data_name,condition,samples)
-        t.set_outliers_in_obs(outliers_in_obs)
-        t.set_center_by(center_by)
-        t.init_model(nystrom=nystrom,m=m,r=r,landmark_method=lm,anchors_basis=ab)
-        
-        # Infos for common covariance
+        t = create_and_fit_tester_for_two_sample_test_kfdat(df=dfv,
+                                                            meta=self.obs.copy(),
+                                                            data_name=data_name,
+                                                            condition=condition,
+                                                            nystrom=nystrom,
+                                                            lm=lm,ab=ab,m=m,r=r,
+                                                            center_by=center_by,
+                                                            outliers_in_obs=outliers_in_obs,
+                                                            viz=False)  
 
-        # if common_covariance:
-            
-        #     spc,evc = self.get_spev('covw')
-        #     spev_name = self.get_covw_spev_name()
-        #     t.spev['covw'][spev_name] = {'sp':spc,'ev':evc}
-
-        #     if 'nystrom' in cov or 'nystrom' in mmd:
-        #         spa,eva = self.get_spev('anchors')
-        #         anchors_name = self.get_anchors_name()
-        #         t.spev['anchors'][anchors_name] = {'sp':spa,'ev':eva}
-                
-        #     kernel_bandwith = self.kernel_bandwidth
-        #     p = self.data[data_name]['p']
-        #     t.init_kernel(f'gauss_{kernel_bandwith/p}')
-
-
-        #     kfdat_name = t.compute_kfdat() # caclul de la stat         
-        #     t.select_trunc() # selection automatique de la troncature 
-        #     t.compute_pval() # calcul des troncatures asymptotiques 
-        # else: 
-        t.init_kernel('gauss_median')
         t.initialize_kfdat()
         kfdat_name = t.kfdat()
 
@@ -170,7 +155,7 @@ class Univariate:
         
         return(t)
         
-    def add_results_univariate_kfda_in_var(self,vtest,variable,name=''):
+    def add_results_univariate_kfda_in_var(self,vtest,variable,name='',verbose=False):
         
         kfdat_name = self.get_kfdat_name()
         dname = f'{name}_{kfdat_name}'
@@ -200,28 +185,28 @@ class Univariate:
 
         self.vard[dn][variable][f'{dname}_univariate'] = True
                 
+        if verbose:
+            tab = '\t' if len(variable)>6 else '\t\t'
 
-        tab = '\t' if len(variable)>6 else '\t\t'
+            tr1 = self.vard[dn][variable][f'{dname}_tr1_t']
+            tr2 = self.vard[dn][variable][f'{dname}_tr2_t']
+            errB1 = self.vard[dn][variable][f'{dname}_tr1_errB']
+            errB2 = self.vard[dn][variable][f'{dname}_tr2_errB']
+            pval1 = self.vard[dn][variable][f'{dname}_tr1_pval']
+            pval2 = self.vard[dn][variable][f'{dname}_tr2_pval']
 
-        tr1 = self.vard[dn][variable][f'{dname}_tr1_t']
-        tr2 = self.vard[dn][variable][f'{dname}_tr2_t']
-        errB1 = self.vard[dn][variable][f'{dname}_tr1_errB']
-        errB2 = self.vard[dn][variable][f'{dname}_tr2_errB']
-        pval1 = self.vard[dn][variable][f'{dname}_tr1_pval']
-        pval2 = self.vard[dn][variable][f'{dname}_tr2_pval']
+            zp_string = "zp: "+" ".join([f'{s}{zp[s]:.2f}' for s in zp.keys()])
+            string = f'{variable} {tab} {zp_string} \t pval{tr1:1.0f}:{pval1:1.0e}  r{tr1:1.0f}:{errB1:.2f} \t pval{tr2:1.0f}:{pval2:1.0e}  r{tr2:1.0f}:{errB2:.2f}'
+            print(string)
 
-        zp_string = "zp: "+" ".join([f'{s}{zp[s]:.2f}' for s in zp.keys()])
-        string = f'{variable} {tab} {zp_string} \t pval{tr1:1.0f}:{pval1:1.0e}  r{tr1:1.0f}:{errB1:.2f} \t pval{tr2:1.0f}:{pval2:1.0e}  r{tr2:1.0f}:{errB2:.2f}'
-        print(string)
-
-    def univariate_kfda(self,variable,name,common_covariance=True,parallel=False):
+    def univariate_kfda(self,variable,name,parallel=False):
         univariate_name = f'{self.get_kfdat_name}_univariate'
         dn = self.data_name
 
         if univariate_name in self.var[dn] and self.var[dn][univariate_name][variable]:
             print(f'{univariate_name} already computed for {variable}')
         else:
-            t=self.compute_univariate_kfda(variable,common_covariance=common_covariance)
+            t=self.compute_univariate_kfda(variable)
         self.add_results_univariate_kfda_in_var(t,variable,name=name)
         if parallel:
             return({'v':variable,**self.vard[dn][variable]})
@@ -265,7 +250,7 @@ class Univariate:
         # parallel testing 
         elif n_jobs >1:
             vss = [voi[h*lots:(h+1)*lots] for h in range(len(voi)//lots)]
-            vss += [voi[len(voi)//lots:fromto[1]]]
+            vss += [voi[(len(voi)//lots)*lots:fromto[1]]]
             i=0
             for vs in vss:  
                 i+=len(vs)
@@ -298,8 +283,8 @@ class Univariate:
                     if file_name in os.listdir(save_path):
                         self.load_univariate_test_results_in_var(save_path,file_name,)
                     self.save_univariate_test_results_in_var(save_path)
-     
-     
+
+
     def update_var_from_dataframe(self,df,verbose = 0):
         dn = self.data_name
         for c in df.columns:
@@ -338,6 +323,34 @@ class Univariate:
             print(file,len(df))
         self.update_var_from_dataframe(df)
     
+    def correct_BH_univariate_for_toi(self,name):
+        tnames = ['1','r1','r2','r3','rmax']
+        kfdat_name = self.get_kfdat_name()
+        for t in tnames:
+            var_prefix = f'{name}_{kfdat_name}_t{t}'
+            self.correct_BenjaminiHochberg_pval_univariate(var_prefix,exceptions=[],focus=None,add_to_prefix='')
+
+    def get_rejected_genes_for_toi(self,name):
+        kfdat_name = self.get_kfdat_name()
+        tnames = ['1','r1','r2','r3','rmax']
+        dict_rejected = {}
+        for t in tnames:
+            for corrected in [True,False]:
+                corr_str = 'BHc' if corrected else ''
+                pval_col = f'{name}_{kfdat_name}_t{t}_pval{corr_str}'
+                pvals = self.var[self.data_name][f'{pval_col}']
+                pvals = filter_genes_wrt_pval(pvals,threshold=.05)
+                print(pval_col,len(pvals))
+                dict_rejected[f'{pval_col}'] = pvals
+        return(dict_rejected)
+
+    def get_rejected_genes(self,name,tname='r1',corrected=False):
+        kfdat_name = self.get_kfdat_name()
+        corr_str = 'BHc' if corrected else ''
+        pval_col = f'{name}_{kfdat_name}_t{tname}_pval{corr_str}'
+        pvals = self.var[self.data_name][f'{pval_col}']
+        pvals = filter_genes_wrt_pval(pvals,threshold=.05)
+        return(pvals)
 
         
 """

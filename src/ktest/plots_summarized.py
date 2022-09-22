@@ -38,7 +38,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
         n1,n2,n = self.get_n1n2n()
-        ax.set_title(f'n1={n1} vs n2={n2}',fontsize=30)
+        samples = list(self.get_index().keys())
+        ax.set_title(f'n{samples[0]}={n1} vs n{samples[1]}={n2}',fontsize=30)
         pval = self.df_pval[column][1]
         text=  f'{pval:.2f}' if pval >=.01 else f'{pval:1.0e}'
         replace_label(ax,0,f'p-value')
@@ -141,3 +142,39 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
 
         return(oname)
 
+    def summary_plots_of_tester(self,title,t_errors=None,t_discriminant=None,t_residuals=None,nkpca=0,color=None):
+        
+        
+        errors = False if t_errors is None else True
+        discriminant = False if t_discriminant is None else True
+        residuals = False if t_residuals is None else True
+        kpca = False if nkpca == 0 else True
+        ncols = errors + discriminant + residuals + nkpca*kpca
+        fig,axes = plt.subplots(ncols=ncols,figsize=(9*ncols,8))
+        
+        fig.suptitle(title,fontsize=50,y=1.04)
+        i=0
+        if errors: 
+            ax = axes[i]
+            i+=1
+            self.plot_pval_and_errors(truncations_of_interest=[1,3,6],t=t_errors,fig=fig,ax=ax)
+            
+        if discriminant:
+            ax = axes[i]
+            i+=1
+            self.density_proj(t = t_discriminant,fig=fig,ax=ax)
+            ax.set_title(f'discriminant axis t={t_discriminant}',fontsize=30)
+        if residuals: 
+            ax = axes[i]
+            i+=1
+            self.residuals(t_residuals)
+            self.scatter_proj([t_residuals,1],xproj='proj_kfda',yproj='proj_residuals',fig=fig,ax=ax,color=color)
+            ax.set_title(f'discriminant and orthogonal axis t={t_residuals}',fontsize=30)
+
+        if kpca:
+            self.scatter_projs(projections=[[i*2+1,i*2+2] for i in range(nkpca)],xproj='proj_kpca',fig=fig,axes=axes[i:],color=color)
+            for ax in axes[i:]:
+                ax.set_title('KPCA',fontsize=30)
+
+        fig.tight_layout()
+                

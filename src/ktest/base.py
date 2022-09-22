@@ -83,6 +83,7 @@ class Data:
         self.center_by = None        
         self.has_data = False   
         self.has_landmarks = False
+        self.has_kernel = False
         self.quantization_with_landmarks_possible = False
 
         # attributs initialisés 
@@ -355,7 +356,7 @@ class Data:
         else:
             self.kernel = kernel
             self.kernel_name = 'specified by user'
-
+        self.has_kernel = True
 
     # new version 
 
@@ -398,6 +399,7 @@ class Data:
         
         if update_current_data_name:
             self.current_data_name = data_name
+        self.has_data=True
 
     def _update_index(self,nobs,index,data_name):
         '''
@@ -433,7 +435,7 @@ class Data:
 
         return(index)
 
-    def _update_meta_data(self,nobs,df_meta,index,sample):
+    def _update_meta_data(self,df_meta,):
         '''
         This function update the meta information about the data contained in the pandas.DataFrame 
         attribute `self.obs`
@@ -463,12 +465,22 @@ class Data:
                 a structure containing every meta information of each observation
 
         '''
-        if df_meta is None:
-            df_meta = pd.DataFrame([sample]*nobs,columns=['sample'],index=index)
+        # if df_meta is None:
+        #     df_meta = pd.DataFrame([sample]*nobs,columns=['sample'],index=index)
+        if self.obs.shape == (0,1):
+            self.obs = df_meta
         else:
-            df_meta['sample'] = [sample]*nobs
-        self.obs = pd.concat([self.obs,df_meta])
-        self.obs['sample'] = self.obs['sample'].astype('category')
+            # self.obs.update(df_meta)
+            self.obs = pd.concat([self.obs,df_meta[~df_meta.index.isin(self.obs.index)]])
+
+
+        for c in self.obs.columns:
+            if len(self.obs[c].unique())<100:
+                # print(c,self.obs[c].unique())
+                self.obs[c] = self.obs[c].astype('category')
+
+        # self.obs = pd.concat([self.obs,df_meta])
+        # self.obs['sample'] = self.obs['sample'].astype('category')
 
     def _update_variables(self,variables,data_name):
         '''
@@ -510,7 +522,6 @@ class Data:
         self.vard[data_name] = {v:{} for v in variables}
 
     def add_data_to_Tester(self,x,
-                           sample,                               
                            data_name,
                            index=None,
                            variables=None,
@@ -519,13 +530,28 @@ class Data:
         nobs = len(x)
         if index is None and df_meta is not None:
             index = df_meta.index
+        if data_name in self.data:
+            old_index = self.data[data_name]['index']
 
-        self._update_dict_data(x,data_name)
-        index = self._update_index(nobs,index,data_name)
-        self._update_meta_data(nobs,df_meta,index,sample)
-        self._update_variables(variables,data_name)
+            if len(index[index.isin(old_index)])==0:
+                print('There is only new data')
+                self._update_dict_data(x,data_name)
+                index = self._update_index(nobs,index,data_name)
+                self._update_meta_data(df_meta=df_meta)
+                self._update_variables(variables,data_name)
 
-    def add_data_to_Tester_from_dataframe(self,df,sample,df_meta=None,data_name='data'):
+            elif len(index[~index.isin(old_index)])==len(index):
+                print('This dataset is already stored in tester.')
+            else:
+                print('There is some new data and already stored data, this situation is not implemented yet. ')
+        else:
+            self._update_dict_data(x,data_name)
+            index = self._update_index(nobs,index,data_name)
+            self._update_meta_data(df_meta=df_meta)
+            self._update_variables(variables,data_name)
+
+
+    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,data_name='data'):
         '''
         
         '''
@@ -533,7 +559,7 @@ class Data:
         index = df.index
         variables = df.columns
 
-        self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta)
+        self.add_data_to_Tester(x,data_name,index,variables,df_meta)
 
     def get_index(self,landmarks=False):
 
@@ -808,7 +834,7 @@ class Data:
                     print(f'{name} not found in {names}, default projection:  {names[0]}')
                     df_proj = dict_df_proj[names[0]]
                 elif name is None:
-                    print(f'projection not specified, default projection : {names[0]}') 
+                    print(f'projection not specified with {which}, default projection : {names[0]}') 
                     df_proj = dict_df_proj[names[0]]
                 else: 
                     df_proj = dict_df_proj[name]
@@ -862,9 +888,11 @@ class Data:
         '''
         
         if center_by is not None and hasattr(self,'obs'):
-            self.center_by = center_by       
+            self.center_by = center_by      
+        if center_by is None:
+            self.center_by = None 
            
-    def set_test_data_info(self,data_name,condition,samples):
+    def set_test_data_info(self,data_name,condition,samples='all'):
         self.data_name = data_name
         self.condition = condition
         if condition in self.obs:
@@ -894,8 +922,16 @@ class Data:
         out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
         return(f'{dn}{c}{smpl}{cb}{out}')
 
+    def get_model_str(self):
+        ny = self.nystrom
+        nys = 'ny' if self.nystrom else 'standard'
+        ab = f'_basis{self.anchors_basis}' if ny else ''
+        lm = f'_lm{self.landmark_method}_m{self.m}' if ny else ''
+        return(f'{nys}{lm}{ab}')
+
     def get_landmarks_name(self):
         dtn = self.get_data_to_test_str()
+
 
         lm = self.landmark_method
         m = f'_m{self.m}'
@@ -918,40 +954,28 @@ class Data:
 
     def get_covw_spev_name(self):
         dtn = self.get_data_to_test_str()
-        
-        cov = self.approximation_cov
-        ab = f'_basis{self.anchors_basis}' if 'nystrom' in cov else ''
-        lm = f'_lm{self.landmark_method}_m{self.m}' if 'nystrom' in cov else ''
+        mn = self.get_model_str()
 
-        return(f'{cov}{lm}{ab}_{dtn}')
+        return(f'{mn}_{dtn}')
 
     def get_kfdat_name(self):
         dtn = self.get_data_to_test_str()
+        mn = self.get_model_str()
 
-        cov = self.approximation_cov
-        mmd = self.approximation_mmd
-        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
-        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov or 'nystrom' in mmd) else ''
-
-        return(f'{cov}{mmd}{ab}{lm}_{dtn}')
+        return(f'{mn}_{dtn}')
 
     def get_residuals_name(self,t,center):
         dtn = self.get_data_to_test_str()
         
-        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
-        cov = self.approximation_cov
-        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
+        mn = self.get_model_str()
 
         c = center
-        return(f'{c}{t}_{cov}{ab}{lm}_{dtn}')
+        return(f'{c}{t}_{mn}_{dtn}')
         
     def get_mmd_name(self):
         dtn = self.get_data_to_test_str()
+        mn = self.get_model_str()
 
-        cov = self.approximation_cov
-        ab = f'_basis{self.anchors_basis}' if ('nystrom' in cov) else ''
-        lm = f'_lm{self.landmark_method}_m{self.m}' if ('nystrom' in cov) else ''
-
-        return(f'{cov}{ab}{lm}_{dtn}')
+        return(f'{mn}_{dtn}')
 
 

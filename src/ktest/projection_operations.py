@@ -49,7 +49,7 @@ class ProjectionOps(KernelTrick):
                     verbose = verbose)
         return(proj,t)
 
-    def compute_proj_kfda(self,t=None,verbose=0):
+    def projections(self,t=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
@@ -64,41 +64,26 @@ class ProjectionOps(KernelTrick):
 
         """
 
-        proj_kfda_name = self.get_kfdat_name() 
+        proj_name = self.get_kfdat_name() 
 
-        if proj_kfda_name in self.df_proj_kfda and str(t) in self.df_proj_kfda[proj_kfda_name]:
+        if proj_name in self.df_proj_kfda and str(t) in self.df_proj_kfda[proj_name]:
             if verbose : 
                 print('Proj on discriminant axis Already computed')
         else:
             proj,t = self.compute_proj_on_eigenvectors(t=t)
+            proj_kpca = proj
             proj_kfda = proj.cumsum(axis=1)
             trunc = range(1,t+1) 
         
-            if proj_kfda_name in self.df_proj_kfda:
-                print(f"écrasement de {proj_kfda_name} dans df_proj_kfda")
-            self.df_proj_kfda[proj_kfda_name] = pd.DataFrame(proj_kfda,index= self.get_xy_index(),columns=[str(t) for t in trunc])
-        return(proj_kfda_name)
-
-
-    def compute_proj_kpca(self,t=None,verbose=0):
-        """ 
+            if proj_name in self.df_proj_kfda:
+                print(f"écrasement de {proj_name} dans df_proj_kfda")
+            if proj_name in self.df_proj_kpca:
+                print(f"écrasement de {proj_name} dans df_proj_kpca")
+            self.df_proj_kfda[proj_name] = pd.DataFrame(proj_kfda,index= self.get_xy_index(),columns=[str(t) for t in trunc])
+            self.df_proj_kpca[proj_name] = pd.DataFrame(proj_kpca,index= self.get_xy_index(),columns=[str(t) for t in trunc])
+        return(proj_name)
         
-        """
-        
-        proj_kpca_name = self.get_kfdat_name() 
 
-        if proj_kpca_name in self.df_proj_kpca and str(t) in self.df_proj_kpca[proj_kpca_name]:
-            if verbose : 
-                print('Proj on discriminant axis Already computed')
-        else:
-            proj,t = self.compute_proj_on_eigenvectors(t=t)
-            proj_kfda = proj
-            trunc = range(1,t+1) 
-        
-            if proj_kpca_name in self.df_proj_kpca:
-                print(f"écrasement de {proj_kpca_name} dans df_proj_kpca")
-            self.df_proj_kpca[proj_kpca_name] = pd.DataFrame(proj_kfda,index= self.get_xy_index(),columns=[str(t) for t in trunc])
-        return(proj_kpca_name)
 
     def compute_proj_mmd(self,verbose=0):
         mmd_name = self.get_mmd_name()
@@ -134,5 +119,6 @@ class ProjectionOps(KernelTrick):
                     },
                     start=False,
                     verbose = verbose)
+
 
 

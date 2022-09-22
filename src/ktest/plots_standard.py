@@ -186,7 +186,7 @@ class Plot_Standard(Statistics):
     def get_plot_properties(self,marker=None,color=None,show_conditions=True,labels='CT',
                             marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
                             big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                            
+                            color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
 
@@ -199,79 +199,127 @@ class Plot_Standard(Statistics):
         outliers_in_obs = self.outliers_in_obs
         coef_bins = 3
         if marker is None and color is None : 
-            ipopx = self.get_xy_index(sample='x')
-            ipopy = self.get_xy_index(sample='y')
+            # print("plot properties marker is None and color is None")
+            dict_index = self.get_index()
+            for i,k in enumerate(dict_index.keys()):
+                ipop = dict_index[k]
+                lab = f'{k}({len(ipop)})'
+                bins = coef_bins*int(np.floor(np.sqrt(len(ipop))))
+                properties[k] = {'index':ipop,
+                                 'plot_args':{'marker':marker_list[i]},
+                                 'mean_plot_args':{'marker':big_marker_list[i],'label':lab},
+                                 'hist_args':{'bins':bins,'label':lab}
+                }
 
-            labx = f'{labels[0]}({len(ipopx)})'
-            laby = f'{labels[1]}({len(ipopy)})'
+            # ipopx = self.get_xy_index(sample='x')
+            # ipopy = self.get_xy_index(sample='y')
+
+            # labx = f'{labels[0]}({len(ipopx)})'
+            # laby = f'{labels[1]}({len(ipopy)})'
             
-            binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
-            binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
+            # binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
+            # binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
                             
-            properties['x'] = {'index':ipopx,
-                            'plot_args':{'marker':'x','color':cx_},
-                            'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
-                            'hist_args':{'bins':binsx,'label':labx,'color':cx_}}
+            # properties['x'] = {'index':ipopx,
+            #                 'plot_args':{'marker':'x','color':cx_},
+            #                 'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
+            #                 'hist_args':{'bins':binsx,'label':labx,'color':cx_}}
                             
-            properties['y'] = {'index':ipopy,
-                            'plot_args':{'marker':'+','color':cy_},
-                            'mean_plot_args':{'marker':my_,'color':cy_,'label':laby},
-                            'hist_args':{'bins':binsy,'label':laby,'color':cy_}}
+            # properties['y'] = {'index':ipopy,
+            #                 'plot_args':{'marker':'+','color':cy_},
+            #                 'mean_plot_args':{'marker':my_,'color':cy_,'label':laby},
+            #                 'hist_args':{'bins':binsy,'label':laby,'color':cy_}}
                             
         
         elif isinstance(color,str) and marker is None:
+            # print("plot properties isinstance(color,str) and marker is None")
             if color in list(variables):
-                x,y = self.get_xy()
-                
-                ipopx = self.get_xy_index(sample='x')
-                ipopy = self.get_xy_index(sample='y')
+                # print("color in list(variables)")
 
-                cx = x[:,variables.get_loc(color)]
-                cy = y[:,variables.get_loc(color)]
-                
-                labx = f'{labels[0]}({len(ipopx)})'
-                laby = f'{labels[1]}({len(ipopy)})'
-            
-                properties['x']  = {'index':ipopx,
-                                    'plot_args':{'marker':'x','c':cx},
-                                    'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
+                dict_data = self.get_data()
+                dict_index = self.get_index()
+                for i,k in enumerate(dict_data.keys()):
+                    
+                    ipop = dict_index[k]
+                    n = len(ipop)
+                    data = dict_data[k]
+                    c = data[:,variables.get_loc(color)]
+                    lab = f'{k}({n})'
+                    properties[k] = {'index':ipop,
+                                    'plot_args':{'marker':marker_list[i]},
+                                    'mean_plot_args':{'marker':big_marker_list[i],'label':lab},
                                     }
-                properties['y']  = {'index':ipopy,
-                                    'plot_args':{'marker':'+','c':cy},
-                                    'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
+                # x,y = self.get_xy()
+                
+                # ipopx = self.get_xy_index(sample='x')
+                # ipopy = self.get_xy_index(sample='y')
+
+                # cx = x[:,variables.get_loc(color)]
+                # cy = y[:,variables.get_loc(color)]
+                
+                # labx = f'{labels[0]}({len(ipopx)})'
+                # laby = f'{labels[1]}({len(ipopy)})'
+            
+                # properties['x']  = {'index':ipopx,
+                #                     'plot_args':{'marker':'x','c':cx},
+                #                     'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx},
+                #                     }
+                # properties['y']  = {'index':ipopy,
+                #                     'plot_args':{'marker':'+','c':cy},
+                #                     'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
                 
                 
             elif color in list(self.obs.columns):
+                # print("color in list(variables)")
                 if self.obs[color].dtype == 'category':
                     for pop in self.obs[color].cat.categories:
                         if show_conditions: 
-                    
-                            ipopx = self.obs.loc[self.obs[color]==pop]\
-                                            .loc[self.obs['sample']=='x'].index
-                            ipopy = self.obs.loc[self.obs[color]==pop]\
-                                            .loc[self.obs['sample']=='y'].index
-                            if outliers_in_obs is not None:
-                                outliers = self.obs[self.obs[outliers_in_obs]].index
-                                ipopx = ipopx[~ipopx.isin(outliers)]
-                                ipopy = ipopy[~ipopy.isin(outliers)]
+                            dict_index = self.get_index()
+                            for i,k in enumerate(dict_index.keys()):
+                                ipop = self.obs.loc[self.obs[color]==pop].index
+                                n = len(ipop)
+                                ipop = ipop[ipop.isin(dict_index[k])]
+                                
+                                m = marker_list[i%len(marker_list)]
+                                mean_m = big_marker_list[i%len(big_marker_list)]
+                        
+                                if outliers_in_obs is not None:
+                                    outliers = self.obs[self.obs[outliers_in_obs]].index
+                                    ipop = ipop[~ipop.isin(outliers)]
+                                lab = f'{k} {pop} ({n})'
+                                bins = coef_bins*int(np.floor(np.sqrt(n)))
+                                properties[f'{pop}{k}'] = {'index':ipop,
+                                                    'plot_args':{'marker':m},
+                                                    'mean_plot_args':{'marker':mean_m,'label':lab},
+                                                    'hist_args':{'bins':bins,'label':lab}}
+                            # ipopx = self.obs.loc[self.obs[color]==pop]\
+                            #                 .loc[self.obs['sample']=='x'].index
+                            # ipopy = self.obs.loc[self.obs[color]==pop]\
+                            #                 .loc[self.obs['sample']=='y'].index
+                            # if outliers_in_obs is not None:
+                            #     outliers = self.obs[self.obs[outliers_in_obs]].index
+                            #     ipopx = ipopx[~ipopx.isin(outliers)]
+                            #     ipopy = ipopy[~ipopy.isin(outliers)]
 
-                            labx = f'{labels[0]} {pop} ({len(ipopx)})'
-                            laby = f'{labels[1]} {pop} ({len(ipopy)})'
+                            # labx = f'{labels[0]} {pop} ({len(ipopx)})'
+                            # laby = f'{labels[1]} {pop} ({len(ipopy)})'
                             
-                            binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
-                            binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
+                            # binsx=coef_bins*int(np.floor(np.sqrt(len(ipopx))))
+                            # binsy=coef_bins*int(np.floor(np.sqrt(len(ipopy))))
                             
-                            properties[f'{pop}x'] = {'index':ipopx,
-                                                    'plot_args':{'marker':'x'},
-                                                    'mean_plot_args':{'marker':mx_,'label':labx},
-                                                    'hist_args':{'bins':binsx,'label':labx}}
-                            properties[f'{pop}y'] = {'index':ipopy,
-                                                    'plot_args':{'marker':'+'},
-                                                    'mean_plot_args':{'marker':my_,'label':laby},
-                                                    'hist_args':{'bins':binsy,'label':laby}}
+                            # properties[f'{pop}x'] = {'index':ipopx,
+                            #                         'plot_args':{'marker':'x'},
+                            #                         'mean_plot_args':{'marker':mx_,'label':labx},
+                            #                         'hist_args':{'bins':binsx,'label':labx}}
+                            # properties[f'{pop}y'] = {'index':ipopy,
+                            #                         'plot_args':{'marker':'+'},
+                            #                         'mean_plot_args':{'marker':my_,'label':laby},
+                            #                         'hist_args':{'bins':binsy,'label':laby}}
 
                             
                         else:
+                            # print('not show conditions')
+
                             ipop = self.obs.loc[self.obs[color]==pop].index
                             if outliers_in_obs is not None:
                                 outliers = self.obs[self.obs[outliers_in_obs]].index
@@ -288,28 +336,46 @@ class Plot_Standard(Statistics):
                             
                             
                 else: # pour une info numérique 
+                    # print(f'{color} is not categorical in obs')
+                    dict_index = self.get_index()
+                    for i,k in enumerate(dict_index.keys()):
 
-                    ipopx = self.obs.loc[self.obs['sample']=='x'].index                                
-                    ipopy = self.obs.loc[self.obs['sample']=='y'].index
+                        m = marker_list[i%len(marker_list)]
+                        mean_m = big_marker_list[i%len(big_marker_list)]
+                        
+
+                        ipop = dict_index[k]
+                        n = len(ipop)
+                        if outliers_in_obs is not None:
+                            outliers = self.obs[self.obs[outliers_in_obs]].index
+                            ipop = ipop[~ipop.isin(outliers)]
+                        c = self.obs.loc[self.obs.index.isin(ipop)][color]
+                        lab = f'{k}({n})'
+                        properties[k] = {'index':ipop,
+                                        'plot_args':{'c':c,'marker':m},
+                                        'mean_plot_args':{'marker':mean_m,'label':lab}}
+
+                    # ipopx = self.obs.loc[self.obs['sample']=='x'].index                                
+                    # ipopy = self.obs.loc[self.obs['sample']=='y'].index
                     
-                    if outliers_in_obs is not None:
-                        outliers = self.obs[self.obs[outliers_in_obs]].index
-                        ipopx = ipopx[~ipopx.isin(outliers)]
-                        ipopy = ipopy[~ipopy.isin(outliers)]
+                    # if outliers_in_obs is not None:
+                    #     outliers = self.obs[self.obs[outliers_in_obs]].index
+                    #     ipopx = ipopx[~ipopx.isin(outliers)]
+                    #     ipopy = ipopy[~ipopy.isin(outliers)]
 
-                    cx = self.obs.loc[self.obs.index.isin(ipopx)][color]
-                    cy = self.obs.loc[self.obs.index.isin(ipopy)][color]
+                    # cx = self.obs.loc[self.obs.index.isin(ipopx)][color]
+                    # cy = self.obs.loc[self.obs.index.isin(ipopy)][color]
 
 
-                    labx = f'{labels[0]}({len(ipopx)})'
-                    laby = f'{labels[1]}({len(ipopy)})'
+                    # labx = f'{labels[0]}({len(ipopx)})'
+                    # laby = f'{labels[1]}({len(ipopy)})'
 
-                    properties['x'] = {'index':ipopx,
-                                    'plot_args':{'c':cx,'marker':'x'},
-                                    'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx}}
-                    properties['y'] = {'index':ipopy,
-                                    'plot_args':{'c':cy,'marker':'+'},
-                                    'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
+                    # properties['x'] = {'index':ipopx,
+                    #                 'plot_args':{'c':cx,'marker':'x'},
+                    #                 'mean_plot_args':{'marker':mx_,'color':cx_,'label':labx}}
+                    # properties['y'] = {'index':ipopy,
+                    #                 'plot_args':{'c':cy,'marker':'+'},
+                    #                 'mean_plot_args':{'marker':my_,'color':cy_,'label':laby}}
                         
 
                         
@@ -566,18 +632,18 @@ class Plot_Standard(Statistics):
         return(fig,axes)
 
 
-    def density_projs(self,fig=None,axes=None,which='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,labels='CT'):
+    def density_projs(self,fig=None,axes=None,which='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True):
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,proj in zip(axes,projections):
-            self.density_proj(t=proj,which=which,name=name,fig=fig,ax=ax)
+            self.density_proj(t=proj,which=which,name=name,fig=fig,ax=ax,show_conditions=show_conditions)
         fig.tight_layout()
         return(fig,axes)
 
     def scatter_projs(self,fig=None,axes=None,xproj='proj_kpca',yproj=None,xname=None,yname=None,projections=[(i*2,i*2+1) for i in range(4)],suptitle=None,
-                        highlight=None,color=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',labels='CT'):
+                        highlight=None,color=None,marker=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',show_conditions=True):
         to_iterate = projections if iterate_over == 'projections' else color
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
@@ -585,9 +651,9 @@ class Plot_Standard(Statistics):
             axes = [axes]
         for ax,obj in zip(axes,to_iterate):
             if iterate_over == 'projections':
-                self.scatter_proj(obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,fig=fig,ax=ax)
+                self.scatter_proj(obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,marker=marker,fig=fig,ax=ax,show_conditions=show_conditions)
             elif iterate_over == 'color':
-                self.scatter_proj(projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,fig=fig,ax=ax)
+                self.scatter_proj(projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,marker=marker,fig=fig,ax=ax,show_conditions=show_conditions)
         fig.tight_layout()
         return(fig,axes)
     
