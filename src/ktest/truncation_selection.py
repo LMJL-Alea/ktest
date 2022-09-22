@@ -28,7 +28,7 @@ class TruncationSelection(Residuals):
         pe = self.get_between_covariance_projection_error()
         pe = cat([tensor([0],dtype =float64),pe])
         pe = 1-pe
-        
+        kmax = kmax if len(pe)>kmax else len(pe)-1
         pen = 1+ (kmax-1)* (pe[kmax]-pe)/(pe[kmax] - pe[1])
         D2 = np.diff(np.diff(pen))
         sel = np.where(D2>S)[0]

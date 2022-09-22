@@ -102,12 +102,12 @@ class Pvalues:
         self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
     def correct_BenjaminiHochberg_pval_univariate(self,var_prefix,exceptions=[],focus=None,add_to_prefix=''):
-        pval = self.var[f'{var_prefix}_pval']
+        pval = self.var[self.data_name][f'{var_prefix}_pval']
         pval = pval if focus is None else pval[pval.index.isin(focus)]
         pval = pval[~pval.index.isin(exceptions)]
         pval = pval[~pval.isna()]
         pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
-        self.var[f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
+        self.var[self.data_name][f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
 
     # def get_rejected_variables_univariate(self,var_prefix,BH=False):
     #     BH_str = 'BHc' if BH else ''

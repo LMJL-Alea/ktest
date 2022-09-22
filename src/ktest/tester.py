@@ -63,6 +63,7 @@ def pytorch_eigsy(matrix):
     #     p = permutation(np.arange(nH0))
     #     self.x0,self.y0 = z[p[:nH0//2]],z[p[nH0//2:]]
 
+
 class Tester(Plot_Univariate,SaveData,Pvalues):
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
@@ -88,37 +89,48 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         s = '##### Data ##### \n'
         
         if self.has_data:
-            n1,n2,n = self.get_n1n2n()
-            x,y = self.get_xy()
-            xindex,yindex = self.get_xy_index(sample='x'),self.get_xy_index(sample='y')
-            s += f"View of Tester object with n1 = {n1}, n2 = {n2} (n={n})\n"
-
-            s += f"x ({x.shape}), y ({y.shape})\n"
-            s += f'kernel : {self.kernel_name}\n'                       
-            s += f'x index : {xindex[:3].tolist()}... \n'
-            s += f'y index : {yindex[:3].tolist()}... \n'
-            s += f'variables : {self.variables[:3].tolist()}...\n'
-            s += f'meta : {self.obs.columns.tolist()}\n'
+            s+='Data : '
+            for dn in self.data.keys():
+                s+=f'{dn}, '
+            s+=f'\t active : {self.data_name}'
+            s+='\nObservations: '
+            dict_nobs = self.get_nobs()
+            for k,n in dict_nobs.items():
+                s+=f'{k}:n={n} '
+            # s += f'variables : {self.var[self.data_name][:3].tolist()}...\n'
+            s += f'\nmeta : {self.obs.columns.tolist()}\n\n'
         else: 
             s += "View of Tester object with no data.\n" 
             s += "You can initiate the data with the class function 'init_data()'.\n\n"
         
         s += '##### Model #### \n'
-        if self.has_model: 
-            cov = self.approximation_cov
-            mmd = self.approximation_mmd
-            ny = 'nystrom' in cov or 'nystrom' in mmd
-            s += f"Model: {cov},{mmd}"
+        if self.has_model:
+
+            ny = self.nystrom
+            nys = 'nystrom' if ny else 'standard'
+            s += f"Model: {nys}"
+
             if ny : 
-                anchors_basis = self.anchors_basis
+                ab = self.anchors_basis
+                lm = self.landmark_method
                 m=self.m
                 r=self.r
-                s += f',{anchors_basis},m={m},r={r}'
+                s += f' {lm} (m={m}), {ab} (r={r})'
             s+= '\n\n'
         else: 
             s += "This Tester object has no model.\n"
             s += "You can initiate the model with the class function 'init_model()'.\n\n"
+
         
+        s += '##### Kernel ####\n'
+        if self.has_kernel:
+            s+=f'kernel : {self.kernel_name}\n\n'
+        else:
+            s+=f'This Tester object has no kernel.\n'
+            s+=f"You can initiate the kernel function with the class function 'init_kernel()'. \n\n"
+            
+
+
         s += '##### Results ##### \n'
         s += '--- Statistics --- \n'
         s += f"df_kfdat ({self.df_kfdat.columns})\n"
@@ -255,5 +267,19 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
             self.compute_proj_kpca(t=t,verbose=verbose)
 
 
+def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,outliers_in_obs=None,kernel='gauss_median',samples='all',viz=True):
+    t = Tester()
+    t.add_data_to_Tester_from_dataframe(df,meta,data_name=data_name)
+    t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
+    t.init_kernel(kernel=kernel)
+    t.init_model(nystrom=nystrom,landmark_method=lm,anchors_basis=ab,m=m,r=r)
+    t.set_center_by(center_by=center_by)
+    t.set_outliers_in_obs(outliers_in_obs=outliers_in_obs)
+    t.kfdat()
 
+    if viz:
+        t.projections()
+        t.compute_pval(t=len(df))
+        t.residuals()
+    return(t)
 
