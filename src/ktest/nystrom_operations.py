@@ -19,35 +19,48 @@ class NystromOps(Model,OutliersOps,Verbosity):
     def __init__(self):
         super(NystromOps,self).__init__()
 
+    def init_landmark_method(self,verbose=0):
+        if self.landmark_method is None:
+            self.landmark_method = 'random'        
+            if verbose >0:
+                print("landmark_method not specified, by default, landmark_method='random'")
+    
+    def init_anchors_basis(self,verbose=0):
+        if self.anchors_basis is None: 
+            self.anchors_basis = 'w'
+            if verbose > 0:
+                print("nystrom anchors_basis not specified, default : w")
+      
+    def init_m(self,verbose=0):
+        ntot = self.get_ntot()  
+
+        if self.m_initial is None:
+            self.m_initial = ntot//10
+            if verbose >0:
+                print("m not specified, by default, m = (n1+n2)//10")
+
+        try:
+            nlandmarks = sum([int(np.floor(n/ntot*self.m_initial)) for k,n in self.get_nobs().items() if k!='ntot'])
+        except ZeroDivisionError:
+            print(f'ZeroDivisionError : the effectifs in dict_nobs are {self.get_nobs()}')
+            # sometimes an approximation error changes the number of landmarks # if self.m_initial != nlandmarks_total:
+        
+        self.m = nlandmarks   
+
+    def init_r(self,verbose):
+        if self.r is None:
+            self.r = self.m      
+            if verbose > 0:
+                print("r not specified, by default, r = m" )
+        assert(self.r <= self.m)
+    
     def init_nystrom(self,verbose=0):
         if not self.nystrom_initialized:
-            ntot = self.get_ntot(landmarks=False)        
-
-            if not self.m_initial is None and verbose >0:
-                print("m not specified, by default, m = (n1+n2)//10")
-            if self.landmark_method is None and verbose >0:
-                print("landmark_method not specified, by default, landmark_method='random'")
-            if self.r is None and verbose > 0:
-                print("r not specified, by default, r = m" )
-            if self.anchors_basis is None and verbose > 0:
-                print("nystrom anchors_basis not specified, default : w")
-            
-            self.m_initial = self.m_initial if self.m_initial is not None else ntot//10
-            dict_nobs  =  self.get_nobs(landmarks=False)
-            try:
-                dict_nlandmarks = {k:int(np.floor(n/ntot*self.m_initial)) for k,n in dict_nobs.items() if k!='ntot'}
-            except ZeroDivisionError:
-                print(f'ZeroDivisionError : the effectifs in dict_nobs are {dict_nobs}')
-            nlandmarks_total = sum([v for k,v in dict_nlandmarks.items()])
-
-            # sometimes an approximation error changes the number of landmarks
-            # if self.m_initial != nlandmarks_total:
-            self.m = nlandmarks_total        
-            self.r = self.m if self.r is None else self.r     
-
-            self.landmark_method = 'random' if self.landmark_method is None else self.landmark_method       
-            self.anchors_basis = 'w' if self.anchors_basis is None else self.anchors_basis
-            assert(self.r <= self.m)
+            self.init_landmark_method(verbose)
+            self.init_anchors_basis(verbose)
+            self.init_m(verbose)
+            self.init_r(verbose)
+                
             self.nystrom_initialized = True
     
     def compute_nystrom_landmarks(self,verbose=0):
@@ -144,6 +157,7 @@ class NystromOps(Model,OutliersOps,Verbosity):
 
             r = self.r 
             m = self.m
+            # m = self.get_ntot(landmarks=True)
             Km = self.compute_gram(landmarks=True)
             P = self.compute_covariance_centering_matrix(quantization=False,landmarks=True,)
             

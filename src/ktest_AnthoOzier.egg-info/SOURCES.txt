@@ -32,6 +32,7 @@ src/ktest/univariate_testing.py
 src/ktest/utils.py
 src/ktest/utils_pandas.py
 src/ktest/utils_plot.py
+src/ktest/utils_reversion.py
 src/ktest/utils_simu_ccdf.py
 src/ktest/utils_univariate.py
 src/ktest/verbosity.py

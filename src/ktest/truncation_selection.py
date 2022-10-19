@@ -19,15 +19,13 @@ class TruncationSelection(Residuals):
 
     def select_trunc_by_between_reconstruction_ratio(self,ratio):
         pe = self.get_between_covariance_projection_error()
-        pe = cat([tensor([0],dtype =float64),pe])
-        pe = 1-pe
+        pe = cat([tensor([1],dtype =float64),pe])
         return(where(pe<ratio)[0][0])
 
         
     def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max'):
         pe = self.get_between_covariance_projection_error()
-        pe = cat([tensor([0],dtype =float64),pe])
-        pe = 1-pe
+        pe = cat([tensor([1],dtype =float64),pe])
         kmax = kmax if len(pe)>kmax else len(pe)-1
         pen = 1+ (kmax-1)* (pe[kmax]-pe)/(pe[kmax] - pe[1])
         D2 = np.diff(np.diff(pen))

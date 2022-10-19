@@ -252,6 +252,7 @@ class Residuals(Statistics):
             Lz12 = diag(Lz**-(1/2))
             Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             Kzx = self.compute_kmn()
+            # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
             mmdt = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2)
 
         else:
@@ -268,7 +269,8 @@ class Residuals(Statistics):
 
         
         
-        projection_error = (mmdt/delta) 
+        projection_reconstruction = (mmdt/delta) 
+        projection_error = 1 -projection_reconstruction
         if return_total:
             return(projection_error,delta)
         else:
@@ -276,10 +278,14 @@ class Residuals(Statistics):
 
     def get_between_covariance_projection_error_associated_to_t(self,t):
         pe = self.get_between_covariance_projection_error()
-        pe = cat([tensor([0],dtype =float64),pe])
-        pe = 1-pe
+        pe = cat([tensor([1],dtype =float64),pe])
         return(pe[t].item())
-        
+
+    def get_within_covariance_explained_variance_associated_to_t(self,t):
+        exv = 1-self.get_explained_variance()
+        exv = cat([tensor([1],dtype =float64),exv])
+        return(exv[t].item())
+
     def get_ordered_spectrum_wrt_between_covariance_projection_error(self):
         '''
         Sorts the eigenvalues of the within covariance operator in order to 
@@ -296,9 +302,12 @@ class Residuals(Statistics):
             of eigenvectors of the within covariance operator ordered by decreasing eigenvalues. 
         
         '''
+        print("attention la fonction get_between_covariance_projection_error a été modifiée mais cette" +\
+            "fonction get_ordered_spectrum_wrt_between_covariance_projection_error n'a pas été modifiée" +\
+            "car je ne savais pas si elle avait encore un intérêt.")
         eB = self.get_between_covariance_projection_error()
 
-        eB = cat((tensor([0],dtype=float64),eB))
+        eB = cat((tensor([1],dtype=float64),eB))
         projection_error = eB[1:] - eB[:-1]
         projection_error = projection_error[~isnan(projection_error)]
         sorted_projection_error,ordered_truncations  = sort(projection_error,descending = True)

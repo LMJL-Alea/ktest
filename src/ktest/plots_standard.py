@@ -49,8 +49,8 @@ class Plot_Standard(Statistics):
             if ylim is None and not no_data_to_plot:
                 # probleme je voulais pas yas dans cette fonction 
                 yas = [chi2.ppf(0.95,t) for t in trunc] 
-                
-                ymax = np.max([yas[-1], np.nanmax(np.isfinite(kfdat[kfdat.index == trunc[-1]]))]) # .max(numeric_only=True)
+                # ymax = np.max([yas[-1], np.nanmax(np.isfinite(kfdat[kfdat.index == trunc[-1]]))]) # .max(numeric_only=True)
+                ymax = np.max([yas[-1], np.nanmax(np.isfinite(kfdat))]) # .max(numeric_only=True)
                 ylim = (-5,ymax)
                 ax.set_ylim(ylim)
             if contrib and len(columns)==1:
@@ -76,16 +76,33 @@ class Plot_Standard(Statistics):
 
         return(fig,ax)
 
-    def plot_pvalue(self,column,t=20,fig=None,ax=None,legend=True,label=None,log=False,ylim=None,title=None,title_fontsize=40,label_asymp=False):
+
+    def plot_pvalue(self,t=20,fig=None,ax=None,title=None,legend=True,log=False):
+        fig,ax = init_plot_pvalue(fig=fig,ax=ax,ylim=(-.05,1.05),t=t,title=title,log=log)
+
+        pval = -np.log(self.df_pval[self.get_kfdat_name()]+1) if log else \
+                self.df_pval[self.get_kfdat_name()]
+
+        ax.plot(pval,label='p-value')        
+        ax.set_xlim(0,t)
+        if legend:
+            ax.legend()
+
+        return(fig,ax)
+
+
+    def plot_several_pvalues(self,t=20,fig=None,ax=None,columns=None,legend=True,log=False,ylim=None,title=None,title_fontsize=40,label_asymp=False):
 
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,ylim=ylim,t=t,label=label_asymp,
                                 title=title,title_fontsize=title_fontsize,log=log)
     
-        pvals = self.df_pval[column].copy()
+        if columns is None:
+            columns = self.df_kfdat.columns
+        pvals = self.df_pval[columns].copy()
         if log :
-            pvals = -np.log(pvals)
-        t_ = (~pvals.isna()).sum()
-        ax.plot(pvals[:t_],label=column if label is None else label)
+            pvals = -np.log(pvals+1)
+        # t_ = (~pvals.isna()).sum().min()
+        pvals.plot(ax=ax)
         ax.set_xlim(0,t)
         
         if legend:
@@ -131,14 +148,32 @@ class Plot_Standard(Statistics):
 
         return(fig,ax)
 
-    def density_proj(self,t,which='proj_kfda',name=None,orientation='vertical',color=None,fig=None,ax=None,show_conditions=True):
+    def get_axis_label(self,proj,t):
+        label = proj if proj in self.get_variables() else \
+                 t if proj=='obs' else \
+                 f'DA{t}' if proj == 'proj_kfda' else \
+                 f'PC{t}' if proj == 'proj_kpca' else \
+                 f'R{t}'
+
+        if proj == 'proj_kfda':
+            pval = self.df_pval[self.get_kfdat_name()].loc[t]
+            label += f' pval={pval:.1e}' if pval<.01 else f' pval={pval:1.2f}'
+                    
+        sp,ev = self.get_spev('covw')
+        if proj in ['proj_kfda','proj_kpca']:
+            lmbda = sp[t-1]
+            label += r' $\lambda$'
+            label += f'={lmbda:.1e}' if lmbda<.01 else f'={lmbda:.2f}' 
+        return(label)
+
+    def density_proj(self,t,proj='proj_kfda',name=None,orientation='vertical',color=None,fig=None,ax=None,show_conditions=True):
         labels = list(self.get_index().keys())
 
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
         properties = self.get_plot_properties(color=color,labels=labels,show_conditions=show_conditions)
-        df_proj= self.init_df_proj(which,name)
+        df_proj= self.init_df_proj(proj,name)
         
         # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
         
@@ -146,7 +181,7 @@ class Plot_Standard(Statistics):
     #         print(kprop,vprop['mean_plot_args'].keys())
             if len(vprop['index'])>0:
                 dfxy = df_proj.loc[df_proj.index.isin(vprop['index'])]
-                dfxy = dfxy[which] if which in dfxy else dfxy[str(t)]                        
+                dfxy = dfxy[proj] if proj in dfxy else dfxy[str(t)]                        
                 
                 ax.hist(dfxy,density=True,histtype='bar',alpha=.5,orientation=orientation,**vprop['hist_args'])
                 if 'label' in vprop['hist_args']:
@@ -166,17 +201,11 @@ class Plot_Standard(Statistics):
                     ax.axvline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
                 else:
                     ax.axhline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
-                    
 
-        name_pval = self.get_kfdat_name()
-        xlabel = which if which in self.data[self.data_name]['variables'] else which.split(sep='_')[1]+f': t={t}'
-        xlabel += f'  pval={self.df_pval[name_pval].loc[t]:.3e}' if which == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[name_pval].loc[t]:.3e}' if which == 'proj_kfda' else \
-                ''
         if orientation == 'vertical':
-            ax.set_xlabel(xlabel,fontsize=25)
+            ax.set_xlabel(self.get_axis_label(proj,t),fontsize=25)
         else:
-            ax.set_ylabel(xlabel,fontsize=25)
+            ax.set_ylabel(self.get_axis_label(proj,t),fontsize=25)
 
         ax.legend(fontsize=30)
 
@@ -536,6 +565,7 @@ class Plot_Standard(Statistics):
         yproj = xproj if yproj is None else yproj
         if xproj == yproj and yname is None:
             yname = xname
+        # print(f'xproj={xproj} xname={xname}  yproj={yproj} yname={yname}')
         df_abscisse = self.init_df_proj(xproj,xname,)
         df_ordonnee = self.init_df_proj(yproj,yname,)
         properties = self.get_plot_properties(marker=marker,color=color,labels=labels,show_conditions=show_conditions,)
@@ -547,7 +577,8 @@ class Plot_Standard(Statistics):
                 x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
                 y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
                             
-                alpha = .2 if text else .8 
+                alpha = .2 if text else .8
+                # print(len(x_),len(y_)) 
                 ax.scatter(x_,y_,s=30,alpha=alpha,**vprop['plot_args'])
                 if 'mean_plot_args' in vprop and 'color' not in vprop['mean_plot_args']:
                     vprop['mean_plot_args']['color'] = ax._children[-1]._facecolors[0]
@@ -587,33 +618,16 @@ class Plot_Standard(Statistics):
         if 'title' in properties :
             ax.set_title(properties['title'],fontsize=20)
 
-        name_pval = self.get_kfdat_name()
-        xlabel = xproj if xproj in self.data[self.data_name]['variables'] else xproj.split(sep='_')[1]+f': t={p1}'
-        # xlabel += f'  pval={self.df_pval[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
-        #         f'  pval={self.df_pval_contributions[xname].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
-        #         ''
-        xlabel += f'  pval={self.df_pval[name_pval].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[name_pval].loc[p1]:.3e}' if xproj == 'proj_kfda' else \
-                ''
-
-        ylabel = yproj if yproj in self.data[self.data_name]['variables'] else yproj.split(sep='_')[1]+f': t={p2}'
-        # ylabel += f'  pval={self.df_pval[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
-        #         f'  pval={self.df_pval_contributions[yname].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
-        #         ''
-        ylabel += f'  pval={self.df_pval[name_pval].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
-                f'  pval={self.df_pval_contributions[name_pval].loc[p2]:.3e}' if yproj == 'proj_kfda' else \
-                ''
-
-        ax.set_xlabel(xlabel,fontsize=25)                    
-        ax.set_ylabel(ylabel,fontsize=25)
+        ax.set_xlabel(self.get_axis_label(xproj,p1),fontsize=25)                    
+        ax.set_ylabel(self.get_axis_label(yproj,p2),fontsize=25)
         
-        ax.legend()
+        ax.legend(fontsize=30)
 
         return(fig,ax)      
 
 
 
-    # désuet ? 
+
     def init_axes_projs(self,fig,axes,projections,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
         if axes is None:
             rows=1;cols=len(projections) + kfda + spectrum
@@ -632,13 +646,13 @@ class Plot_Standard(Statistics):
         return(fig,axes)
 
 
-    def density_projs(self,fig=None,axes=None,which='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True):
+    def density_projs(self,fig=None,axes=None,proj='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True):
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
-        for ax,proj in zip(axes,projections):
-            self.density_proj(t=proj,which=which,name=name,fig=fig,ax=ax,show_conditions=show_conditions)
+        for ax,t in zip(axes,projections):
+            self.density_proj(t=t,proj=proj,name=name,fig=fig,ax=ax,show_conditions=show_conditions)
         fig.tight_layout()
         return(fig,axes)
 
@@ -672,4 +686,43 @@ class Plot_Standard(Statistics):
         ax.legend()
         return(fig,ax)
 
+    def hist_discriminant(self,t,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical'):
+        kfdat_name = self.get_kfdat_name()
+        self.density_proj(t,proj='proj_kfda',name=kfdat_name,orientation=orientation,color=color,
+                        fig=fig,ax=ax,show_conditions=show_conditions)
+    
+    def hist_pc(self,t,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical'):
+        kfdat_name = self.get_kfdat_name()
+        self.density_proj(t,proj='proj_kpca',name=kfdat_name,orientation=orientation,color=color,
+                        fig=fig,ax=ax,show_conditions=show_conditions)
+    
+
+    def plot_nextPC(self,t,fig=None,ax=None,color=None,marker=None,highlight=None,show_conditions=True):
+        self.scatter_proj(projection=[t,t+1],
+                               xproj='proj_kfda',
+                               yproj='proj_kpca',
+                               xname=self.get_kfdat_name(),
+                               yname=self.get_kfdat_name(),
+                               color=color,
+                               marker=marker,
+                               highlight=highlight,
+                               show_conditions=show_conditions,
+                               fig=fig,
+                               ax=ax,)
+        ax.set_title(f'D={t} PC={t+1}',fontsize=30)
+
+    def plot_residuals(self,t=1,center='w',fig=None,ax=None,color=None,marker=None,highlight=None):
+        self.residuals(t=t,center=center)
+        residuals_name = self.get_residuals_name(t=t,center=center)
+        kfdat_name = self.get_kfdat_name()
+        fig,ax=self.scatter_proj([t,1],xproj='proj_kfda',yproj='proj_residuals',
+                                xname=kfdat_name,yname=residuals_name,
+                          fig=fig,ax=ax,color=color,marker=marker,highlight=highlight)
+        ax.set_title(f'discriminant and orthogonal axis t={t}',fontsize=30)
+
+    def plot_kpca(self,t=1,fig=None,ax=None,color=None,marker=None,highlight=None):
+        kfdat_name = self.get_kfdat_name()
+        fig,ax=self.scatter_proj([t,t+1],xproj='proj_kpca',xname=kfdat_name,
+                            fig=fig,ax=ax,color=color,marker=marker,highlight=highlight)
+        ax.set_title('KPCA',fontsize=30)      
 

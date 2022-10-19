@@ -1,4 +1,3 @@
-torch
 numpy
 scipy
 sklearn
@@ -6,3 +5,4 @@ pandas
 joblib
 matplotlib
 adjustText
+kmeans_pytorch

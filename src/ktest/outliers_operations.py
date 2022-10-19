@@ -5,14 +5,16 @@ class OutliersOps(Data):
     def __init__(self):
         super(OutliersOps,self).__init__()
 
-    def determine_outliers_from_condition(self,threshold,which='proj_kfda',outliers_in_obs=None,t='1',orientation='>'):
+    def determine_outliers_from_condition(self,threshold,proj='proj_kfda',outliers_in_obs=None,t='1',orientation='>'):
         
-        if which in ['proj_kfda','proj_kpca']:
+        if proj in ['proj_kfda','proj_kpca']:
             column_in_dataframe = self.get_kfdat_name()
+        elif proj in self.get_variables():
+            column_in_dataframe=None
         else:
-            print(which,'not implemented yet in determine outliers from condition')
+            print(proj,'not implemented yet in determine outliers from condition')
 
-        df = self.init_df_proj(which=which,name=column_in_dataframe)[str(t)]
+        df = self.init_df_proj(proj=proj,name=column_in_dataframe)[str(t)]
 
         if orientation == '>':
             outliers = df[df>threshold].index
@@ -21,6 +23,10 @@ class OutliersOps(Data):
         if orientation == '<>':
             outliers = df[df<threshold[0]].index
             outliers = outliers.append(df[df>threshold[1]].index)
+        if orientation == '><':
+            df = df[df>threshold[0]]
+            df = df[df<threshold[1]]
+            outliers = df.index
 
         if outliers_in_obs is not None:
             df_outliers = self.obs[outliers_in_obs]

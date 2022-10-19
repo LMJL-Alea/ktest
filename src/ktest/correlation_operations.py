@@ -7,19 +7,19 @@ On peut vouloir calculer la corrélation entre les variables d'origine et les di
 nos méthodes. Ces fonctions permettent de le faire simplement. 
 """
 
-def compute_corr_proj_var(self,t=None,sample='xy',which='proj_kfda',name_corr=None,
+def compute_corr_proj_var(self,t=None,sample='xy',proj='proj_kfda',name_corr=None,
                         name_proj=None,prefix_col='',verbose=0): 
         # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
     
     self.verbosity(function_name='compute_corr_proj_var',
             dict_of_variables={'t':t,
-                        'sample':sample,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+                        'sample':sample,'proj':proj,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
             start=True,
             verbose = verbose)
 
     self.prefix_col=prefix_col
 
-    df_proj= self.init_df_proj(which,name_proj)
+    df_proj= self.init_df_proj(proj,name_proj)
     t = df_proj.shape[1] - 1 # -1 pour la colonne sample
 
     x,y = self.get_xy()
@@ -31,11 +31,11 @@ def compute_corr_proj_var(self,t=None,sample='xy',which='proj_kfda',name_corr=No
     df_array = pd.DataFrame(array,index=index,columns=self.variables)
     for ti in range(1,t):
         df_array[f'{prefix_col}{ti}'] = pd.Series(df_proj[f'{ti}'])
-    name_corr = name_corr if name_corr is not None else which.split(sep='_')[1]+name_proj if name_proj is not None else which.split(sep='_')[1] + 'covariance'
+    name_corr = name_corr if name_corr is not None else proj.split(sep='_')[1]+name_proj if name_proj is not None else proj.split(sep='_')[1] + 'covariance'
     self.corr[name_corr] = df_array.corr().loc[self.variables,[f'{prefix_col}{ti}' for ti in range(1,t)]]
     
     self.verbosity(function_name='compute_corr_proj_var',
-            dict_of_variables={'t':t,'sample':sample,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
+            dict_of_variables={'t':t,'sample':sample,'proj':proj,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
             start=False,
             verbose = verbose)
 

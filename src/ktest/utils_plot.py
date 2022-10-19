@@ -1,15 +1,16 @@
 import matplotlib.pyplot as plt
 from scipy.stats import chi2
 from adjustText import adjust_text
-
-def text_truncations_of_interest(truncations_of_interest,ax,values):
+import numpy as np
+def text_truncations_of_interest(truncations_of_interest,ax,values,adjust=True):
     texts = []
     for t in set(truncations_of_interest):
         valt = values[t]
         text = f'{valt:.2f}' if valt >=.01 else f'{valt:1.0e}'
         ax.scatter(x=t,y=valt,s=20)
         texts += [ax.text(t,valt,text,fontsize=20)]
-    adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
+    if adjust:
+        adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
 
 def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None):
 
@@ -58,7 +59,6 @@ def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,ti
 
     if ylim is not None:
         ax.set_ylim(ylim)
-
     return(fig,ax)
 
 def replace_label(ax,position,new_label):
