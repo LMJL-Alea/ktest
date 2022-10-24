@@ -767,6 +767,8 @@ class Data:
     def get_xy(self,landmarks=False):
 
         data = self.get_data(landmarks=landmarks)
+        if len(data)>2:
+            print('more than 2 groups',[f'{k}{len(v)}' for k,v in data.items()])
         return(list(data.values()))
 
     # L sample 
@@ -1003,4 +1005,9 @@ class Data:
 
         return(f'{mn}_{dtn}')
 
-
+    def get_corr_name(self,proj):
+        if proj in ['proj_kfda','proj_kpca']:
+            name = f"{proj.split(sep='_')[1]}_{self.get_kfdat_name()}"
+        else : 
+            print(f'the correlation with {proj} is not handled yet.')
+        return(name)

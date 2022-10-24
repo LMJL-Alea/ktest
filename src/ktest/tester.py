@@ -22,6 +22,7 @@ from .pvalues import Pvalues
 from .save_data import SaveData
 from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
+from .correlation_operations import Correlations
 
 
 
@@ -64,15 +65,11 @@ def pytorch_eigsy(matrix):
     #     self.x0,self.y0 = z[p[:nH0//2]],z[p[nH0//2:]]
 
 
-class Tester(Plot_Univariate,SaveData,Pvalues):
+class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
     It also provides a range of visualisations based on the discrimination between two groups.  
     """
-
-    from .correlation_operations import \
-        compute_corr_proj_var,\
-        find_correlated_variables
 
     def __init__(self):
         """\

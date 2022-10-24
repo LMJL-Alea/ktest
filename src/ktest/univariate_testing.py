@@ -3,7 +3,7 @@ import pandas as pd
 from time import time
 from joblib import Parallel, delayed, parallel_backend
 import os
-
+import numpy as np
 from .utils_univariate import filter_genes_wrt_pval
 
 '''
@@ -76,7 +76,18 @@ class Univariate:
 #                 dfzp[f'count_{s}_{g1[:-1]}_log2fc'] = np.log(dfzp[f'count_{s}_{g1}_mean']/dfzp[f'count_{s}_{g2}_mean'])/np.log(2)
 #       
         self.update_var_from_dataframe(dfzp)
-     
+    
+    def add_log2fc_to_var(self):
+        
+        dict_df = self.get_dataframes_of_data()
+        dfzp = pd.DataFrame()
+        for s,df in dict_df.items():
+            dfzp[f'{s}_mean'] = df.mean()
+        s1,s2 = dict_df.keys()
+        dfzp[f'log2fc_{s1}/{s2}'] = np.log(dfzp[f'{s1}_mean']/dfzp[f'{s2}_mean'])/np.log(2)
+        self.update_var_from_dataframe(dfzp)
+
+
     def get_zero_proportions_of_variable(self,variable):
         """
         Returns a dict of the ero proportions 
