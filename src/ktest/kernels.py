@@ -4,6 +4,7 @@
 
 import torch
 import numpy as np
+import pandas as pd
 
 """
 Ces fonctions déterminent la fonction noyau 
@@ -12,6 +13,8 @@ Ces fonctions déterminent la fonction noyau
 def torch_transformator(x):
     if (isinstance(x, np.ndarray)):
         x = torch.from_numpy(x).type(torch.double)
+    if (isinstance(x,pd.DataFrame)) or (isinstance(x,pd.Series)) :
+        x = torch.tensor(x)
     return(x)
 
 
@@ -80,6 +83,59 @@ def gauss_kernel_mediane(x,y,return_mediane=False,verbose=0):
         return ( lambda x, y: gauss_kernel(x,y,m), m.item() )
     else: 
         return lambda x, y: gauss_kernel(x,y,m)
+
+def corrected_variance_mediane( x, y,variance_per_gene,verbose=0):
+    variance_per_gene = torch_transformator(variance_per_gene)
+    correction = torch.sqrt(variance_per_gene)
+    
+    x = torch.div(x,correction)
+    y = torch.div(y,correction)
+    m = mediane(x, y,verbose=0)
+    return(m)
+
+def gauss_kernel_corrected_variance(x,y,variance_per_gene,sigma,verbose=0):
+    variance_per_gene = torch_transformator(variance_per_gene)
+    correction = torch.sqrt(variance_per_gene)
+    x = torch.div(x,correction)
+    y = torch.div(y,correction)
+    d = distances(x, y)   # [sq_dists]_ij=||X_j - Y_i \\^2
+    K = torch.exp(-d/(2*sigma**2))# / (2 * sigma**2))  # Gram matrix
+    return K
+
+def gauss_kernel_mediane_corrected_variance(x,y,variance_per_gene,return_mediane=False,verbose=0):
+    m = corrected_variance_mediane(x,y,variance_per_gene,verbose)
+    if return_mediane:
+        return ( lambda x, y: gauss_kernel_corrected_variance(x,y,variance_per_gene,m,verbose), m.item() )
+    else: 
+        return lambda x, y: gauss_kernel_corrected_variance(x,y,variance_per_gene,m,verbose)
+
+
+
+def log_corrected_variance_mediane( x, y,variance_per_gene,verbose=0):
+    variance_per_gene = torch_transformator(variance_per_gene)
+    correction = torch.sqrt(variance_per_gene)
+    x = torch.log(torch.div(x,correction)+1)
+    y = torch.log(torch.div(y,correction)+1)
+    m = mediane(x, y,verbose=verbose)
+    return(m)
+
+def gauss_kernel_log_corrected_variance(x,y,variance_per_gene,sigma,verbose=0):
+    variance_per_gene = torch_transformator(variance_per_gene)
+    correction = torch.sqrt(variance_per_gene)
+    x = torch.log(torch.div(x,correction)+1)
+    y = torch.log(torch.div(y,correction)+1)
+    d = distances(x, y)   # [sq_dists]_ij=||X_j - Y_i \\^2
+    K = torch.exp(-d/(2*sigma**2))# / (2 * sigma**2))  # Gram matrix
+    return K
+
+def gauss_kernel_mediane_log_corrected_variance(x,y,variance_per_gene,return_mediane=False,verbose=0):
+    m = log_corrected_variance_mediane(x,y,variance_per_gene,verbose)
+    if return_mediane:
+        return ( lambda x, y: gauss_kernel_log_corrected_variance(x,y,variance_per_gene,m,verbose), m.item() )
+    else: 
+        return lambda x, y: gauss_kernel_log_corrected_variance(x,y,variance_per_gene,m,verbose)
+
+
 
 def linear_kernel(x,y):
     """

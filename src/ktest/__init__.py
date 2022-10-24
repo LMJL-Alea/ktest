@@ -1,10 +1,7 @@
 from .utils import ordered_eigsy
 
 
-from .correlation_operations import \
-    compute_corr_proj_var,\
-    find_correlated_variables
-
+from .correlation_operations import Correlations
 from .verbosity import Verbosity
 from .base import Data,Model
 from .centering_operations import CenteringOps

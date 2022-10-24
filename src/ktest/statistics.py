@@ -251,7 +251,7 @@ class Statistics(ProjectionOps):
 
         #calcul des landmarks et des ancres 
         if any([ny in [cov,mmd] for ny in ['nystrom','nystrom1','nystrom2','nystrom3']]):
-            print('nystrom detected')
+            # print('nystrom detected')
             self.compute_nystrom_landmarks(verbose=verbose)
             self.compute_nystrom_anchors(verbose=verbose) 
 

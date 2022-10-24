@@ -40,9 +40,9 @@ class GramMatrices(CenteringOps):
 
 
         dict_data = self.get_data(landmarks=landmarks)
-        
+        kernel = self.data[self.data_name]['kernel']
         data = torch.cat([x for x in dict_data.values()],axis=0)
-        K = self.kernel(data,data)
+        K = kernel(data,data)
         if not landmarks : 
             K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
@@ -73,11 +73,12 @@ class GramMatrices(CenteringOps):
         
         dict_data = self.get_data(landmarks=False)
         dict_landmarks = self.get_data(landmarks=True)
+        kernel = self.data[self.data_name]['kernel']
         
         data = torch.cat([x for x in dict_data.values()],axis=0)
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
         
-        kmn = self.kernel(landmarks,data)        
+        kmn = kernel(landmarks,data)        
         kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn)
         return(kmn)
 

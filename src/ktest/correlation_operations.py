@@ -1,49 +1,47 @@
 import torch
 import numpy as np
 import pandas as pd
-
+from .base import Data,Model
 """
 On peut vouloir calculer la corrélation entre les variables d'origine et les directions déterminées par 
 nos méthodes. Ces fonctions permettent de le faire simplement. 
 """
+class Correlations(Data):
 
-def compute_corr_proj_var(self,t=None,sample='xy',which='proj_kfda',name_corr=None,
-                        name_proj=None,prefix_col='',verbose=0): 
-        # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
-    
-    self.verbosity(function_name='compute_corr_proj_var',
-            dict_of_variables={'t':t,
-                        'sample':sample,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
-            start=True,
-            verbose = verbose)
+    def compute_corr_proj_var(self,t=None,proj='proj_kfda',verbose=0): 
+            # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
+        
+        self.verbosity(function_name='compute_corr_proj_var',
+                dict_of_variables={'t':t,
+                            'proj':proj},
+                start=True,
+                verbose = verbose)
+        prefix_col = proj.split(sep='_')[1]
+        variables = self.get_variables()
+        df_proj= self.init_df_proj(proj)
+        t = 30 if t is None else t 
+        df = self.get_dataframe_of_all_data()
+        
+        for ti in range(1,t):
+            df[f't{ti}'] = pd.Series(df_proj[f'{ti}'])
+            
+        name_corr = self.get_corr_name(proj)
+        
+        self.corr[name_corr] = df.corr().loc[variables,[f't{ti}' for ti in range(1,t)]]
+        
+        self.verbosity(function_name='compute_corr_proj_var',
+                dict_of_variables={'t':t,'proj':proj},
+                start=False,
+                verbose = verbose)
 
-    self.prefix_col=prefix_col
 
-    df_proj= self.init_df_proj(which,name_proj)
-    t = df_proj.shape[1] - 1 # -1 pour la colonne sample
+    def find_correlated_variables(self,proj='proj_kfda',nvar=1,t=1):
+        name = self.get_corr_name(proj)
+        if nvar==0:
+            return(np.abs(self.corr[name][f't{t}']).sort_values(ascending=False)[:])
+        else: 
+            return(np.abs(self.corr[name][f't{t}']).sort_values(ascending=False)[:nvar])
 
-    x,y = self.get_xy()
 
-    array = torch.cat((x,y),dim=0).numpy() if sample == 'xy' else x.numpy() if sample=='x' else y.numpy()
-    index = self.get_xy_index(sample=sample)
-  
-    
-    df_array = pd.DataFrame(array,index=index,columns=self.variables)
-    for ti in range(1,t):
-        df_array[f'{prefix_col}{ti}'] = pd.Series(df_proj[f'{ti}'])
-    name_corr = name_corr if name_corr is not None else which.split(sep='_')[1]+name_proj if name_proj is not None else which.split(sep='_')[1] + 'covariance'
-    self.corr[name_corr] = df_array.corr().loc[self.variables,[f'{prefix_col}{ti}' for ti in range(1,t)]]
-    
-    self.verbosity(function_name='compute_corr_proj_var',
-            dict_of_variables={'t':t,'sample':sample,'which':which,'name_corr':name_corr,'name_proj':name_proj,'prefix_col':prefix_col},
-            start=False,
-            verbose = verbose)
-
-def find_correlated_variables(self,name=None,nvar=1,t=1,prefix_col=''):
-    if name is None:
-        name = self.get_names()['correlations'][0]
-    if nvar==0:
-        return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:])
-    else: 
-        return(np.abs(self.corr[name][f'{prefix_col}{t}']).sort_values(ascending=False)[:nvar])
-
+    def get_corr_of_variable(self,proj,variable,t):
+        return(self.find_correlated_variables(proj=proj,nvar=0,t=t)[variable])

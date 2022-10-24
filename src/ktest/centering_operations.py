@@ -230,7 +230,6 @@ class CenteringOps(NystromOps):
 #                 a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
 #                 Pn1 = (In1 - 1/n * torch.ger(a1,a1)) # a vérifier si c'est 1/n ou 1/n1
             
-        
         if ab == 'k':
             return(eye(n,dtype=torch.float64))
         if ab == 's':

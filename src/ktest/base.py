@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
-from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel
+from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel,gauss_kernel_mediane_corrected_variance,gauss_kernel_mediane_log_corrected_variance
 from torch import cat
 
 
@@ -338,24 +338,43 @@ class Data:
 
         x,y = self.get_xy()
         verbose = self.verbose
-
+        bandwidth = False
         if type(kernel) == str:
             kernel_params = kernel.split(sep='_')
-            self.kernel_name = kernel
+            kernel_name = kernel
             if kernel_params[0] == 'gauss':
-                if len(kernel_params)==2 and kernel_params[1]=='median':
-                    self.kernel,self.kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True,verbose=verbose)
-                elif len(kernel_params)==2 and kernel_params[1]!='median':
-                    self.kernel_bandwidth = float(kernel_params[1])
-                    self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
-                elif len(kernel_params)==3 and kernel_params[1]=='median':
-                    self.kernel_bandwidth = float(kernel_params[2])*mediane(x,y,verbose=verbose)
-                    self.kernel = lambda x,y:gauss_kernel(x,y,self.kernel_bandwidth) 
+                if len(kernel_params)==2 and kernel_params[1]=='median': # ex: gauss_median
+                    kernel_,kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True,verbose=verbose)
+                    bandwidth = True
+                elif len(kernel_params)==2 and kernel_params[1]!='median': # ex: gauss_3
+                    kernel_bandwidth = float(kernel_params[1])
+                    kernel_ = lambda x,y:gauss_kernel(x,y,kernel_bandwidth) 
+                    bandwidth = True
+                elif len(kernel_params)==3 and kernel_params[1]=='median': # ex: gauss_median_2
+                    kernel_bandwidth = float(kernel_params[2])*mediane(x,y,verbose=verbose)
+                    kernel_ = lambda x,y:gauss_kernel(x,y,kernel_bandwidth) 
+                    bandwidth = True
+                elif len(kernel_params)==4: 
+                    if kernel_params[1]=='median' and kernel_params[2]=='variance': # ex : gauss_median_variance_var
+                        variance_per_gene = self.get_var()[kernel_params[3]]
+                        kernel_,kernel_bandwidth = gauss_kernel_mediane_corrected_variance(x,y,variance_per_gene,return_mediane=True,verbose=verbose)
+                        bandwidth = True
+                    
+                    if kernel_params[1]=='median' and kernel_params[2]=='logvariance': # ex : gauss_median_logvariance_var
+                        variance_per_gene = self.get_var()[kernel_params[3]]
+                        kernel_,kernel_bandwidth = gauss_kernel_mediane_log_corrected_variance(x,y,variance_per_gene,return_mediane=True,verbose=verbose)
+                        bandwidth = True
+
+
             if kernel_params[0] == 'linear':
-                self.kernel = linear_kernel
+                kernel_ = linear_kernel
         else:
-            self.kernel = kernel
-            self.kernel_name = 'specified by user'
+            kernel_ = kernel
+            kernel_name = 'specified by user'
+        self.data[self.data_name]['kernel'] = kernel_
+        self.data[self.data_name]['kernel_name'] = kernel_name
+        if bandwidth:
+            self.data[self.data_name]['kernel_bandwidth'] = kernel_bandwidth
         self.has_kernel = True
 
     # new version 
@@ -526,6 +545,7 @@ class Data:
                            index=None,
                            variables=None,
                            df_meta=None,
+                           df_var=None
                            ):
         nobs = len(x)
         if index is None and df_meta is not None:
@@ -549,9 +569,10 @@ class Data:
             index = self._update_index(nobs,index,data_name)
             self._update_meta_data(df_meta=df_meta)
             self._update_variables(variables,data_name)
+        if df_var is not None:
+            self.update_var_from_dataframe(df_var)
 
-
-    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,data_name='data'):
+    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,df_var=None,data_name='data'):
         '''
         
         '''
@@ -559,9 +580,12 @@ class Data:
         index = df.index
         variables = df.columns
 
-        self.add_data_to_Tester(x,data_name,index,variables,df_meta)
+        self.add_data_to_Tester(x,data_name,index,variables,df_meta,df_var)
 
     def get_index(self,landmarks=False):
+
+        if landmarks:
+            assert(self.has_landmarks)
 
         data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()        
         samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
@@ -629,7 +653,6 @@ class Data:
         else: 
             return(self.data[self.data_name]['X'])
 
-
     def get_nobs(self,landmarks=False):
         
         dict_index = self.get_index(landmarks=landmarks)
@@ -660,10 +683,19 @@ class Data:
         i = self.obs.index
         v = self.data[self.data_name]['variables']
         return(pd.DataFrame(x,i,v))
+
+    def get_variables(self):
+        return(self.data[self.data_name]['variables'])
+
+    def get_var(self):
+        return(self.var[self.data_name])
+
+    def get_vard(self):
+        return(self.vard[self.data_name])   
         
     # Two sample 
     def init_xy(self,x,y,data_name,
-                x_index=None,y_index=None,variables=None,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
+                x_index=None,y_index=None,variables=None,df_var=None,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
         '''
         This function adds two dataset in the data_structure and name them 'x' and 'y'. 
         It is used when performing two-smaple test. 
@@ -706,14 +738,14 @@ class Data:
 
         '''
             
-        self.add_data_to_Tester(x,'x',data_name,x_index,variables,dfx_meta)
+        self.add_data_to_Tester(x,'x',data_name,x_index,variables,dfx_meta,df_var)
         self.add_data_to_Tester(y,'y',data_name,y_index,variables,dfy_meta)
 
         self.init_kernel(kernel)   
 
-    def init_xy_from_dataframe(self,dfx,dfy,data_name,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
+    def init_xy_from_dataframe(self,dfx,dfy,data_name,dfx_meta=None,dfy_meta=None,kernel='gauss_median',df_var=None):
 
-        self.add_data_to_Tester_from_dataframe(df=dfx,sample='x',df_meta=dfx_meta,data_name=data_name)
+        self.add_data_to_Tester_from_dataframe(df=dfx,sample='x',df_meta=dfx_meta,data_name=data_name,df_var=df_var)
         self.add_data_to_Tester_from_dataframe(df=dfy,sample='y',df_meta=dfy_meta,data_name=data_name)
 
         self.init_kernel(kernel)
@@ -735,11 +767,13 @@ class Data:
     def get_xy(self,landmarks=False):
 
         data = self.get_data(landmarks=landmarks)
+        if len(data)>2:
+            print('more than 2 groups',[f'{k}{len(v)}' for k,v in data.items()])
         return(list(data.values()))
 
     # L sample 
     def init_L_groups(self,data_list,data_name,sample_list=None,index_list=None,
-    variables=None,df_meta_list=None,kernel='gauss_median'):
+    variables=None,df_meta_list=None,kernel='gauss_median',df_var=None):
         '''
         This function adds L dataset in the data_structure and name them according to
         `sample_list`. 
@@ -796,19 +830,19 @@ class Data:
             sample_list = [f'x{l}' for l in range(1,L+1)]
 
         for x,sample,index,df_meta in zip(data_list,sample_list,index_list,df_meta_list):
-            self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta)
+            self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta,df_var=df_var)
  
-    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,df_meta_list=None,kernel='gauss_median'):
+    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,df_meta_list=None,kernel='gauss_median',df_var=None):
         L = len(df_list)
         if df_meta_list is None:
             df_meta_list = [None]*L
         if sample_list is None:
             sample_list = [f'x{l}' for l in range(1,L+1)]
         for df,sample,df_meta in zip(df_list,sample_list,df_meta_list):
-            self.add_data_to_Tester_from_dataframe(df,sample,df_meta,data_name)
+            self.add_data_to_Tester_from_dataframe(df,sample,df_meta,data_name,df_var=df_var)
 
     # Access data 
-    def init_df_proj(self,which,name=None,data_name=None):
+    def init_df_proj(self,proj,name=None,data_name=None):
         if data_name is None:
             data_name = self.current_data_name
 
@@ -818,12 +852,12 @@ class Data:
                 'proj_residuals':self.df_proj_residuals # faire en sorte d'ajouter ça
                 }
 
-        if which in proj_options:
-            dict_df_proj = proj_options[which]
+        if proj in proj_options:
+            dict_df_proj = proj_options[proj]
             nproj = len(dict_df_proj)
             names = list(dict_df_proj.keys())
             if nproj == 0:
-                print(f'{which} has not been computed yet')
+                print(f'{proj} has not been computed yet')
             if nproj == 1:
                 if name is not None and name != names[0]:
                     print(f'{name} not corresponding to {names[0]}')
@@ -834,31 +868,27 @@ class Data:
                     print(f'{name} not found in {names}, default projection:  {names[0]}')
                     df_proj = dict_df_proj[names[0]]
                 elif name is None:
-                    print(f'projection not specified with {which}, default projection : {names[0]}') 
+                    print(f'projection not specified with {proj}, default projection : {names[0]}') 
                     df_proj = dict_df_proj[names[0]]
                 else: 
                     df_proj = dict_df_proj[name]
-        elif which in self.var[data_name].index:
-            variables = self.var[data_name].index
-            n1,n2,n = self.get_n1n2n(landmarks=False)
-            datax,datay = self.get_xy()
-            loc_variable = variables.get_loc(which)
-            index = self.get_xy_index()
-
-            df_proj = pd.DataFrame(torch.cat((datax[:,loc_variable],datay[:,loc_variable]),axis=0),index=index,columns=[which])
+        elif proj in self.var[data_name].index:
+            df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
             # df_proj['sample']=['x']*n1 + ['y']*n2
+        elif proj =='obs':
+            df_proj = self.obs
         else:
-            print(f'{which} not recognized')
+            print(f'{proj} not recognized')
 
         return(df_proj)
 
     def make_groups_from_gene_presence(self,gene,data_name):
 
-        dfg = self.init_df_proj(which=gene,data_name=data_name)
+        dfg = self.init_df_proj(proj=gene,data_name=data_name)
         self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
         self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
-    def set_outliers_in_obs(self,outliers_in_obs):
+    def set_outliers_in_obs(self,outliers_in_obs=None):
         if outliers_in_obs in self.obs.columns or outliers_in_obs is None:
             self.outliers_in_obs = outliers_in_obs
 
@@ -887,10 +917,7 @@ class Data:
 
         '''
         
-        if center_by is not None and hasattr(self,'obs'):
-            self.center_by = center_by      
-        if center_by is None:
-            self.center_by = None 
+        self.center_by = center_by      
            
     def set_test_data_info(self,data_name,condition,samples='all'):
         self.data_name = data_name
@@ -978,4 +1005,9 @@ class Data:
 
         return(f'{mn}_{dtn}')
 
-
+    def get_corr_name(self,proj):
+        if proj in ['proj_kfda','proj_kpca']:
+            name = f"{proj.split(sep='_')[1]}_{self.get_kfdat_name()}"
+        else : 
+            print(f'the correlation with {proj} is not handled yet.')
+        return(name)

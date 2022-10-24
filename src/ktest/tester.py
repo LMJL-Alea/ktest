@@ -22,6 +22,7 @@ from .pvalues import Pvalues
 from .save_data import SaveData
 from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
+from .correlation_operations import Correlations
 
 
 
@@ -64,15 +65,11 @@ def pytorch_eigsy(matrix):
     #     self.x0,self.y0 = z[p[:nH0//2]],z[p[nH0//2:]]
 
 
-class Tester(Plot_Univariate,SaveData,Pvalues):
+class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
     """
     Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
     It also provides a range of visualisations based on the discrimination between two groups.  
     """
-
-    from .correlation_operations import \
-        compute_corr_proj_var,\
-        find_correlated_variables
 
     def __init__(self):
         """\
@@ -124,7 +121,11 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
         
         s += '##### Kernel ####\n'
         if self.has_kernel:
-            s+=f'kernel : {self.kernel_name}\n\n'
+            for dn in self.data.keys():
+                if 'kernel_name' in self.data[dn]:
+                    kernel_name = self.data[dn]['kernel_name']
+                    s+=f'kernel {dn} : {kernel_name}\n'
+            s+='\n'
         else:
             s+=f'This Tester object has no kernel.\n'
             s+=f"You can initiate the kernel function with the class function 'init_kernel()'. \n\n"
@@ -176,16 +177,16 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
     # def load_data(self,data_dict,):
     # def save_data():
     # def save_a_dataframe(self,path,which)
-    def get_dataframe_of_data(self):
-        " a mettre à jour"
-        x,y = self.get_xy()
-        xindex = self.get_xy_index(sample='x')
-        yindex = self.get_xy_index(sample='y')
-        var = self.variables
+    # def get_dataframe_of_data(self):
+    #     " a mettre à jour"
+    #     x,y = self.get_xy()
+    #     xindex = self.get_xy_index(sample='x')
+    #     yindex = self.get_xy_index(sample='y')
+    #     var = self.variables
         
-        dfx = pd.DataFrame(x,index=xindex,columns=var)
-        dfy = pd.DataFrame(y,index=yindex,columns=var)
-        return(dfx,dfy)
+    #     dfx = pd.DataFrame(x,index=xindex,columns=var)
+    #     dfy = pd.DataFrame(y,index=yindex,columns=var)
+    #     return(dfx,dfy)
 
 
     def kfdat(self,t=None,verbose=0):
@@ -267,11 +268,11 @@ class Tester(Plot_Univariate,SaveData,Pvalues):
             self.compute_proj_kpca(t=t,verbose=verbose)
 
 
-def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,outliers_in_obs=None,kernel='gauss_median',samples='all',viz=True):
+def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,df_var=None,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,outliers_in_obs=None,kernel='gauss_median',samples='all',viz=True):
     t = Tester()
-    t.add_data_to_Tester_from_dataframe(df,meta,data_name=data_name)
+    t.add_data_to_Tester_from_dataframe(df,meta,data_name=data_name,df_var=df_var)
     t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
-    t.init_kernel(kernel=kernel)
+    t.init_kernel(kernel='gauss_median' if kernel is None else kernel)
     t.init_model(nystrom=nystrom,landmark_method=lm,anchors_basis=ab,m=m,r=r)
     t.set_center_by(center_by=center_by)
     t.set_outliers_in_obs(outliers_in_obs=outliers_in_obs)

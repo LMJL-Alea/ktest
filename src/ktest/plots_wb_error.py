@@ -11,7 +11,7 @@ class Plot_WBerrors(Residuals,Statistics):
     def __init__(self):        
         super(Plot_WBerrors, self).__init__()
 
-
+    # Explorations de visualizations possibles non gardées 
     def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,trunc=None,outliers_in_obs=None):
         '''
         Plots the opposite of log10 pvalue with respect to the percentage of reconstruction 
@@ -192,6 +192,7 @@ class Plot_WBerrors(Residuals,Statistics):
         ax.set_ylabel('reconstruction ratio',fontsize=30)
         return(fig,ax)
 
+    # Visualizations considérées comme pertinentes
     def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name='explained variance',fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
         
         if fig is None:
@@ -225,10 +226,10 @@ class Plot_WBerrors(Residuals,Statistics):
     def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None):
         if fig is None:
             fig,ax = plt.subplots(figsize=(7,7))
-        projection_error,delta = self.get_between_covariance_projection_error(return_total=True)
-        projection_error = cat([tensor([0],dtype=float64),projection_error])
-        errorB = 1 - projection_error
+        errorB,delta = self.get_between_covariance_projection_error(return_total=True)
+        errorB = cat([tensor([1],dtype=float64),errorB])
         trunc = np.arange(0,len(errorB))
+
         label = name #of {delta:.3e}'
         if scatter:
             ax.scatter(trunc,errorB)
