@@ -18,6 +18,9 @@ class Univariate:
     def __init__(self):        
         super(Univariate, self).__init__()
 
+    def get_univariate_results_in_var(self,trunc,name):
+        return(f'{name}_{self.get_kfdat_name()}_t{trunc}')
+
     def compute_zero_proportions_of_variable(self,variable):
         """
         Returns a dict object with the zero information of the variable with respect to the tested conditions.
@@ -77,15 +80,30 @@ class Univariate:
 #       
         self.update_var_from_dataframe(dfzp)
     
-    def add_log2fc_to_var(self):
-        
+    def add_log2fc_to_var(self,data_name=None):
+        if data_name is not None:
+            current_data_name = self.data_name
+            self.data_name = data_name
+            dn = f'{data_name}_'
+        else :
+            dn = ''
         dict_df = self.get_dataframes_of_data()
         dfzp = pd.DataFrame()
         for s,df in dict_df.items():
-            dfzp[f'{s}_mean'] = df.mean()
+            dfzp[f'{dn}{s}_mean'] = df.mean()
         s1,s2 = dict_df.keys()
-        dfzp[f'log2fc_{s1}/{s2}'] = np.log(dfzp[f'{s1}_mean']/dfzp[f'{s2}_mean'])/np.log(2)
+        dfzp[f'{dn}log2fc_{s1}/{s2}'] = np.log(dfzp[f'{dn}{s1}_mean']/dfzp[f'{dn}{s2}_mean'])/np.log(2)
+    #     print(dfzp)
+        if data_name is not None: 
+            self.data_name = current_data_name
         self.update_var_from_dataframe(dfzp)
+
+    def compute_log2fc_from_another_dataframe(self,df,data_name='raw'):
+        
+        index = self.get_dataframe_of_all_data().index
+        df = df[df.index.isin(index)]
+        self.add_data_to_Tester_from_dataframe(df,data_name=data_name,update_current_data_name=False)            
+        self.add_log2fc_to_var(data_name=data_name)
 
 
     def get_zero_proportions_of_variable(self,variable):
@@ -197,12 +215,12 @@ class Univariate:
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
 
-    def create_univariate_tester(self,variable,kernel=None,inform_var=True):
+    def create_univariate_tester(self,variable,kernel=None,inform_var=True,viz=False):
         # Get testing info from global object 
         from .tester import create_and_fit_tester_for_two_sample_test_kfdat
 
         dfv = self.init_df_proj(variable)
-        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()
+        data_name,condition,samples,marked_obs_to_ignore = self.get_data_name_condition_samples_marked_obs()
         nystrom,lm,ab,m,r = self.get_model()
         center_by = self.center_by
         # Initialize univariate tester with common covariance 
@@ -215,9 +233,9 @@ class Univariate:
                                                             nystrom=nystrom,
                                                             lm=lm,ab=ab,m=m,r=r,
                                                             center_by=center_by,
-                                                            outliers_in_obs=outliers_in_obs,
+                                                            marked_obs_to_ignore=marked_obs_to_ignore,
                                                             kernel=kernel,    
-                                                            viz=False)  
+                                                            viz=viz)  
         return(t)
 
     def compute_univariate_kfda(self,variable,kernel_bandwidth=None):
@@ -256,7 +274,7 @@ class Univariate:
                 pval = vtest.df_pval[variable][t]
                 kfda = vtest.df_kfdat[variable][t]
 
-                errB = vtest.get_between_covariance_projection_error_associated_to_t(t)
+                errB = vtest.get_explained_difference_of_t(t)
                 errW = vtest.get_within_covariance_explained_variance_associated_to_t(t)
 
                 vard[variable][f'{col}_pval'] = pval
@@ -385,26 +403,6 @@ class Univariate:
                         vard = self.get_vard()
                         vard[v][key] = value
 
-    def update_var_from_dataframe(self,df,verbose = 0):
-        var = self.get_var()
-        for c in df.columns:
-            if verbose>1:
-                print(c,end=' ')
-            token = False
-            if 'univariate' in c and c in var:
-                token = True
-                nbef = sum(var[c]==1)
-            if c not in var:
-                var[c] = df[c].astype('float64').copy()
-            else:
-                if verbose>1:
-                    print('update',end= '|')
-                var[c].update(df[c].astype('float64'))
-            if token:
-                naft = sum(var[c]==1)
-                if verbose >0:
-                    print(f'\n tested from {nbef} to {naft}')
-
     def save_univariate_test_results_in_var(self,path):
         dn = self.data_name
         for cu in self.var[dn].columns:
@@ -425,12 +423,12 @@ class Univariate:
     
 
     # pvalue related
-    def correct_BH_univariate_for_toi(self,name):
-        tnames = ['1','r1','r2','r3','rmax']
-        kfdat_name = self.get_kfdat_name()
-        for t in tnames:
-            var_prefix = f'{name}_{kfdat_name}_t{t}'
-            self.correct_BenjaminiHochberg_pval_univariate(var_prefix,exceptions=[],focus=None,add_to_prefix='')
+    # def correct_BH_univariate_for_toi(self,name):
+    #     tnames = ['1','r1','r2','r3','rmax']
+    #     kfdat_name = self.get_kfdat_name()
+    #     for t in tnames:
+    #         var_prefix = f'{name}_{kfdat_name}_t{t}'
+    #         self.correct_BenjaminiHochberg_pval_univariate(var_prefix,exceptions=[],focus=None,add_to_prefix='')
 
     def get_rejected_genes_for_toi(self,name):
         kfdat_name = self.get_kfdat_name()
@@ -446,14 +444,19 @@ class Univariate:
                 dict_rejected[f'{pval_col}'] = pvals
         return(dict_rejected)
 
-    def get_rejected_genes(self,name,tname='r1',corrected=False):
+    def get_rejected_genes(self,name,tname='r1',corrected=False,threshold=.05):
         kfdat_name = self.get_kfdat_name()
         corr_str = 'BHc' if corrected else ''
         pval_col = f'{name}_{kfdat_name}_t{tname}_pval{corr_str}'
-        pvals = self.var[self.data_name][f'{pval_col}']
-        pvals = filter_genes_wrt_pval(pvals,threshold=.05)
-        return(pvals)
-
+        pvals = self.get_var()[f'{pval_col}']
+        pvals = filter_genes_wrt_pval(pvals,threshold=threshold)
+        df_output = pd.DataFrame()
+        df_output['pvals'] = pvals
+        if tname.isdigit():
+            df_output['trunc'] = int(tname)
+        else:
+            df_output['trunc'] = self.get_var()[f'{name}_{kfdat_name}_t{tname}_t']
+        return(df_output)
 
     # Trash ? 
     def create_tester_of_goi(self,goi):
@@ -470,7 +473,7 @@ class Univariate:
 
         df = self.get_dataframe_of_all_data()
         df = df[goi]
-        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()
+        data_name,condition,samples,marked_obs_to_ignore = self.get_data_name_condition_samples_marked_obs()
         nystrom,lm,ab,m,r = self.get_model()
         center_by = self.center_by
             
@@ -482,7 +485,7 @@ class Univariate:
                                                             nystrom=nystrom,
                                                             lm=lm,ab=ab,m=m,r=r,
                                                             center_by=center_by,
-                                                            outliers_in_obs=outliers_in_obs,
+                                                            marked_obs_to_ignore=marked_obs_to_ignore,
                                                             viz=False)  
 
         t.set_center_by(center_by)

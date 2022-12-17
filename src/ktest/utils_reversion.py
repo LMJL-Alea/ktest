@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from .tester import create_and_fit_tester_for_two_sample_test_kfdat
-
+import numpy as np
 def get_meta_from_df(df):
     meta = pd.DataFrame()
     meta['index'] = df.index
@@ -11,6 +11,29 @@ def get_meta_from_df(df):
     meta['condition'] = meta['index'].apply(lambda x : x.split(sep='.')[1])
     return(meta)
 
+def get_tester_from_df_and_comparaison(df,comparaison,name,kernel='gauss_median',nystrom=False,center_by=None):
+    
+    meta = get_meta_from_df(df)
+    cstr = "_".join(comparaison)
+    cells = meta[meta['condition'].isin(comparaison)].index
+    dfc = df[df.index.isin(cells)] 
+    metac = meta[meta.index.isin(cells)] 
+    null_genes = list(dfc.sum()[dfc.sum()==0].index)
+    if len(null_genes)>0:
+        print('there are null genes')
+        print(null_genes)
+        dfc = dfc.drop(columns=null_genes)
+    
+    t = create_and_fit_tester_for_two_sample_test_kfdat(df=dfc,
+                                                               meta=metac.copy(),
+                                                           data_name=f'{name}_{cstr}',
+                                                           condition='condition',
+    #                                                             df_var= df_var,
+                                                            kernel=kernel,
+                                                           nystrom=nystrom,
+                                                           center_by=center_by,)
+    return(t)
+    
 
 
 def get_name_in_dict_data(k):
@@ -18,7 +41,7 @@ def get_name_in_dict_data(k):
     name += '_batch_corrected' if '_batch_corrected' in k else ''
     return(name)
 
-def figures_outliers_of_reversion_from_tq(tester,trunc,q_,df,focus=None,color=None,marker=None,return_outliers=False):
+def figures_outliers_of_reversion_from_tq(tester,trunc,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
     # suptitle = f'{cstr} {name} t{trunc} q{q_}'
     
     str_focus = '' if focus is None else f'_{focus}'
@@ -41,7 +64,8 @@ def figures_outliers_of_reversion_from_tq(tester,trunc,q_,df,focus=None,color=No
         outliers_list=outliers_list,
         outliers_name=outliers_name,
         color=color,
-        marker=marker)
+        marker=marker,
+        contrib=contrib)
     
     ax = axes[1]
     ax.axvline(q,color='crimson',ls='--')
@@ -127,13 +151,13 @@ def get_tester_outliers_vs_all(df,outliers_list,outliers_name):
                                                     center_by=None,)
     return(toutvsothers)
 
-def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,color=None,marker=None):
+def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
     
     
     fig,axes = plt.subplots(ncols=4,figsize=(28,7)) 
                 
     ax = axes[0]
-    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20)
+    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,contrib=contrib)
 
     ax = axes[1]
     tester.hist_discriminant(t=trunc,fig=fig,ax=ax,)
@@ -144,9 +168,9 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
     ax.set_title(outliers_name,fontsize=30)
 
     ax = axes[3]
-    tester.fit_tester_with_ignored_outliers(outliers_list=outliers_list,
-                                            outliers_name=outliers_name)
-    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,outliers_in_obs=outliers_name)
+    tester.fit_tester_with_ignored_observations(list_of_observations_to_ignore = outliers_list,
+                                                list_name=outliers_name)
+    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,marked_obs_to_ignore=outliers_name,contrib=contrib)
     
 
     if color is not None:
@@ -164,7 +188,7 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
         for condition,ax in zip(['0H','24H','48HDIFF','48HREV'],axes_):
 
             dtest[condition].plot_pval_and_errors(
-                fig=fig_,ax=ax,truncations_of_interest=[1,3,5],t=20)
+                fig=fig_,ax=ax,truncations_of_interest=[1,3,5],t=20,contrib=contrib)
 
             ax.set_title(f'out vs {condition}',fontsize=30)
     else:
@@ -172,4 +196,99 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
     fig.tight_layout()
     return(fig,axes)
 
+def plot_densities_of_conditions_for_a_variable_reversion(df,meta,condition,g,
+        datasets=['0H','48HREV0','48HREV24','24H','48HDIFF'],
+        colors= ['xkcd:blue','xkcd:sky blue','xkcd:sea green','xkcd:kelly green','xkcd:red orange'],
+        label_datasets=False,means=True,hist=True,fig=None,axes=None):
+    
+    if fig is None:
+        fig,axes = plt.subplots(5,1,figsize=(4,7))
+
+    axes[0].set_title(g,fontsize=30)
+    emin,emax = 0,0
+    for k,dataset,c in zip(range(5),datasets,colors):
+        ax = axes[k]
+        cells = meta[meta[condition].isin([dataset])].index
+        expr = df[df.index.isin(cells)][g] 
+        emin = expr.min() if expr.min()<emin else emin
+        emax = expr.max() if expr.max()>emax else emax
+        if hist:
+            bins = int(np.floor(3*np.sqrt(len(expr))))
+            ax.hist(expr,density=True,histtype='step',lw=3,bins=bins,color=c)
+            ax.hist(expr,density=True,histtype='bar',alpha=.5,bins=bins,color=c)
+        if means:
+            ax.axvline(expr.mean(),color=c,lw=2)
+        if label_datasets:
+            ax.set_ylabel(dataset,fontsize=15)
+    for k in range(5):
+        axes[k].set_xlim(emin,emax)
+
+def plot_violins_of_conditions_for_a_variable_reversion(df,meta,condition,g,
+        datasets=['0H','48HREV0','48HREV24','24H','48HDIFF'],
+        colors = ['xkcd:blue','xkcd:sky blue','xkcd:sea green','xkcd:kelly green','xkcd:red orange'],
+        fig=None,ax=None):    
+    
+    if fig is None:
+        fig,ax = plt.subplots()
+        
+    exprs = []
+    for d in datasets:
+        cells = meta[meta[condition].isin([d])].index
+        expr =df[df.index.isin(cells)][g]
+        exprs += [expr] 
+        
+    violons = ax.violinplot(exprs,showmeans=True)
+    ax.set_xticks(range(1,len(datasets)+1))
+    ax.set_xticklabels(datasets,rotation=90)
+#     ax.xticks(rotation=90)
+    for v,c in zip(violons['bodies'],colors):
+        v.set_facecolor(c)
+#                                     ax.boxplot(exprs,labels=datasets)
+    ax.set_title(g)
+      
+def plot_time_trajectory_for_a_variable_reversion(df,meta,condition,g,
+        colors = ['xkcd:sky blue','xkcd:sea green','xkcd:red orange'],
+        fig=None,ax=None):    
+    
+    if fig is None:
+        fig,ax = plt.subplots()
+    tdiff = []
+    trev = []
+    tstop = []
+
+
+
+    for dataset,trajectory,color in zip(['48HREV0','48HREV24','48HDIFF'],[trev,tstop,tdiff],
+                                        ['xkcd:sky blue','xkcd:sea green','xkcd:red orange']):
+
+        for d in ['0H','24H']:
+            cells = meta[meta[condition].isin([d])].index
+            expr =df[df.index.isin(cells)][g]
+            trajectory += [expr.mean()]
+        cells = meta[meta[condition].isin([dataset])].index
+        expr =df[df.index.isin(cells)][g]
+        trajectory += [expr.mean()]
+          
+        ax.plot([1,2,3],trajectory,color=color,label=dataset,alpha=.8)
+        ax.scatter([1,2,3],trajectory,color=color,s=10)
+    ax.set_xticks([1,2,3])
+    ax.set_xticklabels(['0H','24H','48H'])
+    ax.legend(fontsize=7)
+    ax.set_title(g)
+    
+def center_dataframe_by_effect(df,effect):
+    df['effect'] = effect
+    mean = df.groupby('effect').mean()
+    
+    first = True
+    for e in df['effect'].unique():
+        dfe = df[df['effect']==e]
+        dfe = dfe.drop(columns=['effect'])
+        dfec = dfe - mean.loc[e]
+        if first:
+            first=False
+            dfc = dfec
+        else:
+            dfc = pd.concat([dfc,dfec])
+    return(dfc)
 

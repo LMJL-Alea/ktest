@@ -97,7 +97,7 @@ class Data:
         self.data_name = None
         self.condition = 'sample'
         self.samples = 'all'
-        self.outliers_in_obs = None
+        self.marked_obs_to_ignore = None
         # self.data = {'x':{},'y':{}}
         self.main_data=None
 
@@ -109,6 +109,7 @@ class Data:
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
+        self.df_proj_tmmd = {}
         self.df_proj_residuals = {}
         self.corr = {}     
         self.dict_mmd = {}
@@ -484,22 +485,63 @@ class Data:
                 a structure containing every meta information of each observation
 
         '''
-        # if df_meta is None:
-        #     df_meta = pd.DataFrame([sample]*nobs,columns=['sample'],index=index)
-        if self.obs.shape == (0,1):
-            self.obs = df_meta
-        else:
-            # self.obs.update(df_meta)
-            self.obs = pd.concat([self.obs,df_meta[~df_meta.index.isin(self.obs.index)]])
+
+        if df_meta is not None:
+            if self.obs.shape == (0,1):
+                self.obs = df_meta
+            else:
+                # self.obs.update(df_meta)
+                self.obs = pd.concat([self.obs,df_meta[~df_meta.index.isin(self.obs.index)]])
 
 
-        for c in self.obs.columns:
-            if len(self.obs[c].unique())<100:
-                # print(c,self.obs[c].unique())
-                self.obs[c] = self.obs[c].astype('category')
+            for c in self.obs.columns:
+                if len(self.obs[c].unique())<100:
+                    # print(c,self.obs[c].unique())
+                    self.obs[c] = self.obs[c].astype('category')
 
-        # self.obs = pd.concat([self.obs,df_meta])
-        # self.obs['sample'] = self.obs['sample'].astype('category')
+    # def update_var_from_dataframe(self,df,verbose = 0):
+    #     var = self.get_var()
+    #     for c in df.columns:
+    #         if verbose>1:
+    #             print(c,end=' ')
+    #         token = False
+    #         if 'univariate' in c and c in var:
+    #             token = True
+    #             nbef = sum(var[c]==1)
+    #         if c not in var:
+    #             var[c] = df[c].astype('float64').copy()
+    #         else:
+    #             if verbose>1:
+    #                 print('update',end= '|')
+    #             var[c].update(df[c].astype('float64'))
+    #         if token:
+    #             naft = sum(var[c]==1)
+    #             if verbose >0:
+    #                 print(f'\n tested from {nbef} to {naft}')
+    
+    def update_var_from_dataframe(self,df,verbose = 0):
+        var = self.get_var()
+        c_to_add = []
+        for c in df.columns:
+            if verbose>1:
+                print(c,end=' ')
+            token = False
+            if 'univariate' in c and c in var:
+                token = True
+                nbef = sum(var[c]==1)
+            if c not in var:
+                c_to_add += [c]
+                df[c] = df[c].astype('float64')
+            else:
+                if verbose>1:
+                    print('update',end= '|')
+                var[c].update(df[c].astype('float64'))
+            if token:
+                naft = sum(var[c]==1)
+                if verbose >0:
+                    print(f'\n tested from {nbef} to {naft}')
+        df_to_add = df[c_to_add]
+        self.var[self.data_name] = var.join(df_to_add)
 
     def _update_variables(self,variables,data_name):
         '''
@@ -545,7 +587,8 @@ class Data:
                            index=None,
                            variables=None,
                            df_meta=None,
-                           df_var=None
+                           df_var=None,
+                           update_current_data_name = True
                            ):
         nobs = len(x)
         if index is None and df_meta is not None:
@@ -555,7 +598,7 @@ class Data:
 
             if len(index[index.isin(old_index)])==0:
                 print('There is only new data')
-                self._update_dict_data(x,data_name)
+                self._update_dict_data(x,data_name,update_current_data_name)
                 index = self._update_index(nobs,index,data_name)
                 self._update_meta_data(df_meta=df_meta)
                 self._update_variables(variables,data_name)
@@ -572,7 +615,8 @@ class Data:
         if df_var is not None:
             self.update_var_from_dataframe(df_var)
 
-    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,df_var=None,data_name='data'):
+    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,df_var=None,data_name='data',
+                           update_current_data_name = True):
         '''
         
         '''
@@ -580,23 +624,24 @@ class Data:
         index = df.index
         variables = df.columns
 
-        self.add_data_to_Tester(x,data_name,index,variables,df_meta,df_var)
+        self.add_data_to_Tester(x,data_name,index,variables,df_meta,df_var,
+                           update_current_data_name = update_current_data_name)
 
     def get_index(self,landmarks=False):
 
         if landmarks:
             assert(self.has_landmarks)
 
-        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()        
+        data_name,condition,samples,marked_obs_to_ignore = self.get_data_name_condition_samples_marked_obs()        
         samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
 
         dict_index = {}
 
         for sample in samples_list: 
             ooi = self.obs[self.obs[condition]==sample].index
-            if outliers_in_obs is not None:
-                outliers = self.obs[self.obs[outliers_in_obs]].index             
-                ooi = ooi[~ooi.isin(outliers)]
+            if marked_obs_to_ignore is not None:
+                marked_obs = self.obs[self.obs[marked_obs_to_ignore]].index             
+                ooi = ooi[~ooi.isin(marked_obs)]
             if landmarks:            
                 
                 # When kmeans is used, the indexes do not refer to observations but to centroids
@@ -633,7 +678,6 @@ class Data:
         return(dict_data)
     
     def get_data(self,landmarks=False):
-        
         data_name = self.data_name
     
         if landmarks and self.landmark_method =='kmeans':
@@ -842,39 +886,63 @@ class Data:
             self.add_data_to_Tester_from_dataframe(df,sample,df_meta,data_name,df_var=df_var)
 
     # Access data 
+    # def init_df_proj(self,proj,name=None,data_name=None):
+    #     if data_name is None:
+    #         data_name = self.current_data_name
+
+    #     proj_options = {'proj_kfda':self.df_proj_kfda,
+    #             'proj_kpca':self.df_proj_kpca,
+    #             'proj_mmd':self.df_proj_mmd,
+    #             'proj_tmmd':self.df_proj_tmmd,
+    #             'proj_residuals':self.df_proj_residuals 
+    #             }
+
+    #     if proj in proj_options:
+    #         dict_df_proj = proj_options[proj]
+    #         nproj = len(dict_df_proj)
+    #         names = list(dict_df_proj.keys())
+    #         if nproj == 0:
+    #             print(f'{proj} has not been computed yet')
+    #         if nproj == 1:
+    #             if name is not None and name != names[0]:
+    #                 print(f'{name} not corresponding to {names[0]}')
+    #             else:
+    #                 df_proj = dict_df_proj[names[0]]
+    #         if nproj >1:
+    #             if name is not None and name not in names:
+    #                 print(f'{name} not found in {names}, default projection:  {names[0]}')
+    #                 df_proj = dict_df_proj[names[0]]
+    #             elif name is None:
+    #                 print(f'projection not specified with {proj}, default projection : {names[0]}') 
+    #                 df_proj = dict_df_proj[names[0]]
+    #             else: 
+    #                 df_proj = dict_df_proj[name]
+    #     elif proj in self.var[data_name].index:
+    #         df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
+    #         # df_proj['sample']=['x']*n1 + ['y']*n2
+    #     elif proj =='obs':
+    #         df_proj = self.obs
+    #     else:
+    #         print(f'{proj} not recognized')
+
+    #     return(df_proj)
+
     def init_df_proj(self,proj,name=None,data_name=None):
         if data_name is None:
             data_name = self.current_data_name
+        if proj == 'proj_kfda':
+            df_proj = self.get_proj_kfda(name=name)
+        elif proj == 'proj_kpca':
+            df_proj = self.get_proj_kpca(name=name)
+        elif proj == 'proj_mmd':
+            df_proj = self.get_proj_mmd(name=name)
+        elif proj == 'proj_tmmd':
+            df_proj = self.get_proj_tmmd(name=name)
+        elif proj == 'proj_residuals':
+            df_proj = self.get_proj_residuals(name=name)
 
-        proj_options = {'proj_kfda':self.df_proj_kfda,
-                'proj_kpca':self.df_proj_kpca,
-                'proj_mmd':self.df_proj_mmd,
-                'proj_residuals':self.df_proj_residuals # faire en sorte d'ajouter ça
-                }
-
-        if proj in proj_options:
-            dict_df_proj = proj_options[proj]
-            nproj = len(dict_df_proj)
-            names = list(dict_df_proj.keys())
-            if nproj == 0:
-                print(f'{proj} has not been computed yet')
-            if nproj == 1:
-                if name is not None and name != names[0]:
-                    print(f'{name} not corresponding to {names[0]}')
-                else:
-                    df_proj = dict_df_proj[names[0]]
-            if nproj >1:
-                if name is not None and name not in names:
-                    print(f'{name} not found in {names}, default projection:  {names[0]}')
-                    df_proj = dict_df_proj[names[0]]
-                elif name is None:
-                    print(f'projection not specified with {proj}, default projection : {names[0]}') 
-                    df_proj = dict_df_proj[names[0]]
-                else: 
-                    df_proj = dict_df_proj[name]
         elif proj in self.var[data_name].index:
             df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
-            # df_proj['sample']=['x']*n1 + ['y']*n2
         elif proj =='obs':
             df_proj = self.obs
         else:
@@ -882,15 +950,59 @@ class Data:
 
         return(df_proj)
 
+
+
+    def get_proj_kfda(self,name=None):
+        if name is None:
+            name = self.get_kfdat_name()
+        if name in self.df_proj_kfda:
+            return(self.df_proj_kfda[name])
+        else:
+            print(f"proj kfda '{name}' has not been computed yet")
+
+    def get_proj_kpca(self,name=None):
+        if name is None:
+            name = self.get_kfdat_name()
+        if name in self.df_proj_kpca:
+            return(self.df_proj_kpca[name])
+        else:
+            print(f"proj kpca '{name}' has not been computed yet")
+
+    def get_proj_mmd(self,name=None):
+        if name is None:
+            name = self.get_mmd_name()
+        if name in self.df_proj_mmd:
+            return(self.df_proj_mmd[name])
+        else:
+            print(f"proj mmd '{name}' has not been computed yet")
+
+    def get_proj_tmmd(self,name=None):
+        if name is None:
+            name = self.get_mmd_name()
+        if name in self.df_proj_mmd:
+            return(self.df_proj_tmmd[name])
+        else:
+            print(f"proj tmmd '{name}' has not been computed yet")
+
+    def get_proj_residuals(self,name=None):
+        if name is None:
+            name = self.get_residuals_name()
+        if name in self.df_proj_residuals:
+            return(self.df_proj_residuals[name])
+        else:
+            print(f"proj residuals '{name}' has not been computed yet")
+
+
+
     def make_groups_from_gene_presence(self,gene,data_name):
 
         dfg = self.init_df_proj(proj=gene,data_name=data_name)
         self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
         self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
-    def set_outliers_in_obs(self,outliers_in_obs=None):
-        if outliers_in_obs in self.obs.columns or outliers_in_obs is None:
-            self.outliers_in_obs = outliers_in_obs
+    def set_marked_obs_to_ignore(self,marked_obs_to_ignore=None):
+        if marked_obs_to_ignore in self.obs.columns or marked_obs_to_ignore is None:
+            self.marked_obs_to_ignore = marked_obs_to_ignore
 
     def set_center_by(self,center_by=None):
         '''
@@ -926,8 +1038,8 @@ class Data:
             self.obs[condition] = self.obs[condition].astype('category')
         self.samples = samples
         
-    def get_data_name_condition_samples_outliers(self):
-        return(self.data_name,self.condition,self.samples,self.outliers_in_obs)
+    def get_data_name_condition_samples_marked_obs(self):
+        return(self.data_name,self.condition,self.samples,self.marked_obs_to_ignore)
         
     def get_spev(self,slot='covw',t=None,center=None):
         spev_name = self.get_covw_spev_name() if slot=='covw' else \
@@ -946,8 +1058,8 @@ class Data:
         c = self.condition
         smpl = '' if self.samples == 'all' else "".join(self.samples)
         cb = '' if self.center_by is None else f'_cb_{self.center_by}'    
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        return(f'{dn}{c}{smpl}{cb}{out}')
+        marking = '' if self.marked_obs_to_ignore is None else f'_{self.marked_obs_to_ignore}'
+        return(f'{dn}{c}{smpl}{cb}{marking}')
 
     def get_model_str(self):
         ny = self.nystrom

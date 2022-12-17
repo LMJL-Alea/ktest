@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 # from kernels import gauss_kernel_mediane
 # Local 
 
-from .statistics import Statistics
+from .kernel_statistics import Statistics
 from .pvalues import Pvalues
 from .save_data import SaveData
 from .plots_univariate import Plot_Univariate
@@ -212,21 +212,11 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
 
-            outliers_in_obs : None ou string,
-            nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
-
         """
 
-        # récupération des paramètres du modèle dans les attributs 
 
-
-        # définition du nom de la colonne dans laquelle seront stockées les valeurs de la stat 
-        # dans l'attribut df_kfdat (une DataFrame Pandas)   
-        # je devrais définir une fonction spécifique pour ces lignes qui apparaissent dans plusieurs fonctions. 
-        # name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
         kfdat_name = self.get_kfdat_name()
-        # inutile de calculer la stat si elle est déjà calculée (le name doit la caractériser)
-        if kfdat_name in self.df_kfdat :
+        if kfdat_name in self.df_kfdat : # avoid computing twice the same stat 
             if verbose : 
                 print(f'kfdat {kfdat_name} already computed')
 
@@ -268,14 +258,14 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
             self.compute_proj_kpca(t=t,verbose=verbose)
 
 
-def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,df_var=None,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,outliers_in_obs=None,kernel='gauss_median',samples='all',viz=True):
+def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,df_var=None,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,marked_obs_to_ignore=None,kernel='gauss_median',samples='all',viz=True):
     t = Tester()
     t.add_data_to_Tester_from_dataframe(df,meta,data_name=data_name,df_var=df_var)
     t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
     t.init_kernel(kernel='gauss_median' if kernel is None else kernel)
     t.init_model(nystrom=nystrom,landmark_method=lm,anchors_basis=ab,m=m,r=r)
     t.set_center_by(center_by=center_by)
-    t.set_outliers_in_obs(outliers_in_obs=outliers_in_obs)
+    t.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore)
     t.kfdat()
 
     if viz:

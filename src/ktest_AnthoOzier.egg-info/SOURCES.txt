@@ -12,6 +12,7 @@ src/ktest/correlation_operations.py
 src/ktest/functions.py
 src/ktest/gram_matrices.py
 src/ktest/initializations.py
+src/ktest/kernel_statistics.py
 src/ktest/kernel_trick.py
 src/ktest/kernels.py
 src/ktest/nystrom_operations.py
@@ -27,7 +28,6 @@ src/ktest/residuals.py
 src/ktest/rv_gen.py
 src/ktest/save_data.py
 src/ktest/scutils.py
-src/ktest/statistics.py
 src/ktest/tester.py
 src/ktest/truncation_selection.py
 src/ktest/univariate_testing.py

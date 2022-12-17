@@ -84,41 +84,93 @@ class ProjectionOps(KernelTrick):
         return(proj_name)
         
 
-
-    def compute_proj_mmd(self,verbose=0):
-        mmd_name = self.get_mmd_name()
-        mmd = self.approximation_mmd
-        if mmd_name in self.df_proj_mmd :
-            if verbose : 
-                print('Proj on discriminant axis Already computed')
-        else:
-            self.verbosity(function_name='compute_proj_mmd',
+    def compute_proj_on_tMMD(self,t=None,verbose=0):
+        
+        self.verbosity(function_name='compute_proj_on_eigenvectors',
                     dict_of_variables={
-                    'approximation':mmd,
+                    't':t,
                     },
                     start=True,
                     verbose = verbose)
+                    
+        cov = self.approximation_cov
+        sp,ev = self.get_spev('covw')
+        
+        tmax = 200
+        t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
 
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            n1,n2,n = self.get_n1n2n()
+        pkm=self.compute_pkm()
+        upk=self.compute_upk(t)
+        n1,n2,n = self.get_n1n2n()
 
-            m = self.compute_omega(quantization=(mmd=='quantization'))
-            if mmd == 'standard':
-                K = self.compute_gram()
-            
-            
-            proj = torch.matmul(K,m)
-            if mmd_name in self.df_proj_mmd:
-                print(f"écrasement de {mmd_name} dans df_proj_mmd")
-            self.df_proj_mmd[mmd_name] = pd.DataFrame(proj,index=self.get_xy_index(),columns=['mmd'])
-            # self.df_proj_mmd[name]['sample'] = ['x']*n1 + ['y']*n2
-            
-            self.verbosity(function_name='compute_proj_mmd',
+        if cov == 'standard' or 'nystrom' in cov: 
+            proj = (mv(ev.T[:t],pkm)*upk).numpy()
+            # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
+        if cov == 'quantization':
+            proj = (mv(ev.T[:t],pkm)*upk).numpy()
+
+
+        self.verbosity(function_name='compute_proj_on_eigenvectors',
                                     dict_of_variables={
-                    'approximation':mmd,
+                    't':t,
                     },
                     start=False,
                     verbose = verbose)
+
+        return(proj,t)
+
+    def compute_proj_on_MMD(self,verbose=0):
+        
+        self.verbosity(function_name='compute_proj_on_eigenvectors',
+                    dict_of_variables={
+                    },
+                    start=True,
+                    verbose = verbose)
+        
+        mmd = self.approximation_mmd            
+        m = self.compute_omega(quantization=(mmd=='quantization'))
+        if mmd == 'standard':
+            K = self.compute_gram()
+        
+        proj = torch.matmul(K,m)
+            
+        self.verbosity(function_name='compute_proj_on_eigenvectors',
+                                    dict_of_variables={
+                    },
+                    start=False,
+                    verbose = verbose)
+        return(proj)
+
+
+    def projections_MMD(self,t=None,verbose=0):
+        """ 
+        Computes the vector of projection of the embeddings on the discriminant axis corresponding 
+        to the MMD statistic with a truncation parameter equal to t and with no truncation and stores 
+        the results as column of the attribute `df_proj_mmd` et df_proj_tmmd. 
+        
+        """
+
+        mmd_name = self.get_mmd_name()
+        
+        if mmd_name in self.df_proj_mmd and (mmd_name in self.df_proj_tmmd and str(t) in self.df_proj_tmmd[mmd_name]):
+            if verbose : 
+                print('Proj on MMD discriminant axis Already computed')
+
+        else:
+            proj_tmmd,t = self.compute_proj_on_tMMD(t=t,verbose=verbose)
+            proj_tmmd = proj_tmmd.cumsum(axis=1)
+            proj_mmd = self.compute_proj_on_MMD(verbose=verbose)
+            trunc = range(1,t+1) 
+        
+            if mmd_name in self.df_proj_mmd:
+                print(f"écrasement de {mmd_name} dans df_proj_mmd")
+            if mmd_name in self.df_proj_tmmd:
+                print(f"écrasement de {mmd_name} dans df_proj_tmmdkpca")
+            self.df_proj_mmd[mmd_name] = pd.DataFrame(proj_mmd,index= self.get_xy_index(),columns=['mmd'])
+            self.df_proj_tmmd[mmd_name] = pd.DataFrame(proj_tmmd,index= self.get_xy_index(),columns=[str(t) for t in trunc])
+        return(mmd_name)
+
+
 
 
 

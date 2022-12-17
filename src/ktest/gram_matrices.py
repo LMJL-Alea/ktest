@@ -107,7 +107,7 @@ class GramMatrices(CenteringOps):
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
 
-            outliers_in_obs : None ou string,
+            marked_obs_to_ignore : None ou string,
             nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées.    
 
         """
@@ -221,9 +221,6 @@ class GramMatrices(CenteringOps):
             sample (default='xy') : str, on which data do we compute the matrix
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
-
-            outliers_in_obs : None ou string,
-            nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
 
         """
 

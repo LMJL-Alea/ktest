@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
-
+import os
 from ktest.tester import Tester
-from ktest.statistics import correct_BenjaminiHochberg_pval_of_dfcolumn,correct_BenjaminiHochberg_pval_of_dataframe
+# from ktest.pvalues import correct_BenjaminiHochberg_pval_of_dfcolumn,correct_BenjaminiHochberg_pval_of_dataframe
 from ktest.functions import compute_standard_kfda,compute_standard_mmd
 from ktest.utils_pandas import pd_select_df_from_index
 
@@ -196,8 +195,8 @@ def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
     truth_EB = np.array([0]*1000 + [0]*4500 + [1]*4500)
     
     perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
-         'DE':TDR_per_alternative(x,truth_DE),'DM':TDR_per_alternative(x,truth_DM),
-         'DP':TDR_per_alternative(x,truth_DP),'DB':TDR_per_alternative(x,truth_DB),
+         'DE':TDR_per_alternative(xBH,truth_DE),'DM':TDR_per_alternative(xBH,truth_DM),
+         'DP':TDR_per_alternative(xBH,truth_DP),'DB':TDR_per_alternative(xBH,truth_DB),
          'EE':1-TDR_per_alternative(x,truth_EE),'EB':1-TDR_per_alternative(x,truth_EB)
         } 
     return([{**perfs,**dict_hyperparams}])
@@ -254,7 +253,8 @@ def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
     truth_EE = np.array([0]*1000 + [1]*4500 + [0]*4500)
     truth_EB = np.array([0]*1000 + [0]*4500 + [1]*4500)
     
-    perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
+    perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),
+            'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
          'DE':TDR_per_alternative(x,truth_DE),'DM':TDR_per_alternative(x,truth_DM),
          'DP':TDR_per_alternative(x,truth_DP),'DB':TDR_per_alternative(x,truth_DB),
          'EE':TDR_per_alternative(x,truth_EE),#'EB':TDR_per_alternative(x,truth_EB)

@@ -20,7 +20,7 @@ class Kfdat:
         reinitialize_landmarks,\
         reinitialize_anchors
     
-    from .statistics import \
+    from .kernel_statistics import \
         compute_kfdat,\
         compute_pkm,\
         initialize_kfdat,\
