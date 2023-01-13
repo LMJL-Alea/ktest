@@ -16,10 +16,14 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
     # reconstructions error 
     def plot_pval_and_errors(self,truncations_of_interest=[1,3,5],t=30,fig=None,ax=None,marked_obs_to_ignore=None,
                             log=False,cumul=False,adjust=True,decreasing=False,
+                            log_spectrum=False,
                             pval_aggregated=True,pval_contrib=False,
                             var_within=False,var_conditions=True,
                             diff=True,grid=True):
         
+        if decreasing:
+            cumul=True
+
         if marked_obs_to_ignore is not None:
             self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore)
 
@@ -28,8 +32,10 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         
         pval = any([pval_aggregated,pval_contrib])
         if pval:
-            self.plot_pvalue(fig=fig,ax=ax,t=t,log=log,aggregated=pval_aggregated,contrib=pval_contrib,truncations_of_interest=truncations_of_interest,adjust=adjust)
-        if any([var_within,var_conditions]):
+            self.plot_pvalue(fig=fig,ax=ax,t=t,aggregated=pval_aggregated,contrib=pval_contrib,truncations_of_interest=truncations_of_interest,adjust=adjust,log=log)
+        if log_spectrum:
+            self.plot_part_log_spectrum(t=t,fig=fig,ax=ax)
+        elif any([var_within,var_conditions]):
             self.plot_explained_variability(t=t,fig=fig,ax=ax,
                 within=var_within,conditions=var_conditions,cumul=cumul,log=log,decreasing=decreasing)
         if diff:

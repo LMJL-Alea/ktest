@@ -275,7 +275,7 @@ class Univariate:
                 kfda = vtest.df_kfdat[variable][t]
 
                 errB = vtest.get_explained_difference_of_t(t)
-                errW = vtest.get_within_covariance_explained_variance_associated_to_t(t)
+                errW = vtest.get_explained_variability_of_t(t)
 
                 vard[variable][f'{col}_pval'] = pval
                 vard[variable][f'{col}_kfda'] = kfda 
@@ -329,13 +329,14 @@ class Univariate:
 
         
         self.load_univariate_test_results_in_var_if_possible(save_path,name,verbose=verbose) # load data if necessary
-        voi = self.determine_variables_to_test(fromto=fromto,name=name) # determine variables to test
+        voi = self.determine_variables_to_test(fromto=fromto,name=name,verbose=verbose) # determine variables to test
 
         # not parallel testing
         if n_jobs==1:
             results=[]
-            for v,kb in voi:
-                print(v)
+            for v in voi:
+                if verbose>0:
+                    print(v)
                 results+=[self.univariate_kfda(v,name,kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,parallel=True)]
         
         # parallel testing 
@@ -346,20 +347,23 @@ class Univariate:
             for vs in vss: 
 
                 i+=len(vs)
-                print(f'testing {i}/{len(voi)}')
+                if verbose>0:
+                    print(f'testing {i}/{len(voi)}')
                 t0 = time()  
                 with parallel_backend('loky'):
                     results = Parallel(n_jobs=n_jobs)(delayed(self.univariate_kfda)(v,name,
                     kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,parallel=True) for v  in  vs)
                 
-                print(f'Tested in {time() - t0} \n\n')
-                self.update_vard_from_parallel_univariate_kfda_results(results=results,tested_variables=vs) # update vard attribute with the results of vs genes tested
-                self.save_intermediate_results(save_path,name) # save intermediate results in file in case of early interuption
+                if verbose>0:
+                    print(f'Tested in {time() - t0} \n\n')
+                self.update_vard_from_parallel_univariate_kfda_results(results=results,tested_variables=vs,verbose=verbose) # update vard attribute with the results of vs genes tested
+                self.save_intermediate_results(save_path,name,verbose=verbose) # save intermediate results in file in case of early interuption
 
     # functions for parallel univariate testing        
     def load_univariate_test_results_in_var_if_possible(self,save_path,name,verbose=0):
         file_name=f'{name}_{self.get_kfdat_name()}_univariate.csv'
-        print(f'{file_name} in dir :{file_name in os.listdir(save_path)}')
+        if verbose >0:
+            print(f'{file_name} in dir :{file_name in os.listdir(save_path)}')
         if save_path is not None and file_name in os.listdir(save_path):
             if verbose >0:
                 print(f'loading {file_name}')
@@ -368,32 +372,35 @@ class Univariate:
     def update_var_from_vard(self):
         self.update_var_from_dataframe(pd.DataFrame(self.get_vard()).T)
 
-    def save_intermediate_results(self,save_path,name):
+    def save_intermediate_results(self,save_path,name,verbose=0):
         if save_path is not None:
-            print('saving')
+            if verbose>0:
+                print('saving')
             file_name=f'{name}_{self.get_kfdat_name()}_univariate.csv'
             self.update_var_from_vard()
             self.load_univariate_test_results_in_var_if_possible(save_path,file_name)
-            self.save_univariate_test_results_in_var(save_path)
+            self.save_univariate_test_results_in_var(save_path,verbose=verbose)
 
-    def determine_variables_to_test(self,fromto,name): 
+    def determine_variables_to_test(self,fromto,name,verbose=0): 
          
         var = self.get_var()
         dname = f'{name}_{self.get_kfdat_name()}'
         variables = self.get_variables()
         fromto[1] = len(variables) if fromto[1]==-1 else fromto[1]      
         voi = variables[fromto[0]:fromto[1]]
-        print(f'{len(voi)} variable to test')
+        if verbose >0:
+            print(f'{len(voi)} variable to test')
         
         if f'{dname}_univariate' in var:
             tested = var[var[f'{dname}_univariate']==1].index
             voi = voi[~voi.isin(tested)]
-        print(f'{len(voi)} not already tested among them')
+        if verbose>0:
+            print(f'{len(voi)} not already tested among them')
         return(voi)
 
-    def update_vard_from_parallel_univariate_kfda_results(self,results,tested_variables):
+    def update_vard_from_parallel_univariate_kfda_results(self,results,tested_variables,verbose=0):
         for a_,v in zip(results,tested_variables):
-            if a_ is None: 
+            if a_ is None : 
                 print(f'{v} was not tested')
             if a_ is not None:
     #                 print(a_)
@@ -403,16 +410,18 @@ class Univariate:
                         vard = self.get_vard()
                         vard[v][key] = value
 
-    def save_univariate_test_results_in_var(self,path):
+    def save_univariate_test_results_in_var(self,path,verbose=0):
         dn = self.data_name
         for cu in self.var[dn].columns:
             if 'univariate' in cu:
-                print(cu)
+                if verbose>0:
+                    print(cu)
                 dname = cu.split(sep='_univariate')[0]
                 cols = [c for c in self.var[dn].columns if f'{dname}_' in c]
                 df = self.var[dn][cols]
                 df = df[df[cu]==True]
-                print(df.shape)
+                if verbose>0:
+                    print(df.shape)
                 df.to_csv(f'{path}{cu}.csv')
 
     def load_univariate_test_results_in_var(self,path,file,verbose=0):
@@ -423,12 +432,6 @@ class Univariate:
     
 
     # pvalue related
-    # def correct_BH_univariate_for_toi(self,name):
-    #     tnames = ['1','r1','r2','r3','rmax']
-    #     kfdat_name = self.get_kfdat_name()
-    #     for t in tnames:
-    #         var_prefix = f'{name}_{kfdat_name}_t{t}'
-    #         self.correct_BenjaminiHochberg_pval_univariate(var_prefix,exceptions=[],focus=None,add_to_prefix='')
 
     def get_rejected_genes_for_toi(self,name):
         kfdat_name = self.get_kfdat_name()

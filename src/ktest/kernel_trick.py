@@ -1,6 +1,6 @@
 
-from torch import mv,diag,chain_matmul,dot,sum
-
+from torch import mv,diag,dot,sum
+import torch
 from .gram_matrices import GramMatrices
 
 class KernelTrick(GramMatrices):
@@ -198,26 +198,24 @@ class KernelTrick(GramMatrices):
         
         if cov == 'standard':
             Kx = self.compute_gram(landmarks=False)
-            epk = chain_matmul(ev.T[:t],Pbi,Kx).T
-            # epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
+            epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
+            
         if cov == 'nystrom3':
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             # print(f'm:{m} evt:{ev.T[:t].shape} Lz12{Lz12.shape} Uz{Uz.shape} Kzx{Kzx.shape}')
-            epk = 1/m**(1/2) * chain_matmul(ev.T[:t],Lz12,Uz.T,Kzx).T
+            epk = 1/m**(1/2) * torch.linalg.multi_dot([ev.T[:t],Lz12,Uz.T,Kzx]).T
 
         elif 'nystrom' in cov:
             Lz,_ = self.get_spev(slot='anchors')
             Lz1 = diag(Lz**-1)
             # print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
-            epk = 1/m*chain_matmul(ev.T[:t],Pbi,Kzx.T,Uz,Lz1,Uz.T,Kzx).T
-            # epk = 1/r*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz,Uz.T,Kzx]).T
+            epk = 1/m*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz1,Uz.T,Kzx]).T
         # pas à jour 
         if cov == 'quantization':
             Kzx = self.compute_kmn()
             A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-            epk = chain_matmul(ev.T[:t],A_12,Pbi,Kzx).T
-            # epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
+            epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
         
         return(epk)
 

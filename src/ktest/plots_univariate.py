@@ -60,31 +60,89 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         ax.set_title(title,fontsize=20)
         return(fig,ax)
 
-    def plot_pval_and_errors_of_variable(self,variable,t=30,fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True):
+
+    def plot_density_of_variables(self,variables,fig=None,axes=None,color=None):
+        if fig is None:
+            ncols = len(variables)
+            fig,axes = plt.subplots(ncols=ncols, figsize=(ncols*10,6))
+
+        for variable,ax in zip(variables,axes):
+            self.plot_density_of_variable(variable=variable,fig=fig,ax=ax,color=color)
+        return(fig,axes)
+
+    def scatter_2variables(self,v1,v2,fig=None,ax=None,color=None,marker=None,highlight=None,show_conditions=True,text=False,alpha=.8,legend=True,legend_fontsize=15):
         if fig is None:
             fig,ax = plt.subplots(figsize=(7,7))
+        if v1 in self.get_variables() and v2 in self.get_variables():
+            self.scatter_proj(projection=[v1,v2],xproj=v1,yproj=v2,fig=fig,ax=ax,
+                        color=color,marker=marker,highlight=highlight,
+                        show_conditions=show_conditions,text=text,alpha=alpha,
+                        legend=legend,legend_fontsize=legend_fontsize)
+        return(fig,ax)
+
+    def scatter_variables(self,variables,fig=None,axes=None,color=None,marker=None,highlight=None,show_conditions=True,text=False,alpha=.8,legend=True,legend_fontsize=15):
+        nv = len(variables)
+        if nv == 2:
+            v1,v2 = variables
+            fig,axes = self.scatter_2variables(v1,v2,fig=fig,ax=ax,
+                        color=color,marker=marker,highlight=highlight,
+                        show_conditions=show_conditions,text=text,alpha=alpha,
+                        legend=legend,legend_fontsize=legend_fontsize)        
+
+        elif nv>2:
+            if fig is None:
+                fig,axes = plt.subplots(ncols=nv,nrows=nv,figsize=(7*nv,7*nv))
+            for i,vi in enumerate(variables):
+                for j,vj in enumerate(variables):
+                    ax = axes[i,j]
+                    if vi != vj and vi in self.get_variables() and vj in self.get_variables():
+                        self.scatter_2variables(vi,vj,fig=fig,ax=ax,
+                        color=color,marker=marker,highlight=highlight,
+                        show_conditions=show_conditions,text=text,alpha=alpha,
+                        legend=legend,legend_fontsize=legend_fontsize)        
+
+        return(fig,axes)
+
+
+    def plot_pval_and_errors_of_variable(self,variable,t=30,name='',fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True,
+                    pval=True,var=True,diff=True):
+        if fig is None:
+            fig,ax = plt.subplots(figsize=(12,6))
         
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
         
-        pval = [self.get_var()[f'_{self.get_kfdat_name()}_t{trunc}_pval'][variable] for trunc in range(1,t)]
-        errB = [1]+[self.get_var()[f'_{self.get_kfdat_name()}_t{trunc}_errB'][variable] for trunc in range(1,t)]
-        errW = [1]+[self.get_var()[f'_{self.get_kfdat_name()}_t{trunc}_errW'][variable] for trunc in range(1,t)]
+        if pval:
+            self.plot_pvalue_of_variable(variable=variable,name=name,t=t,fig=fig,ax=ax,truncations_of_interest=truncations_of_interest,adjust=adjust,)
+        
+        if var:
+            errW = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errW'][variable] for trunc in range(1,t)]
+            ax.plot(range(t),errW,label='w-variability')
+        
+        if diff:
+            errB = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errB'][variable] for trunc in range(1,t)]
+            ax.plot(range(t),errB,label='difference')
         
         
-        ax.plot(range(1,t),pval,label='p-value')
-        ax.plot(range(t),errB,label='explained difference')
-        ax.plot(range(t),errW,label='explained variance')
         ax.legend(fontsize=20)
         
-        if truncations_of_interest is not None:
-            text_truncations_of_interest(truncations_of_interest,ax,[0]+pval,adjust=adjust)
-            
+
         ax.set_xlabel('Truncation',fontsize=30)
         ax.set_ylabel('Errors or pval',fontsize=30)
         ax.set_title(variable,fontsize=30)
         ax.set_xlim(-1,t+1)
         return(fig,ax)
 
+    def plot_pvalue_of_variable(self,variable,name='',t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
+        if fig is None:
+            fig,ax = plt.subplots(figsize=(12,6))
+        fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
+        pval = [self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_pval'][variable] for trunc in range(1,t)]
+        label = f'{variable} p-value' if label is None else label
+        ax.plot(range(1,t),pval,label=label,color=color,ls=ls)
+        if truncations_of_interest is not None:
+            text_truncations_of_interest(truncations_of_interest,ax,[0]+pval,adjust=adjust)
+        ax.set_ylim(-.05,1.05)  
+        ax.legend(fontsize=20)
     def plot_discriminant_of_expression_univariate(self,variable,trunc,
                                                 color=None,marker=None,highlight=None,
                                                 previous_discriminant=False,

@@ -62,8 +62,7 @@ class GramMatrices(CenteringOps):
             return(K)
         else:
             P = self.compute_centering_matrix_with_respect_to_some_effects()
-            return(torch.chain_matmul(P,K,P))
-            # retutn(torch.linalg.multi_dot([P,K,P]))
+            return(torch.linalg.multi_dot([P,K,P]))
 
     def compute_kmn(self):
         """
@@ -143,8 +142,7 @@ class GramMatrices(CenteringOps):
             if self.quantization_with_landmarks_possible:
                 Kmm = self.compute_gram(landmarks=True)
                 A = self.compute_quantization_weights(sample=sample,power=.5)
-                Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
-                # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
+                Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
             else:
                 print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmark_method='kmeans'")
 
@@ -158,9 +156,7 @@ class GramMatrices(CenteringOps):
                 Lp_inv = torch.diag(Lp**(-1))
                 
                 Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
-                Kw = 1/(n*m*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
-                # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
-                # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
+                Kw = 1/(n*m*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
@@ -187,9 +183,8 @@ class GramMatrices(CenteringOps):
 
                 # Calcul de la matrice à diagonaliser avec Nystrom. 
                 # Comme tu le disais, cette formule est symétrique et on pourrait utiliser une SVD en l'écrivant BB^T
-                # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)
-                Kw = 1/(n*m**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
-
+                # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)         
+                Kw = 1/(n*m**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])  
             else:
                 print("nystrom new version impossible, you need compute landmarks and/or anchors")
                     
@@ -197,8 +192,7 @@ class GramMatrices(CenteringOps):
         # version standard 
         elif approximation == 'standard':
             K = self.compute_gram(landmarks=False)
-            Kw = 1/n * torch.chain_matmul(P,K,P)
-            # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
+            Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
         self.verbosity(function_name='compute_centered_gram',

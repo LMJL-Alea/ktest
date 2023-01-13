@@ -274,3 +274,12 @@ def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,
         t.residuals()
     return(t)
 
+
+def create_and_fit_tester_for_two_sample_test_kfdat_from_xy(x,y,names='xy',kernel='gauss_median'):
+    x = pd.DataFrame(x,columns = [str(i) for i in range(x.shape[1])])
+    y = pd.DataFrame(y,columns = [str(i) for i in range(x.shape[1])])
+    z = pd.concat([x,y])
+    obs = pd.DataFrame([names[0]]*len(x)+[names[1]]*len(y),columns=['condition'])
+    t = create_and_fit_tester_for_two_sample_test_kfdat(df=z,meta=obs,data_name='data1',condition='condition',kernel=kernel)
+    return(t)
+

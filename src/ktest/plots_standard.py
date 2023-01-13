@@ -80,12 +80,13 @@ class Plot_Standard(Statistics):
 
 
 
-    def plot_pvalue(self,t=20,fig=None,ax=None,title=None,legend=True,log=False,contrib=False,aggregated=True,truncations_of_interest=None,adjust=True):
+    def plot_pvalue(self,t=20,fig=None,ax=None,title=None,legend=True,log=False,contrib=False,aggregated=True,truncations_of_interest=None,adjust=True,
+                color_agg='black',color_uni='xkcd:blue',ls_agg='dashdot',ls_uni='--',label_agg='p-value',label_uni='axis p-value'):
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,ylim=(-.05,1.05),t=t,title=title,log=log)
 
         if aggregated:
             pval = self.get_pvalue(log=log).loc[:t]
-            ax.plot(pval,label='p-value',ls='dashdot',c='black') 
+            ax.plot(pval,label=label_agg,ls=ls_agg,c=color_agg) 
 
             if truncations_of_interest is not None:
                 values = [0]+pval 
@@ -95,7 +96,7 @@ class Plot_Standard(Statistics):
 
         if contrib:
             pval = self.get_pvalue(contrib=contrib,log=log).loc[:t]
-            ax.plot(pval,label=r'axis p-value',alpha=.5,ls='--',color='xkcd:blue') 
+            ax.plot(pval,label=label_uni,alpha=.5,ls=ls_uni,color=color_uni) 
 
             if truncations_of_interest is not None and not aggregated:
                 values = [0]+pval 
@@ -492,9 +493,14 @@ class Plot_Standard(Statistics):
         for kprop,vprop in properties.items():
     #         print(kprop,vprop['mean_plot_args'].keys())
             if len(vprop['index'])>0:
-                x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
-                y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
-                            
+                x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])]
+                y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])]
+
+                x_ = x_[p1] if p1 in x_ else x_[str(p1)]                        
+                y_ = y_[p2] if p2 in y_ else y_[str(p2)]                        
+                
+
+
                 # alpha = .2 if text else .8
                 # print(len(x_),len(y_)) 
                 ax.scatter(x_,y_,s=30,alpha=alpha,**vprop['plot_args'])

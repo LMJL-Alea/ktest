@@ -166,8 +166,7 @@ class NystromOps(Model,OutliersOps,Verbosity):
             assert(len(P)==m)
             assert(len(Km)==m)
             
-            sp_anchors,ev_anchors = ordered_eigsy(1/m*torch.chain_matmul(P,Km,P))        
-            # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
+            sp_anchors,ev_anchors = ordered_eigsy(1/m*torch.linalg.multi_dot([P,Km,P]))        
 
             if sum(sp_anchors>0)<r:
                 self.r = sum(sp_anchors>0).item()

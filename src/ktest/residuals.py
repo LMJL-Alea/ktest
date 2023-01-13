@@ -1,7 +1,8 @@
 
 
 # import torch
-from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,chain_matmul,float64,isnan,sort,cat,tensor
+from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,float64,isnan,sort,cat,tensor
+import torch
 from numpy import sqrt
 from .utils import ordered_eigsy
 import pandas as pd
@@ -127,9 +128,9 @@ class Residuals(Statistics):
             n = self.get_ntot(landmarks=False)
             K = self.compute_gram()
             if center.lower() in 'tw':
-                K_epsilon = 1/n * chain_matmul(P,P_epsilon.T,K,P_epsilon,P)
+                K_epsilon = 1/n * torch.linalg.multi_dot([P,P_epsilon.T,K,P_epsilon,P])
             else :
-                K_epsilon = 1/n * chain_matmul(P_epsilon.T,K,P_epsilon)
+                K_epsilon = 1/n * torch.linalg.multi_dot([P_epsilon.T,K,P_epsilon])
         if cov == 'nystrom3':
             
             n = self.get_ntot(landmarks=False)
@@ -140,11 +141,11 @@ class Residuals(Statistics):
             Kmn = self.compute_kmn() 
 
             if center.lower() in 'tw':
-                K_epsilon = 1/(n*m) * chain_matmul(Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P,P_epsilon,
-                Kmn.T,Pz,Uz,Lz12)
+                K_epsilon = 1/(n*m) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P,P_epsilon,
+                Kmn.T,Pz,Uz,Lz12])
             else : 
-                K_epsilon = 1/(n*m) * chain_matmul(Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P_epsilon,
-                Kmn.T,Pz,Uz,Lz12)
+                K_epsilon = 1/(n*m) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P_epsilon,
+                Kmn.T,Pz,Uz,Lz12])
         return(K_epsilon)
 
     def diagonalize_residual_covariance(self,t=None,center='W'):
@@ -169,7 +170,7 @@ class Residuals(Statistics):
             sp,ev = ordered_eigsy(K_epsilon)
             L_12 = diag(sp**-(1/2))
             if cov == 'standard':
-                fv = 1/sqrt(n)* chain_matmul(P_epsilon,P,ev,L_12)
+                fv = 1/sqrt(n)* torch.linalg.multi_dot([P_epsilon,P,ev,L_12])
             if cov == 'nystrom3':
                 anchors_name = self.get_anchors_name()
                 m = self.get_ntot(landmarks=True)
@@ -180,7 +181,7 @@ class Residuals(Statistics):
                 
                 if len(ev) != len(P):
                     P = P[:,:len(ev)]
-                fv = 1/sqrt(n) * 1/m * chain_matmul(Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12)
+                fv = 1/sqrt(n) * 1/m * torch.linalg.multi_dot([Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12])
             self.spev['residuals'][residuals_name] = {'sp':sp,'ev':fv}
             return(residuals_name)
             

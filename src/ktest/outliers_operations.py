@@ -1,5 +1,6 @@
 from ktest.base import Data
 import pandas as pd
+
 class OutliersOps(Data):
     
     def __init__(self):

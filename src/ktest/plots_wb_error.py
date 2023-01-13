@@ -4,7 +4,7 @@ import pandas as pd
 from .residuals import Residuals
 from .kernel_statistics import Statistics
 from .utils_plot import adjusted_xticks
-from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,chain_matmul,float64,isnan,sort,cat,tensor,sum,log
+from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,float64,isnan,sort,cat,tensor,sum,log
 from numpy import sqrt
 import torch
 class Plot_WBerrors(Residuals,Statistics):
@@ -47,11 +47,12 @@ class Plot_WBerrors(Residuals,Statistics):
     # def get_between_covariance_projection_error(self,return_total=False):
 
     def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
-        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')
+        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
         spp = (sp/sum(sp)) if part_of_inertia else sp
         spp = spp.cumsum(0) if cumul else spp
         spp = 1-spp if decreasing else spp
         spp = torch.log(spp) if log else spp
+
         return(spp)
 
     def get_pvalue(self,contrib=False,log=False,name=None):
@@ -102,7 +103,8 @@ class Plot_WBerrors(Residuals,Statistics):
             # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
             mmdt = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
                 (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
-
+            tot = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
+            exd = mmdt/tot
         else:
             pkm = self.compute_pkm()
             mmdt =(mv(fv.T,pkm)**2).cumsum(0)**(1/2) if cumul else (mv(fv.T,pkm)**2)**(1/2) 
@@ -191,5 +193,20 @@ class Plot_WBerrors(Residuals,Statistics):
         ax.set_xticks(adjusted_xticks(tmax))
         
         return(fig,ax)
+
+    def plot_part_log_spectrum(self,t=None,fig=None,ax=None):
+        if fig is None:
+            fig,ax = plt.subplots(figsize=(12,6))
+
+        sp = self.get_spectrum(cumul=False,part_of_inertia=False,log=True)
+        sp = sp[~torch.isnan(sp)]
+        sp = (sp+sp.min().abs())/(sp.max()-sp.min())
+        tmax = len(sp) if t is None else min(t,len(sp))
+        trunc = range(1,tmax)
+        ax.plot(trunc,sp[:trunc[-1]],label='log-spectrum')
+        ax.set_xlabel('t',fontsize= 20)
+        ax.set_ylim(0,1.05)
+        return(fig,ax)
+
 
 

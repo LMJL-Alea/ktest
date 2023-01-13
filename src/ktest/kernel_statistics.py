@@ -1,6 +1,6 @@
 import torch
 import pandas as pd
-from torch import mv,diag,chain_matmul,dot,sum
+from torch import mv,diag,dot,sum
 import numpy as np
 from .kernel_trick import KernelTrick
 from .projection_operations import ProjectionOps

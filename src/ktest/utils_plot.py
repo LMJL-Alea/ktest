@@ -52,14 +52,14 @@ def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,ti
     trunc=range(1,t)
 
     if ax is None:
-        fig,ax = plt.subplots(figsize=(10,10))
+        fig,ax = plt.subplots(figsize=(12,6))
     asymp_arg = {'label':r'$q_{\chi^2}(0.95)$' if label else '',
                 'ls':'--','c':'crimson','lw': 4}
     if title is not None:
         ax.set_title(title,fontsize=title_fontsize)
     
     ax.set_xlabel(r'regularization $t$',fontsize= 20)
-    ax.set_ylabel(r'$\frac{n_1 n_2}{n} \Vert \widehat{\Sigma}_{W}^{-1/2}(t)(\widehat{\mu}_2 - \widehat{\mu}_1) \Vert _\mathcal{H}^2$',fontsize= 20)
+    ax.set_ylabel(r'p-value',fontsize= 20)
     ax.set_xlim(0,trunc[-1])
     ax.set_xticks(adjusted_xticks(t))
     

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from .tester import create_and_fit_tester_for_two_sample_test_kfdat
 import numpy as np
+
 def get_meta_from_df(df):
     meta = pd.DataFrame()
     meta['index'] = df.index
@@ -11,11 +12,11 @@ def get_meta_from_df(df):
     meta['condition'] = meta['index'].apply(lambda x : x.split(sep='.')[1])
     return(meta)
 
-def get_tester_from_df_and_comparaison(df,comparaison,name,kernel='gauss_median',nystrom=False,center_by=None):
-    
-    meta = get_meta_from_df(df)
+def get_tester_from_df_and_comparaison(df,comparaison,name,kernel='gauss_median',nystrom=False,center_by=None,condition='condition',meta=None):
+    if meta is None:
+        meta = get_meta_from_df(df)
     cstr = "_".join(comparaison)
-    cells = meta[meta['condition'].isin(comparaison)].index
+    cells = meta[meta[condition].isin(comparaison)].index
     dfc = df[df.index.isin(cells)] 
     metac = meta[meta.index.isin(cells)] 
     null_genes = list(dfc.sum()[dfc.sum()==0].index)
@@ -27,7 +28,7 @@ def get_tester_from_df_and_comparaison(df,comparaison,name,kernel='gauss_median'
     t = create_and_fit_tester_for_two_sample_test_kfdat(df=dfc,
                                                                meta=metac.copy(),
                                                            data_name=f'{name}_{cstr}',
-                                                           condition='condition',
+                                                           condition=condition,
     #                                                             df_var= df_var,
                                                             kernel=kernel,
                                                            nystrom=nystrom,
@@ -157,7 +158,7 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
     fig,axes = plt.subplots(ncols=4,figsize=(28,7)) 
                 
     ax = axes[0]
-    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,contrib=contrib)
+    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,pval_contrib=contrib)
 
     ax = axes[1]
     tester.hist_discriminant(t=trunc,fig=fig,ax=ax,)
@@ -170,7 +171,7 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
     ax = axes[3]
     tester.fit_tester_with_ignored_observations(list_of_observations_to_ignore = outliers_list,
                                                 list_name=outliers_name)
-    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,marked_obs_to_ignore=outliers_name,contrib=contrib)
+    tester.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,marked_obs_to_ignore=outliers_name,pval_contrib=contrib)
     
 
     if color is not None:
@@ -188,7 +189,7 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
         for condition,ax in zip(['0H','24H','48HDIFF','48HREV'],axes_):
 
             dtest[condition].plot_pval_and_errors(
-                fig=fig_,ax=ax,truncations_of_interest=[1,3,5],t=20,contrib=contrib)
+                fig=fig_,ax=ax,truncations_of_interest=[1,3,5],t=20,pval_contrib=contrib,var_conditions=False,diff=False)
 
             ax.set_title(f'out vs {condition}',fontsize=30)
     else:

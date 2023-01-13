@@ -253,7 +253,6 @@ class Data:
         self.init_metadata(dfx_meta,dfy_meta) 
         self.set_center_by(center_by)
         
-
     def init_metadata(self,dfx_meta=None,dfy_meta=None):
         '''
         This function initializes the attribute `obs` containing metainformation on the data. 
