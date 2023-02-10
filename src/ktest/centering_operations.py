@@ -106,6 +106,23 @@ def permute_matrix_to_respect_index_order(M,col):
         permutation[li] = range(cum_effectifs[i],cum_effectifs[i+1])
     return(M[permutation,:][:,permutation])    
 
+
+
+def compute_covariance_centering_matrix_(n,dict_nobs,ab):
+    if ab == 'k':
+        return(eye(n,dtype=torch.float64))
+    if ab == 's':
+        In = eye(n, dtype=torch.float64)
+        Jn = ones(n, n, dtype=torch.float64)
+        return(In - 1/n * Jn)
+    if ab == 'w':
+        In = eye(n)
+        effectifs = [v for k,v in dict_nobs.items() if k != 'ntot'] 
+        diag_Jn_by_n = compute_diag_Jn_by_n(effectifs)
+        return(In - diag_Jn_by_n)
+    else:
+        print('invalid anchor basis') 
+
 class CenteringOps(NystromOps):
 
     def __init__(self):
@@ -156,10 +173,10 @@ class CenteringOps(NystromOps):
         '''
         
         center_by = self.center_by
-        outliers_in_obs = self.outliers_in_obs
+        marked_obs_to_ignore = self.marked_obs_to_ignore
         n = self.get_ntot()
         Pw = eye(n,dtype = torch.float64)
-        obs = self.obs if outliers_in_obs is None else self.obs[~self.obs[outliers_in_obs]]
+        obs = self.obs if marked_obs_to_ignore is None else self.obs[~self.obs[marked_obs_to_ignore]]
 
         if center_by is None:
             pass
@@ -230,19 +247,8 @@ class CenteringOps(NystromOps):
 #                 a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
 #                 Pn1 = (In1 - 1/n * torch.ger(a1,a1)) # a vérifier si c'est 1/n ou 1/n1
             
-        if ab == 'k':
-            return(eye(n,dtype=torch.float64))
-        if ab == 's':
-            In = eye(n, dtype=torch.float64)
-            Jn = ones(n, n, dtype=torch.float64)
-            return(In - 1/n * Jn)
-        if ab == 'w':
-            In = eye(n)
-            effectifs = [v for k,v in dict_nobs.items() if k != 'ntot'] 
-            diag_Jn_by_n = compute_diag_Jn_by_n(effectifs)
-            return(In - diag_Jn_by_n)
-        else:
-            print('invalid anchor basis') 
+        P = compute_covariance_centering_matrix_(n,dict_nobs,ab)
+        return(P)
 
     def compute_omega(self,quantization=False):
         '''

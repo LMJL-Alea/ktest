@@ -12,19 +12,20 @@ quelle troncature on peut aller avec une erreur de type I contrôllée.
 On choisit à terme la plus grande troncature qui contrôle cette erreur.  
 """
 
+# A supprimer 
 class TruncationSelection(Residuals):
 
     def __init__(self):
         super(TruncationSelection,self).__init__()
 
     def select_trunc_by_between_reconstruction_ratio(self,ratio):
-        pe = self.get_between_covariance_projection_error()
+        pe = self.get_explained_difference()
         pe = cat([tensor([1],dtype =float64),pe])
         return(where(pe<ratio)[0][0])
 
         
     def select_trunc_by_between_reconstruction_ressaut(self,kmax=11,S=.5,which_ressaut='max'):
-        pe = self.get_between_covariance_projection_error()
+        pe = self.get_explained_difference()
         pe = cat([tensor([1],dtype =float64),pe])
         kmax = kmax if len(pe)>kmax else len(pe)-1
         pen = 1+ (kmax-1)* (pe[kmax]-pe)/(pe[kmax] - pe[1])

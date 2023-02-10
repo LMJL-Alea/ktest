@@ -1,250 +1,230 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import pandas as pd
 from .residuals import Residuals
-from .statistics import Statistics
-from torch import cat,tensor,float64
-
-
+from .kernel_statistics import Statistics
+from .utils_plot import adjusted_xticks
+from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,float64,isnan,sort,cat,tensor,sum,log
+from numpy import sqrt
+import torch
 class Plot_WBerrors(Residuals,Statistics):
         
     def __init__(self):        
         super(Plot_WBerrors, self).__init__()
 
-    # Explorations de visualizations possibles non gardées 
-    def plot_pval_with_respect_to_within_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,trunc=None,outliers_in_obs=None):
+    # Visualizations considérées comme pertinentes
+
+
+    def get_ordered_spectrum_wrt_between_covariance_projection_error(self):
         '''
-        Plots the opposite of log10 pvalue with respect to the percentage of reconstruction 
-        of the spectral truncation of the within covariance operator 
-        compared to the full within covariance operator. 
+        Sorts the eigenvalues of the within covariance operator in order to 
+        have the best reconstruction of (\mu_2 - \mu1)
         
+        Returns 
+        -------
+            sorted_projection_error : torch.Tensor,
+            The percentage of (\mu_2 - \mu1) captured by the eigenvector capturing the ith largest 
+            percentage of (\mu_2 - \mu1) is at the ith position. 
+            
+            ordered_truncation : torch.Tensor,
+            The position of the vector capturing the ith largest percentage of (\mu_2 - \mu1) in the list 
+            of eigenvectors of the within covariance operator ordered by decreasing eigenvalues. 
+        
+        '''
+        print("attention la fonction get_between_covariance_projection_error a été modifiée mais cette" +\
+            "fonction get_ordered_spectrum_wrt_between_covariance_projection_error n'a pas été modifiée" +\
+            "car je ne savais pas si elle avait encore un intérêt.")
+        eB = self.get_explained_difference()
+
+        eB = cat((tensor([1],dtype=float64),eB))
+        projection_error = eB[1:] - eB[:-1]
+        projection_error = projection_error[~isnan(projection_error)]
+        sorted_projection_error,ordered_truncations  = sort(projection_error,descending = True)
+        ordered_truncations += 1
+        
+        return(sorted_projection_error,ordered_truncations)
+        
+    # def get_between_covariance_projection_error(self,return_total=False):
+
+    def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
+        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
+        spp = (sp/sum(sp)) if part_of_inertia else sp
+        spp = spp.cumsum(0) if cumul else spp
+        spp = 1-spp if decreasing else spp
+        spp = torch.log(spp) if log else spp
+
+        return(spp)
+
+    def get_pvalue(self,contrib=False,log=False,name=None):
+        name = self.get_kfdat_name() if name is None else name
+        df_pval = self.df_pval_contributions if contrib else self.df_pval
+        pval = np.log(df_pval[name]) if log else df_pval[name]
+        return(pval) 
+
+    def get_kfda(self,contrib=False,log=False,name=None):
+        name = self.get_kfdat_name() if name is None else name
+        df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
+        kfda = np.log(df_kfda[name]) if log else df_kfda[name]
+        return(kfda) 
+
+
+    def get_explained_difference_of_t(self,t):
+        pe = self.get_explained_difference()
+        return(pe[t-1].item())
+
+    def get_explained_variability_of_t(self,t):
+        exv = self.get_explained_variability()
+        return(exv[t-1].item())
+
+    def get_explained_difference(self,cumul=False,log=False,decreasing=False):
+        '''
+        Returns the explained difference with respect to the truncation. 
+        Can be cumulated and log. 
         Parameters
         ----------
-            self : Tester,
-            Should contain a filled `df_pval` attribute
+            self : Tester, 
+            Should contain the eigenvectors and eigenvalues of the within covariance operator in the attribute `spev`
             
-            name : str,
-            Should correspond to a column of the attribute `df_pval`
-
-            scatter (default = True) : boolean, 
-            If True, a scatter plot is added to the plot in order to visualize each step of the reconstruction.     
-            If False, it is only a plot. 
-    
-            fig (optional) : matplotlib.pyplot.figure 
-            The figure of the plot.
-            A new one is created if needed.
-            
-            ax (optional) : matplotlib.pyplot.axis 
-            The axis of the plot.
-            A new one is created if needed.
-
-        
-            trunc (optionnal) : list,
-            The order of the eigenvectors to project (\mu_2 - \mu_1), 
-            By default, the eigenvectors are ordered by decreasing eigenvalues. 
-
+        Returns 
+        ------
+            projection_error : torch.Tensor
+            The projection error of (\mu_2- \mu_1) as a percentage. 
         '''
         
-        if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
+        cov = self.approximation_cov
+        n = self.get_ntot(landmarks=False)
+        sp,ev = self.get_spev('covw')  
+        sp12 = sp**(-1/2)
+        ev,sp12 = ev[:,~isnan(sp12)],sp12[~isnan(sp12)]
+        fv    = n**(-1/2)*sp12*ev if cov == 'standard' else ev         
+        # K = self.compute_gram(landmarks=False)
+        om = self.compute_omega()
         
-        name = outliers_in_obs if outliers_in_obs is not None else name 
-
-        log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-        log10pval = np.array(log10pval[log10pval<10**10])
-        expvar = np.array(self.get_explained_variance()[:len(log10pval)])
-        
-        threshold = -np.log(0.05)/np.log(10)
-        ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
-        
-        expvar_acc = expvar[log10pval<=threshold]
-        log10pval_acc = log10pval[log10pval<=threshold]
-
-        expvar_rej = expvar[log10pval>threshold]
-        log10pval_rej = log10pval[log10pval>threshold]
-        
-        if scatter:
-            if len(expvar_acc)>0:
-                ax.scatter(expvar_acc,log10pval_acc,color='green')
-            if len(expvar_rej)>0:
-                ax.scatter(expvar_rej,log10pval_rej,color='red')
-            ax.plot(expvar,log10pval,label=name,lw=.8,alpha=.5)
+        if cov != 'standard':
+            m = self.get_ntot(landmarks=True)
+            Lz,Uz = self.get_spev(slot='anchors')
+            Lz12 = diag(Lz**-(1/2))
+            Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+            Kzx = self.compute_kmn()
+            # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
+            mmdt = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
+                (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
+            tot = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
+            exd = mmdt/tot
         else:
-            ax.plot(expvar_acc,log10pval_acc,lw=1,alpha=1)
-            ax.plot(expvar_rej,log10pval_rej,label=name,lw=1,alpha=1)
+            pkm = self.compute_pkm()
+            mmdt =(mv(fv.T,pkm)**2).cumsum(0)**(1/2) if cumul else (mv(fv.T,pkm)**2)**(1/2) 
+            tot = (mv(fv.T,pkm)**2).sum(0)**(1/2)
+            exd = mmdt/tot
+        exd = 1 - exd if decreasing else exd
+        exd = np.log(exd) if log else (exd)
 
-        ax.set_ylabel('-log10pval',fontsize=30)
-        ax.set_xlabel(r'$\Sigma_W$ reconstruction',fontsize=30)
-        ax.set_ylim(0,20)
-        ax.set_xlim(-.05,1.05)
-        ax.axhline(-np.log(0.05)/np.log(10),)
-        return(fig,ax)
-    
-    def plot_pval_with_respect_to_between_covariance_reconstruction_error(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
+        return exd
+
+
+
+    def plot_explained_difference(self,t=None,fig=None,ax=None,cumul=False,log=False,decreasing=False,color='xkcd:neon purple',label='difference',legend=True):
         if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
+            fig,ax = plt.subplots(figsize=(12,6))
+        exd = self.get_explained_difference(cumul=cumul,log=log,decreasing=decreasing)
+        t = len(exd) if t is None else t
+        trunc = range(1,t+1)
         
-        name = outliers_in_obs if outliers_in_obs is not None else name 
+        # ax.plot(trunc,exd[:t],lw=1,alpha=1,label=label,color=color)
+        ax.bar(trunc,exd[:t],color=color,alpha=1,label=label)
+        # ax1.bar(xp,ypnorm,color='red',alpha=.2)
 
-        log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-        log10pval = np.array(log10pval[log10pval<10**10])
-        error = np.array(self.get_between_covariance_projection_error()[:len(log10pval)])
-        
-        threshold = -np.log(0.05)/np.log(10)
-        
-        error_acc = error[log10pval<=threshold]
-        log10pval_acc = log10pval[log10pval<=threshold]
-
-        error_rej = error[log10pval>threshold]
-        log10pval_rej = log10pval[log10pval>threshold]
-        
-        if scatter:
-            if len(error_acc)>0:
-                ax.scatter(error_acc,log10pval_acc,color='green')
-            if len(error_rej)>0:
-                ax.scatter(error_rej,log10pval_rej,color='red')
-            ax.plot(error,log10pval,label=name,lw=.8,alpha=.5)
-        else:
-            ax.plot(error_acc,log10pval_acc,lw=1,alpha=1)
-            ax.plot(error_rej,log10pval_rej,label=name,lw=1,alpha=1)
-
-        ax.set_ylabel('-log10pval',fontsize=30)
-        ax.set_xlabel(r'$\Sigma_B$ reconstruction ',fontsize=30)
-        ax.set_ylim(0,20)
-        ax.set_xlim(-.05,1.05)
-        ax.axhline(-np.log(0.05)/np.log(10),)
+        ax.set_ylabel(r'Difference',fontsize=30)
+        ax.set_xlabel('t',fontsize=30)
+        ax.set_xticks(adjusted_xticks(t))
+                
+        if not log:     
+            ax.set_ylim(-.05,1.05)
+        if legend:
+            ax.legend(fontsize=20)
         return(fig,ax)
+
+    def compute_explained_variability_per_condition(self,cumul=False,log=False,decreasing=False):
+        # Sur nystrom on pourrait se demander quelle est la part de la variabilité des conditions capturée par les ancres. 
         
-    def plot_relative_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
+        n=self.get_ntot()    
+        upk = self.compute_upk(n)
+        if 'nystrom' in self.approximation_cov:
+            upk = upk[:,:-1]
+        dfepk = pd.DataFrame(upk,index=self.get_index(in_dict=False),columns=[str(t) for t in range(upk.shape[1])])
+        
+        exvc = {} 
+        for k,v in self.get_index().items():
+            dfk = dfepk.loc[dfepk.index.isin(v)]
+            exvck = dfk.var().cumsum()/dfk.var().sum() if cumul else dfk.var()/dfk.var().sum()
+            exvck = 1 - exvck if decreasing else exvck
+            exvck = np.log(exvck) if log else exvck
+            exvc[k] = exvck
+        return(exvc)
+        
+    def get_explained_variability(self,within=True,cumul=False,log=False,decreasing=False):
+        if within: 
+            exv = self.get_spectrum(cumul=cumul,part_of_inertia=True,log=log,decreasing=decreasing)
+        else: 
+            exv = self.compute_explained_variability_per_condition(cumul=cumul,log=log,decreasing=decreasing)
+        return(exv)
+
+    def plot_explained_variability(self,t=None,fig=None,ax=None,within=True,conditions=True,cumul=False,log=False,decreasing=False,color_w='xkcd:sea green',colors_g=['xkcd:cerulean','xkcd:light orange'],legend=True):
         if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
-
-        name = outliers_in_obs if outliers_in_obs is not None else name 
-
-        log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-        log10pval = np.array(log10pval[log10pval<10**10])
-        threshold = -np.log(0.05)/np.log(10)
-
-        errorB = np.array(self.get_between_covariance_projection_error(outliers_in_obs=outliers_in_obs))
-        errorW = np.array(self.get_explained_variance())
-
-        errorB_acc = errorB[:len(log10pval)][log10pval<=threshold]
-        errorW_acc = errorW[:len(log10pval)][log10pval<=threshold]
+            fig,ax = plt.subplots(figsize=(12,6))
+        colors_g = [None,None] if colors_g is None else colors_g
+        tmax = 0 if t is None else t 
+        if within:
+            exv = self.get_explained_variability(cumul=cumul,log=log,decreasing=decreasing)
+            tw = len(exv) if t is None else t
+            trunc = range(1,tw+1)
+            label = 'w-variability'
+            ax.bar(trunc,exv[:t],color=color_w,alpha=1,label=label)
+            # ax.plot(trunc,exv[:tw],lw=1,alpha=1,color=color_w,label=label)
+            tmax = np.max([tmax,tw])
+            ax.set_ylabel(r'w-variability',fontsize=30)
         
-        errorB_rej = errorB[:len(log10pval)][log10pval>threshold]
-        errorW_rej = errorW[:len(log10pval)][log10pval>threshold]
-        
-        if scatter:
-            if len(errorB_acc)>0:
-                ax.scatter(errorB_acc,errorW_acc,color='green')
-            if len(errorB_rej)>0:
-                ax.scatter(errorB_rej,errorW_rej,color='red')
-            ax.plot(errorB,errorW,label=name,lw=.8,alpha=.5)
+        if conditions:
+            exv = self.get_explained_variability(within=False,cumul=cumul,log=log,decreasing=decreasing)
+            if len(exv)==2:
+                colors = {k:c for k,c in zip(exv.keys(),colors_g)}
+            else:
+                colors = {k:None for k in exv.keys()}
+            for k,v in exv.items():
+                tk = len(v) if t is None else t                   
+                trunc = np.arange(1,tk+1)
+                label=f'{k}-variability'
+                # ax.plot(trunc,v[:tk],label=label,lw=1,alpha=1,color=colors[k])
+                ax.bar(trunc,v[:tk],color=colors[k],alpha=.4,label=label)
+                tmax = np.max([tmax,tk])
+            ax.set_ylabel(r'group variability',fontsize=30)
             
+        if within and conditions:
+            ax.set_ylabel(r'variability',fontsize=30)
+        if legend:
+            ax.legend(fontsize=20)
 
-        else:
-            ax.plot(errorB,errorW,lw=1,alpha=1)
-
-        ax.set_ylabel(r'$\Sigma_W$ reconstruction ',fontsize=30)
-        ax.set_xlabel(r'$\Sigma_B$ reconstruction ',fontsize=30)
-        
-        errorB = errorB[~np.isnan(errorB)]
-        errorW = errorW[~np.isnan(errorW)]
-
-        mini = np.min([np.min(errorB),np.min(errorW)])
-        h = (1 - mini)/20
-        ax.plot(np.arange(mini,1,h),np.arange(mini,1,h),c='xkcd:bluish purple',lw=.4,alpha=1)
+        ax.set_xlabel('t',fontsize=30)
+        if not log:
+            ax.set_ylim(-.05,1.05)
+        ax.set_xlim(-1,tmax)
+        ax.set_xticks(adjusted_xticks(tmax))
         
         return(fig,ax)
-        
-    def plot_ratio_reconstruction_errors(self,name,fig=None,ax=None,scatter=True,outliers_in_obs=None):
+
+    def plot_part_log_spectrum(self,t=None,fig=None,ax=None):
         if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
-        
-        log10pval = self.df_pval[name].apply(lambda x: -np.log(x)/np.log(10))
-        log10pval = np.array(log10pval[log10pval<10**10])
-        threshold = -np.log(0.05)/np.log(10)
+            fig,ax = plt.subplots(figsize=(12,6))
 
-    #     errorB = np.array(get_between_covariance_projection_error(self))
-    #     errorW = np.array(self.get_explained_variance())
-
-        errorB = np.array(self.get_between_covariance_projection_error()[:len(log10pval)])
-        errorW = np.array(self.get_explained_variance()[:len(log10pval)])
-
-        
-        errorB_acc = errorB[log10pval<=threshold]
-        errorW_acc = errorW[log10pval<=threshold]
-        
-        errorB_rej = errorB[log10pval>threshold]
-        errorW_rej = errorW[log10pval>threshold]
-        
-        
-        la = len(errorB_acc)
-        lb = len(errorB_rej)
-        if scatter:
-            if len(errorB_acc)>0:
-                ax.scatter(np.arange(1,la+1),errorB_acc/errorW_acc,color='green')
-            if len(errorB_rej)>0:
-                ax.scatter(np.arange(la+1,la+1+lb),errorB_rej/errorW_rej,color='red')
-            ax.plot(np.arange(1,la+1+lb),errorB/errorW,label=name,lw=.8,alpha=.5)
-        
-        ax.set_xlabel('truncation',fontsize=30)
-        ax.set_ylabel('reconstruction ratio',fontsize=30)
+        sp = self.get_spectrum(cumul=False,part_of_inertia=False,log=True)
+        sp = sp[~torch.isnan(sp)]
+        sp = (sp+sp.min().abs())/(sp.max()-sp.min())
+        tmax = len(sp) if t is None else min(t,len(sp))
+        trunc = range(1,tmax)
+        ax.plot(trunc,sp[:trunc[-1]],label='log-spectrum')
+        ax.set_xlabel('t',fontsize= 20)
+        ax.set_ylim(0,1.05)
         return(fig,ax)
 
-    # Visualizations considérées comme pertinentes
-    def plot_within_covariance_reconstruction_error_with_respect_to_t(self,name='explained variance',fig=None,ax=None,scatter=True,t=None,outliers_in_obs=None):
-        
-        if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
 
-
-        label = name # tr($\Sigma_W$) = {trace:.3e}'
-
-        explained_variance = self.get_explained_variance()
-        explained_variance = cat([tensor([0],dtype=float64),explained_variance])
-        expvar = 1 - explained_variance
-        trunc = np.arange(0,len(expvar))
-        
-        if scatter:
-            ax.scatter(trunc,expvar)
-            ax.plot(trunc,expvar,label=label,lw=.8,alpha=.5)
-        else:
-            ax.plot(trunc,expvar,lw=1,alpha=1,label=label)
-        
-
-        ax.set_ylabel(r'$\Sigma_W$ reconstruction',fontsize=30)
-        ax.set_xlabel('truncation',fontsize=30)
-        ax.set_ylim(-.05,1.05)
-        xmax = len(expvar) if t is None else t
-        
-        ax.set_xlim(-1,xmax)
-        xticks = np.arange(0,xmax) if xmax<20 else np.arange(0,xmax,2) if xmax<50 else np.arange(0,xmax,5) if xmax<200 else np.arange(0,xmax,10) if xmax < 500 else np.arange(0,xmax,20)
-        ax.set_xticks(xticks)
-        return(fig,ax)
-
-    def plot_between_covariance_reconstruction_error_with_respect_to_t(self,name='explained difference',fig=None,ax=None,scatter=True,t=None):
-        if fig is None:
-            fig,ax = plt.subplots(figsize=(7,7))
-        errorB,delta = self.get_between_covariance_projection_error(return_total=True)
-        errorB = cat([tensor([1],dtype=float64),errorB])
-        trunc = np.arange(0,len(errorB))
-
-        label = name #of {delta:.3e}'
-        if scatter:
-            ax.scatter(trunc,errorB)
-            ax.plot(trunc,errorB,label=label,lw=.8,alpha=.5)
-        else:
-            ax.plot(trunc,errorB,lw=1,alpha=1,label=label)
-        
-
-        ax.set_ylabel(r'$(\mu_2 - \mu_1)$ projection error',fontsize=30)
-        ax.set_xlabel('truncation',fontsize=30)
-        ax.set_ylim(-.05,1.05)
-        xmax = len(errorB) if t is None else t
-        
-        ax.set_xlim(-1,xmax)
-        xticks = np.arange(0,xmax) if xmax<20 else np.arange(0,xmax,2) if xmax<50 else np.arange(0,xmax,5) if xmax<200 else np.arange(0,xmax,10) if xmax < 500 else np.arange(0,xmax,20)
-        ax.set_xticks(xticks)
-        return(fig,ax)
 

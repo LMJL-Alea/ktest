@@ -22,30 +22,12 @@ Ces fonctions calculent la stat à partir de données et renvoie directement la 
 L'objet tester reste en back et n'est pas accessible. 
 """
 
-def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
+# def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
+    # removed function that returned test.df_kfdat,test.df_pval
 
-    test = Tester()
-    test.init_data(x,y,kernel=kernel)
-    test.init_model(**params_model)
-    test.kfdat(name=name,pval=pval)
-    if pval:
-        return(test.df_kfdat,test.df_pval)
-    else:
-        return(test.df_kfdat)
+# def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
+    # removed function that returned test.dict_mmd
 
-def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
-    if isinstance(x,pd.DataFrame) or isinstance(x,pd.Series):
-        if len(x.shape)==1:
-            x = x.to_numpy().reshape(-1,1)
-            y = y.to_numpy().reshape(-1,1)
-        else:
-            x = x.to_numpy()
-            y = y.to_numpy()
-    test = Tester()
-    test.init_data(x,y,kernel=kernel)
-    test.init_model(**params_model)
-    test.mmd(name=name)
-    return(test.dict_mmd)
 
 """
 Dans le cas d'un grid search pour tuner plusieurs paramètres, ces fonctions 
@@ -160,6 +142,15 @@ def get_dist_matrix_from_dict_test_and_names(names,dict_tests,dict_data):
             dist[cat2][cat1] = stat
     return(pd.DataFrame(dist).fillna(0).to_numpy())
 
+def get_data_in_dict_data_from_name(name,dict_data):
+    cat1 = name.split(sep='_')[0]
+    cat2 = name.split(sep='_')[1]
+
+    df1 = pd.concat([dict_data[c] for c in [c for c in cat1.split(sep=',')]],axis=0) if ',' in cat1 else dict_data[cat1]
+    df2 = pd.concat([dict_data[c] for c in [c for c in cat2.split(sep=',')]],axis=0) if ',' in cat2 else dict_data[cat2]
+    return(df1,df2)
+
+
 def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={},center_by=None,free_memory=True):
     '''
     This function was specifically developped for the analysis of the CRCL data but it can be generalized. 
@@ -225,15 +216,11 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
     ------- 
         A new Tester object is added in dict_tests at the key name. 
     '''
-    
-    
+
     if name not in dict_tests:
         cat1 = name.split(sep='_')[0]
         cat2 = name.split(sep='_')[1]
-
-        df1 = pd.concat([dict_data[c] for c in [c for c in cat1.split(sep=',')]],axis=0) if ',' in cat1 else dict_data[cat1]
-        df2 = pd.concat([dict_data[c] for c in [c for c in cat2.split(sep=',')]],axis=0) if ',' in cat2 else dict_data[cat2]
-
+        df1,df2 = get_data_in_dict_data_from_name(name,dict_data)
 
 
         if dict_meta is not None:

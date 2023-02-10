@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
-from torch import mv,diag,chain_matmul,dot,sum
-
+from torch import mv,diag,dot,sum
+import numpy as np
 from .kernel_trick import KernelTrick
 from .projection_operations import ProjectionOps
 """
@@ -20,29 +20,6 @@ class Statistics(ProjectionOps):
     def __init__(self):
         super(Statistics,self).__init__()
 
-
-    def get_explained_variance(self):
-        '''
-        This function returns a list of percentages of supported variance, the ith element contain the 
-        variance supported by the first i eigenvectors of the covariance operator of interest. 
-
-        Parameters
-        ----------
-            sample : str,
-            if sample = 'x' : Focuses on the covariance operator of the first sample
-            if sample = 'y' : Focuses on the covariance operator of the second sample
-            if sample = 'xy' : Focuses on the within-group covariance operator 
-                    
-        Returns
-        ------- 
-            spp : torch.tensor,
-            the list of cumulated variances ordered in decreasing order.  
-
-        '''
-
-        sp,_ = self.get_spev('covw')
-        spp = (sp/torch.sum(sp)).cumsum(0)
-        return(spp)
 
     def get_trace(self):
         sp,_ = self.get_spev('covw')

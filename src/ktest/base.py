@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
-from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel,gauss_kernel_mediane_corrected_variance,gauss_kernel_mediane_log_corrected_variance
+from .kernels import mediane,gauss_kernel,linear_kernel
 from torch import cat
 
 
@@ -29,17 +29,58 @@ def convert_to_pandas_index(index):
     else:
         return(index)
 
+def get_kernel_name(function,bandwidth,median_coef):
+    n = ''
+    if function == 'gauss':
+        n+=function
+        if bandwidth == 'median':
+            n+= f'_{median_coef}median' if median_coef != 1 else '_median' 
+        else: 
+            n+=f'_{bandwidth}'
+        
+        
+    elif function == 'linear':
+        n+=function
+    else:
+        n='user_specified'
+    return(n)
+
+
+def init_test_params(test='kfda',nystrom=False,m=None,r=None,landmark_method='random',
+            anchors_basis='w'):
+    return({'test':test,
+            'nystrom':nystrom,
+            'm':m,
+            'r':r,
+            'landmark_method':landmark_method,
+            'anchors_basis':anchors_basis
+    })
+
+
+def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
+    """
+    Returns an object that defines the kernel
+    """
+    return(
+        {'function':function,
+            'bandwidth':bandwidth,
+            'median_coef':median_coef,
+            'kernel_name':kernel_name
+            }
+    )
+    
+
 class Model:
     def __init__(self):        
         super(Model, self).__init__()
         self.has_model = False
         
-
-    def init_model(self,nystrom=False,m=None,r=None,landmark_method='random',anchors_basis='w'):
+    def init_test_params(self,test='kfda',nystrom=False,m=None,r=None,landmark_method='random',anchors_basis='w'):
         '''
         
         Parameters
         ----------
+            test : 'kfda' or 'mmd'
             nystrom (default = False) : bool
                 Whether to use the nystrom approximation or not.
             m : int, the total number of landmarks. 
@@ -54,6 +95,7 @@ class Model:
         It is not possible to use nystrom for small datasets (n<100)
         '''
 
+        self.test = test
         self.nystrom = nystrom
         if nystrom:
             self.approximation_cov = 'nystrom3'
@@ -72,8 +114,16 @@ class Model:
         self.has_model = True
         self.nystrom_initialized = False
 
-    def get_model(self):
-        return(self.nystrom,self.landmark_method,self.anchors_basis,self.m_initial,self.r)
+    def get_test_params(self):
+        
+        return({'test':self.test,
+            'nystrom':self.nystrom,
+            'm':self.m_initial,
+            'r':self.r,
+            'landmark_method':self.landmark_method,
+            'anchors_basis':self.anchors_basis
+        })
+
 
 
 class Data:
@@ -97,7 +147,7 @@ class Data:
         self.data_name = None
         self.condition = 'sample'
         self.samples = 'all'
-        self.outliers_in_obs = None
+        self.marked_obs_to_ignore = None
         # self.data = {'x':{},'y':{}}
         self.main_data=None
 
@@ -109,6 +159,7 @@ class Data:
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
+        self.df_proj_tmmd = {}
         self.df_proj_residuals = {}
         self.corr = {}     
         self.dict_mmd = {}
@@ -117,267 +168,57 @@ class Data:
 
         # for verbosity 
         self.start_times = {}
-
-    def init_index_xy(self,x_index = None,y_index = None):
-        '''
-        This function initializes the attributes of the data indexes 
-        `x_index` and `y_index` of `x` and `y` of the Tester object. 
-
-
-        Parameters
-        ----------
-            x_index (default : None): None, list or pandas.Series
-                if x_index is None, the index is a list of numbers from 1 to n1
-                else, the list or pandas.Series should contain the ordered list 
-                of index corresponding to the observations of x
-
-            y_index (default : None): None, list or pandas.Series
-                if y_index is None, the index is a list of numbers from n1+1 to n1+n2
-                else, the list or pandas.Series should contain the ordered list 
-                of index corresponding to the observations of y
-
-        Attributes Initialized
-        ---------- ----------- 
-            
-            x_index : pandas.Index, the indexes of the first dataset `x` 
-            y_index : pandas.Index, the indexes of the second dataset `y`
-            index : pandas.Index, the concatenation of `x_index` and `y_index`
-
-        '''
-        # generates range index if no index
-        n1,n2,n = self.get_n1n2n()
-        self.data['x']['index']=pd.Index(range(1,n1+1)) if x_index is None else pd.Index(x_index) if isinstance(x_index,list) else x_index 
-        self.data['y']['index']=pd.Index(range(n1,n)) if y_index is None else pd.Index(y_index) if isinstance(y_index,list) else y_index
-        assert(len(self.data['x']['index']) == self.data['x']['n'])
-        assert(len(self.data['y']['index']) == self.data['y']['n'])
-        
-    def init_variables(self,variables = None):
-        '''
-        Initializes the variables names in the attribute `variables`. 
-        
-        Parameters
-        ----------
-            variables (default : None) : None, list or pandas.Series
-            An iterable containing the variable names,
-            if None, the attribute variables is a list of numbers from 0 to the number of variables -1. 
-
-        Attributes Initialized
-        ---------- ----------- 
-            variables : the list of variable names
-
-        '''
-        self.variables = range(self.data['x'][self.main_data]['p']) if variables is None else variables
-        self.var = pd.DataFrame(index=self.variables)
-        self.vard = {v:{} for v in self.variables}
-
-    def init_data_from_dataframe(self,dfx,dfy,kernel='gauss_median',dfx_meta=None,dfy_meta=None,center_by=None,verbose=0,data_name='data'):
-        '''
-        This function initializes all the information concerning the data of the Tester object.
-
-        Parameters
-        ----------
-            dfx : pandas.Series (univariate testing) or pandas.DataFrame (univariate or multivariate testing)
-                the columns correspond to the variables 
-                the index correspond to the data indexes
-                the dataframe contain the data
-                dfx and dfy should have the same column names.    
-                if pandas.Series, the variable name is set to 'univariate'
                 
-            dfy : pandas.Series (univariate testing) or pandas.DataFrame (univariate or multivariate testing)
-                the columns correspond to the variables 
-                the index correspond to the data indexes
-                the dataframe contain the data        
-                dfx and dfy should have the same column names.     
-                if pandas.Series, the variable name is set to 'univariate'
-
-            kernel : str or function (default : 'gauss_median') 
-                if kernel is a string, it have to correspond to the following synthax :
-                    'gauss_median' for the gaussian kernel with median bandwidth
-                    'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
-                    'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
-                    'linear' for the linear kernel
-                if kernel is a function, 
-                    it should take two torch.tensors as input and return a torch.tensor contaning
-                    the kernel evaluations between the lines (observations) of the two inputs. 
-
-            dfx_meta (optional): pandas.DataFrame,
-                A dataframe containing meta information on the first dataset. 
-
-            dfy_meta (optional): pandas.DataFrame,
-                A dataframe containing meta information on the second dataset. 
-
-            center_by (optional) : str, 
-                either a column of self.obs or a combination of columns with the following syntax
-                - starts with '#' to specify that it is a combination of effects
-                - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
-                - the effects are separated by a '_'
-                exemple : '#-celltype_+patient'
-
-            data_name (default : 'data') : str,
-                the name of the data in the structure data 
-
-        Attributes Initialized
-        ---------- ----------- 
-            x : torch.Tensor, the first dataset
-            y : torch.Tensor, the second dataset 
-            n1_initial : int, the original size of `x`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
-            n2_initial : int, the original size of `y`, in case we decide to rerun the test with a subset of the cells (deprecated ?)
-            n1 : int, size of `x`
-            n2 : int, size of `y` 
-            has_data : boolean, True if the Tester object has data (deprecated ?)
-            x_index : pandas.Index, the indexes of the first dataset `x` 
-            y_index : pandas.Index, the indexes of the second dataset `y`
-            index : pandas.Index, the concatenation of `x_index` and `y_index`
-            variables : the list of variable names
-            center_by : str,
-                is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
-            obs : pandas.DataFrame, 
-                Its index correspond to the attribute `index`
-                It is the concatenation of dfx_meta and dfy_meta, 
-                It contains at least one column 'sample' equal to 'x' if the observation comes from the 
-                firs dataset and 'y' otherwise. 
-            kernel : the kernel function to be used to compute Gram matrices. 
-
-        '''
-        if isinstance(dfx,pd.Series):
-            dfx = dfx.to_frame(name='univariate')
-            dfy = dfy.to_frame(name='univariate')
-        
-        self.verbose = verbose
-        self.init_xy(dfx,dfy,data_name=data_name)
-        self.init_index_xy(dfx.index,dfy.index)
-        
-        self.init_variables(dfx.columns)
-        self.init_kernel(kernel)
-        self.init_metadata(dfx_meta,dfy_meta) 
-        self.set_center_by(center_by)
-        
-
-    def init_metadata(self,dfx_meta=None,dfy_meta=None):
-        '''
-        This function initializes the attribute `obs` containing metainformation on the data. 
-
-        Parameters
-        ----------
-            dfx_meta (default = None): pandas.DataFrame,
-                A dataframe containing meta information on the first dataset. 
-
-            dfy_meta (default = None): pandas.DataFrame,
-                A dataframe containing meta information on the second dataset. 
-                
-
-        Attributes Initialized
-        ---------- ----------- 
-            obs : pandas.DataFrame, 
-                Its index correspond to the attribute `index`
-                It is the concatenation of dfx_meta and dfy_meta, 
-                It contains at least one column 'sample' equal to 'x' if the observation comes from the 
-                firs dataset and 'y' otherwise. 
-
-        '''
-
-        if dfx_meta is not None :
-            dfx_meta['sample'] = ['x']*len(dfx_meta)
-            dfy_meta['sample'] = ['y']*len(dfy_meta)
-            self.obs = pd.concat([dfx_meta,dfy_meta],axis=0)
-            self.obs.index = self.get_xy_index()
-        else:
-            self.obs= pd.DataFrame(index=self.get_xy_index())
-
-    def init_data(self,
-            x:Union[np.array,torch.tensor]=None,
-            y:Union[np.array,torch.tensor]=None,
-            x_index:List = None,
-            y_index:List = None,
-            variables:List = None,
-            kernel:str='gauss_median',
-            dfx_meta:pd.DataFrame = None,
-            dfy_meta:pd.DataFrame = None,
-            center_by:str = None,
-            verbose = 0):
-        
+    def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
         '''
         
         Parameters
         ----------
+            function (default = 'gauss') : str or function
+                str in ['gauss','linear'] for gauss kernel or linear kernel. 
+                function : kernel function specified by user
 
-            kernel : str or function (default : 'gauss_median') 
-                if kernel is a string, it have to correspond to the following synthax :
-                    'gauss_median' for the gaussian kernel with median bandwidth
-                    'gauss_median_w' where w is a float for the gaussian kernel with a fraction of the median as the bandwidth 
-                    'gauss_x' where x is a float for the gaussian kernel with x bandwidth    
-                    'linear' for the linear kernel
-                if kernel is a function, 
-                    it should take two torch.tensors as input and return a torch.tensor contaning
-                    the kernel evaluations between the lines (observations) of the two inputs. 
+            bandwidth (default = 'median') : str or float
+                str in ['median'] to use the median or a multiple of it as a bandwidth. 
+                float : value of the bandwidth
 
-        Attributes Initialized
-        ---------- ----------- 
+            coef (default = 1) : float
+                multiple of the median to use as bandwidth if kernel == 'gauss' and bandwidth == 'median' 
 
-        '''
-        # remplacer xy_index par xy_meta
-
-        self.verbose = verbose
-        self.init_xy(x,y)
-        self.init_index_xy(x_index,y_index) 
-        self.init_variables(variables)
-        self.init_kernel(kernel)
-        self.init_metadata(dfx_meta,dfy_meta)
-        self.set_center_by(center_by)
-        self.has_data = True        
-
-    def init_kernel(self,kernel):
-        '''
-        
-        Parameters
-        ----------
-
+            correction (default = None) : None or str 
+                if str : column of the metadata to correct the bandwidth   
         Returns
         ------- 
         '''
 
         x,y = self.get_xy()
         verbose = self.verbose
-        bandwidth = False
-        if type(kernel) == str:
-            kernel_params = kernel.split(sep='_')
-            kernel_name = kernel
-            if kernel_params[0] == 'gauss':
-                if len(kernel_params)==2 and kernel_params[1]=='median': # ex: gauss_median
-                    kernel_,kernel_bandwidth = gauss_kernel_mediane(x,y,return_mediane=True,verbose=verbose)
-                    bandwidth = True
-                elif len(kernel_params)==2 and kernel_params[1]!='median': # ex: gauss_3
-                    kernel_bandwidth = float(kernel_params[1])
-                    kernel_ = lambda x,y:gauss_kernel(x,y,kernel_bandwidth) 
-                    bandwidth = True
-                elif len(kernel_params)==3 and kernel_params[1]=='median': # ex: gauss_median_2
-                    kernel_bandwidth = float(kernel_params[2])*mediane(x,y,verbose=verbose)
-                    kernel_ = lambda x,y:gauss_kernel(x,y,kernel_bandwidth) 
-                    bandwidth = True
-                elif len(kernel_params)==4: 
-                    if kernel_params[1]=='median' and kernel_params[2]=='variance': # ex : gauss_median_variance_var
-                        variance_per_gene = self.get_var()[kernel_params[3]]
-                        kernel_,kernel_bandwidth = gauss_kernel_mediane_corrected_variance(x,y,variance_per_gene,return_mediane=True,verbose=verbose)
-                        bandwidth = True
-                    
-                    if kernel_params[1]=='median' and kernel_params[2]=='logvariance': # ex : gauss_median_logvariance_var
-                        variance_per_gene = self.get_var()[kernel_params[3]]
-                        kernel_,kernel_bandwidth = gauss_kernel_mediane_log_corrected_variance(x,y,variance_per_gene,return_mediane=True,verbose=verbose)
-                        bandwidth = True
+        has_bandwidth = False
 
+        kernel_name = get_kernel_name(function=function,bandwidth=bandwidth,median_coef=median_coef) if kernel_name is None else kernel_name
 
-            if kernel_params[0] == 'linear':
-                kernel_ = linear_kernel
+        if function == 'gauss':
+            if bandwidth == 'median':
+                median = mediane(x,y,verbose=verbose)
+                bandwidth = median_coef * median 
+            kernel_ = lambda x,y:gauss_kernel(x,y,bandwidth) 
+            has_bandwidth = True
+            
+            
+        elif function == 'linear':
+            kernel_ = linear_kernel
         else:
-            kernel_ = kernel
-            kernel_name = 'specified by user'
+            kernel_ = function
+
         self.data[self.data_name]['kernel'] = kernel_
         self.data[self.data_name]['kernel_name'] = kernel_name
-        if bandwidth:
-            self.data[self.data_name]['kernel_bandwidth'] = kernel_bandwidth
+        if has_bandwidth:
+            self.data[self.data_name]['kernel_bandwidth'] = bandwidth
         self.has_kernel = True
+        self.kernel_params = init_kernel_params(function=function,bandwidth=bandwidth,median_coef=median_coef,kernel_name=kernel_name)
 
-    # new version 
+    def get_kernel_params(self):
+        return(self.kernel_params)
 
     def _update_dict_data(self,x,data_name,update_current_data_name=True): 
         '''
@@ -454,7 +295,7 @@ class Data:
 
         return(index)
 
-    def _update_meta_data(self,df_meta,):
+    def _update_meta_data(self,metadata,):
         '''
         This function update the meta information about the data contained in the pandas.DataFrame 
         attribute `self.obs`
@@ -468,7 +309,7 @@ class Data:
             nobs : int 
                 number of observation concerned by the update
 
-            df_meta : pandas.DataFrame
+            metadata : pandas.DataFrame
                 table of metadata
 
             index : list, pandas.index, iterable
@@ -484,22 +325,44 @@ class Data:
                 a structure containing every meta information of each observation
 
         '''
-        # if df_meta is None:
-        #     df_meta = pd.DataFrame([sample]*nobs,columns=['sample'],index=index)
-        if self.obs.shape == (0,1):
-            self.obs = df_meta
-        else:
-            # self.obs.update(df_meta)
-            self.obs = pd.concat([self.obs,df_meta[~df_meta.index.isin(self.obs.index)]])
 
 
-        for c in self.obs.columns:
-            if len(self.obs[c].unique())<100:
-                # print(c,self.obs[c].unique())
-                self.obs[c] = self.obs[c].astype('category')
+        if metadata is not None:
+            if self.obs.shape == (0,1):
+                self.obs = metadata
+            else:
+                # self.obs.update(metadata)
+                self.obs = pd.concat([self.obs,metadata[~metadata.index.isin(self.obs.index)]])
 
-        # self.obs = pd.concat([self.obs,df_meta])
-        # self.obs['sample'] = self.obs['sample'].astype('category')
+
+            for c in self.obs.columns:
+                if len(self.obs[c].unique())<100:
+                    # print(c,self.obs[c].unique())
+                    self.obs[c] = self.obs[c].astype('category')
+
+    def update_var_from_dataframe(self,df,verbose = 0):
+        var = self.get_var()
+        c_to_add = []
+        for c in df.columns:
+            if verbose>1:
+                print(c,end=' ')
+            token = False
+            if 'univariate' in c and c in var:
+                token = True
+                nbef = sum(var[c]==1)
+            if c not in var:
+                c_to_add += [c]
+                df[c] = df[c].astype('float64')
+            else:
+                if verbose>1:
+                    print('update',end= '|')
+                var[c].update(df[c].astype('float64'))
+            if token:
+                naft = sum(var[c]==1)
+                if verbose >0:
+                    print(f'\n tested from {nbef} to {naft}')
+        df_to_add = df[c_to_add]
+        self.var[self.data_name] = var.join(df_to_add)
 
     def _update_variables(self,variables,data_name):
         '''
@@ -544,20 +407,21 @@ class Data:
                            data_name,
                            index=None,
                            variables=None,
-                           df_meta=None,
-                           df_var=None
+                           metadata=None,
+                           var_metadata=None,
+                           update_current_data_name = True
                            ):
         nobs = len(x)
-        if index is None and df_meta is not None:
-            index = df_meta.index
+        if index is None and metadata is not None:
+            index = metadata.index
         if data_name in self.data:
             old_index = self.data[data_name]['index']
 
             if len(index[index.isin(old_index)])==0:
                 print('There is only new data')
-                self._update_dict_data(x,data_name)
+                self._update_dict_data(x,data_name,update_current_data_name)
                 index = self._update_index(nobs,index,data_name)
-                self._update_meta_data(df_meta=df_meta)
+                self._update_meta_data(metadata=metadata)
                 self._update_variables(variables,data_name)
 
             elif len(index[~index.isin(old_index)])==len(index):
@@ -567,12 +431,13 @@ class Data:
         else:
             self._update_dict_data(x,data_name)
             index = self._update_index(nobs,index,data_name)
-            self._update_meta_data(df_meta=df_meta)
+            self._update_meta_data(metadata=metadata)
             self._update_variables(variables,data_name)
-        if df_var is not None:
-            self.update_var_from_dataframe(df_var)
+        if var_metadata is not None:
+            self.update_var_from_dataframe(var_metadata)
 
-    def add_data_to_Tester_from_dataframe(self,df,df_meta=None,df_var=None,data_name='data'):
+    def add_data_to_Tester_from_dataframe(self,df,metadata=None,var_metadata=None,data_name='data',
+                           update_current_data_name = True):
         '''
         
         '''
@@ -580,34 +445,38 @@ class Data:
         index = df.index
         variables = df.columns
 
-        self.add_data_to_Tester(x,data_name,index,variables,df_meta,df_var)
+        self.add_data_to_Tester(x,data_name,index,variables,metadata,var_metadata,
+                           update_current_data_name = update_current_data_name)
 
-    def get_index(self,landmarks=False):
+    def get_index(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,in_dict=True):
 
         if landmarks:
             assert(self.has_landmarks)
 
-        data_name,condition,samples,outliers_in_obs = self.get_data_name_condition_samples_outliers()        
+        condition = self.condition if condition is None else condition
+        samples = self.samples if samples is None else samples
+        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+            
         samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
 
-        dict_index = {}
+        index_output = {} if in_dict else pd.Index([])
 
         for sample in samples_list: 
             ooi = self.obs[self.obs[condition]==sample].index
-            if outliers_in_obs is not None:
-                outliers = self.obs[self.obs[outliers_in_obs]].index             
-                ooi = ooi[~ooi.isin(outliers)]
+            if marked_obs_to_ignore is not None:
+                marked_obs = self.obs[self.obs[marked_obs_to_ignore]].index             
+                ooi = ooi[~ooi.isin(marked_obs)]
             if landmarks:            
-                
+
                 # When kmeans is used, the indexes do not refer to observations but to centroids
                 if self.landmark_method == 'kmeans':
-                    
+
                     kmeans_lm_name = self.get_kmeans_landmarks_name_for_sample(sample=sample)
                     try:
                         lm_index = self.data[kmeans_lm_name]['index']
                     except KeyError:
                         print(f'KeyError : {kmeans_lm_name} not in {list(self.data.keys())}')
-                        
+
                     ooi = lm_index
 
                 else:
@@ -617,8 +486,13 @@ class Data:
                     except KeyError:
                         print(f'KeyError : {sample}_{landmarks_name} not in {self.obs.columns.to_list()}')
                     ooi = ooi[ooi.isin(lm_index)]
-            dict_index[sample] = ooi
-        return(dict_index) 
+            if in_dict:
+                index_output[sample] = ooi
+            else:
+                
+                index_output = index_output.append(ooi)
+        return(index_output) 
+
 
     def get_kmeans_landmarks(self):
         
@@ -632,15 +506,14 @@ class Data:
             dict_data[sample] = self.data[kmeans_landmarks_name]['X']
         return(dict_data)
     
-    def get_data(self,landmarks=False):
-        
+    def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
         data_name = self.data_name
     
         if landmarks and self.landmark_method =='kmeans':
             dict_data = self.get_kmeans_landmarks()
             
         else:
-            dict_index = self.get_index(landmarks=landmarks)
+            dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
             if landmarks and self.landmark_method=='kmeans':
                 dict_data = {k:self.data[data_name]['X'] for k in dict_index.keys()}
             else:
@@ -653,9 +526,9 @@ class Data:
         else: 
             return(self.data[self.data_name]['X'])
 
-    def get_nobs(self,landmarks=False):
+    def get_nobs(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
         
-        dict_index = self.get_index(landmarks=landmarks)
+        dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         if landmarks and self.landmark_method == 'kmeans':
             dict_nobs = {k:len(v) for k,v in dict_index.items()}
         else:
@@ -667,9 +540,9 @@ class Data:
         dict_nobs = self.get_nobs(landmarks=landmarks)
         return(dict_nobs['ntot'])
 
-    def get_dataframes_of_data(self,landmarks=False):
-        dict_data = self.get_data(landmarks=landmarks)
-        dict_index = self.get_index(landmarks=landmarks)
+    def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
+        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         variables = self.data[self.data_name]['variables']
 
         dict_df = {}
@@ -694,62 +567,6 @@ class Data:
         return(self.vard[self.data_name])   
         
     # Two sample 
-    def init_xy(self,x,y,data_name,
-                x_index=None,y_index=None,variables=None,df_var=None,dfx_meta=None,dfy_meta=None,kernel='gauss_median'):
-        '''
-        This function adds two dataset in the data_structure and name them 'x' and 'y'. 
-        It is used when performing two-smaple test. 
-
-        Parameters
-        ----------
-            x,y : numpy.array, pandas.DataFrame, pandas.Series or torch.Tensor
-                A table of any type containing the data
-            
-            data_name : str
-                The data structure to update in the dict of data `self.data`.
-                This name refers to the pretreatments and normalization steps applied to the data.
-
-            x_index,y_index : list, pandas.index, iterable
-                a list of value indexes which refers to the observations. 
-
-            variables : list, pandas.index, iterable
-                a list of value indexes which refers to the variables.
-
-            dfx_meta, dfy_meta : pandas.DataFrame
-                table of metadata
-
-            kernel : str
-                Refers to the kernel function to use for testing
-
-        Attributes Initialized
-        ---------- ----------- 
-            data : dict
-                this dict structure contains data informations for each data_name
-                    - 'X' : `torch.tensor` of data
-                    - 'p' : dimension of the data, number of variables
-                    - 'index' : `pandas.Index` of the observations
-                    - 'variables' : `pandas.Index` of the variables
-            
-            obs: pandas.DataFrame
-                a structure containing every meta information of each observation
-
-            kernel : function
-                kernel function to be used
-
-        '''
-            
-        self.add_data_to_Tester(x,'x',data_name,x_index,variables,dfx_meta,df_var)
-        self.add_data_to_Tester(y,'y',data_name,y_index,variables,dfy_meta)
-
-        self.init_kernel(kernel)   
-
-    def init_xy_from_dataframe(self,dfx,dfy,data_name,dfx_meta=None,dfy_meta=None,kernel='gauss_median',df_var=None):
-
-        self.add_data_to_Tester_from_dataframe(df=dfx,sample='x',df_meta=dfx_meta,data_name=data_name,df_var=df_var)
-        self.add_data_to_Tester_from_dataframe(df=dfy,sample='y',df_meta=dfy_meta,data_name=data_name)
-
-        self.init_kernel(kernel)
-
     def get_n1n2n(self,landmarks=False):
         nobs = self.get_nobs(landmarks=landmarks)
         return(list(nobs.values()))
@@ -773,7 +590,7 @@ class Data:
 
     # L sample 
     def init_L_groups(self,data_list,data_name,sample_list=None,index_list=None,
-    variables=None,df_meta_list=None,kernel='gauss_median',df_var=None):
+    variables=None,metadata_list=None,kernel='gauss_median',var_metadata=None):
         '''
         This function adds L dataset in the data_structure and name them according to
         `sample_list`. 
@@ -798,7 +615,7 @@ class Data:
             variables : list, pandas.index, iterable
                 a list of value indexes which refers to the variables.
 
-            df_meta_list :  list of pandas.DataFrame
+            metadata_list :  list of pandas.DataFrame
                 list of L tables of metadata
 
             kernel : str
@@ -824,57 +641,40 @@ class Data:
         L = len(data_list)
         if index_list is None:
             index_list = [None]*L
-        if df_meta_list is None:
-            df_meta_list = [None]*L
+        if metadata_list is None:
+            metadata_list = [None]*L
         if sample_list is None:
             sample_list = [f'x{l}' for l in range(1,L+1)]
 
-        for x,sample,index,df_meta in zip(data_list,sample_list,index_list,df_meta_list):
-            self.add_data_to_Tester(x,sample,data_name,index,variables,df_meta,df_var=df_var)
+        for x,sample,index,metadata in zip(data_list,sample_list,index_list,metadata_list):
+            self.add_data_to_Tester(x,sample,data_name,index,variables,metadata,var_metadata=var_metadata)
  
-    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,df_meta_list=None,kernel='gauss_median',df_var=None):
+    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,metadata_list=None,kernel='gauss_median',var_metadata=None):
         L = len(df_list)
-        if df_meta_list is None:
-            df_meta_list = [None]*L
+        if metadata_list is None:
+            metadata_list = [None]*L
         if sample_list is None:
             sample_list = [f'x{l}' for l in range(1,L+1)]
-        for df,sample,df_meta in zip(df_list,sample_list,df_meta_list):
-            self.add_data_to_Tester_from_dataframe(df,sample,df_meta,data_name,df_var=df_var)
+        for df,sample,metadata in zip(df_list,sample_list,metadata_list):
+            self.add_data_to_Tester_from_dataframe(df,sample,metadata,data_name,var_metadata=var_metadata)
 
-    # Access data 
+
     def init_df_proj(self,proj,name=None,data_name=None):
         if data_name is None:
             data_name = self.current_data_name
+        if proj == 'proj_kfda':
+            df_proj = self.get_proj_kfda(name=name)
+        elif proj == 'proj_kpca':
+            df_proj = self.get_proj_kpca(name=name)
+        elif proj == 'proj_mmd':
+            df_proj = self.get_proj_mmd(name=name)
+        elif proj == 'proj_tmmd':
+            df_proj = self.get_proj_tmmd(name=name)
+        elif proj == 'proj_residuals':
+            df_proj = self.get_proj_residuals(name=name)
 
-        proj_options = {'proj_kfda':self.df_proj_kfda,
-                'proj_kpca':self.df_proj_kpca,
-                'proj_mmd':self.df_proj_mmd,
-                'proj_residuals':self.df_proj_residuals # faire en sorte d'ajouter ça
-                }
-
-        if proj in proj_options:
-            dict_df_proj = proj_options[proj]
-            nproj = len(dict_df_proj)
-            names = list(dict_df_proj.keys())
-            if nproj == 0:
-                print(f'{proj} has not been computed yet')
-            if nproj == 1:
-                if name is not None and name != names[0]:
-                    print(f'{name} not corresponding to {names[0]}')
-                else:
-                    df_proj = dict_df_proj[names[0]]
-            if nproj >1:
-                if name is not None and name not in names:
-                    print(f'{name} not found in {names}, default projection:  {names[0]}')
-                    df_proj = dict_df_proj[names[0]]
-                elif name is None:
-                    print(f'projection not specified with {proj}, default projection : {names[0]}') 
-                    df_proj = dict_df_proj[names[0]]
-                else: 
-                    df_proj = dict_df_proj[name]
         elif proj in self.var[data_name].index:
             df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
-            # df_proj['sample']=['x']*n1 + ['y']*n2
         elif proj =='obs':
             df_proj = self.obs
         else:
@@ -882,15 +682,60 @@ class Data:
 
         return(df_proj)
 
+
+
+
+    def get_proj_kfda(self,name=None):
+        if name is None:
+            name = self.get_kfdat_name()
+        if name in self.df_proj_kfda:
+            return(self.df_proj_kfda[name])
+        else:
+            print(f"proj kfda '{name}' has not been computed yet")
+
+    def get_proj_kpca(self,name=None):
+        if name is None:
+            name = self.get_kfdat_name()
+        if name in self.df_proj_kpca:
+            return(self.df_proj_kpca[name])
+        else:
+            print(f"proj kpca '{name}' has not been computed yet")
+
+    def get_proj_mmd(self,name=None):
+        if name is None:
+            name = self.get_mmd_name()
+        if name in self.df_proj_mmd:
+            return(self.df_proj_mmd[name])
+        else:
+            print(f"proj mmd '{name}' has not been computed yet")
+
+    def get_proj_tmmd(self,name=None):
+        if name is None:
+            name = self.get_mmd_name()
+        if name in self.df_proj_mmd:
+            return(self.df_proj_tmmd[name])
+        else:
+            print(f"proj tmmd '{name}' has not been computed yet")
+
+    def get_proj_residuals(self,name=None):
+        if name is None:
+            name = self.get_residuals_name()
+        if name in self.df_proj_residuals:
+            return(self.df_proj_residuals[name])
+        else:
+            print(f"proj residuals '{name}' has not been computed yet")
+
+
+
     def make_groups_from_gene_presence(self,gene,data_name):
 
         dfg = self.init_df_proj(proj=gene,data_name=data_name)
         self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
         self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
-    def set_outliers_in_obs(self,outliers_in_obs=None):
-        if outliers_in_obs in self.obs.columns or outliers_in_obs is None:
-            self.outliers_in_obs = outliers_in_obs
+    def set_marked_obs_to_ignore(self,marked_obs_to_ignore=None):
+        if marked_obs_to_ignore in self.obs.columns or marked_obs_to_ignore is None:
+            self.marked_obs_to_ignore = marked_obs_to_ignore
 
     def set_center_by(self,center_by=None):
         '''
@@ -926,10 +771,15 @@ class Data:
             self.obs[condition] = self.obs[condition].astype('category')
         self.samples = samples
         
-    def get_data_name_condition_samples_outliers(self):
-        return(self.data_name,self.condition,self.samples,self.outliers_in_obs)
+    def get_data_name_condition_samples_marked_obs(self):
+        return(self.data_name,self.condition,self.samples,self.marked_obs_to_ignore)
         
     def get_spev(self,slot='covw',t=None,center=None):
+        """
+        Return spectrum and eigenvectors.
+        slot in ['covw','anchors','residuals']
+        """
+
         spev_name = self.get_covw_spev_name() if slot=='covw' else \
                     self.get_anchors_name() if slot=='anchors' else \
                     self.get_residuals_name(t=t,center=center)
@@ -941,13 +791,19 @@ class Data:
                     
     # Names 
 
-    def get_data_to_test_str(self):
+    def get_data_to_test_str(self,condition=None,samples=None,marked_obs_to_ignore=None):
+
         dn = self.data_name
-        c = self.condition
-        smpl = '' if self.samples == 'all' else "".join(self.samples)
+        c = self.condition if condition is None else condition
+        samples = self.samples if samples is None else samples
+        mark = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+
+
+        # si les conditions et samples peuvent être mis en entrées, cente_by aussi
+        smpl = '' if samples == 'all' else "".join(samples)
         cb = '' if self.center_by is None else f'_cb_{self.center_by}'    
-        out = '' if self.outliers_in_obs is None else f'_{self.outliers_in_obs}'
-        return(f'{dn}{c}{smpl}{cb}{out}')
+        marking = '' if mark is None else f'_{mark}'
+        return(f'{dn}{c}{smpl}{cb}{marking}')
 
     def get_model_str(self):
         ny = self.nystrom
@@ -985,14 +841,14 @@ class Data:
 
         return(f'{mn}_{dtn}')
 
-    def get_kfdat_name(self):
-        dtn = self.get_data_to_test_str()
+    def get_kfdat_name(self,condition=None,samples=None,marked_obs_to_ignore=None):
+        dtn = self.get_data_to_test_str(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         mn = self.get_model_str()
 
         return(f'{mn}_{dtn}')
 
-    def get_residuals_name(self,t,center):
-        dtn = self.get_data_to_test_str()
+    def get_residuals_name(self,t,center,condition=None,samples=None,marked_obs_to_ignore=None):
+        dtn = self.get_data_to_test_str(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         
         mn = self.get_model_str()
 

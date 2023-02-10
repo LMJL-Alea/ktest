@@ -1,5 +1,6 @@
 
 from scipy.stats import chi2
+
 import pandas as pd
 from joblib import parallel_backend
 from joblib import Parallel, delayed
@@ -101,7 +102,8 @@ class Pvalues:
         
         self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
-    def correct_BenjaminiHochberg_pval_univariate(self,var_prefix,exceptions=[],focus=None,add_to_prefix=''):
+    def correct_BenjaminiHochberg_pval_univariate(self,trunc,name='',exceptions=[],focus=None,add_to_prefix=''):
+        var_prefix = f'{name}_{self.get_kfdat_name()}_t{trunc}'
         pval = self.var[self.data_name][f'{var_prefix}_pval']
         pval = pval if focus is None else pval[pval.index.isin(focus)]
         pval = pval[~pval.index.isin(exceptions)]

@@ -16,21 +16,28 @@ class GramMatrices(CenteringOps):
     def __init__(self):
         super(GramMatrices,self).__init__()
 
-    def compute_gram(self,landmarks=False): 
+    def compute_gram(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None): 
         """
         Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 
-        
+
         The kernel used is the kernel stored in the attribute `kernel`. 
-        ( The attribute `kernel` can be initialized with the method init_kernel() ) 
+        ( The attribute `kernel` can be initialized with the method kernel() ) 
 
         The computed Gram matrix is centered with respect to the attribute `center_by`.
         ( The attribute `center_by` can be initialized with the method init_center_by())
-        
+
         The Gram matrix is not stored in memory because it is usually large and fast to compute. 
 
         Parameters
         ----------
-
+            landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
 
         Returns
         -------
@@ -39,13 +46,56 @@ class GramMatrices(CenteringOps):
         """
 
 
-        dict_data = self.get_data(landmarks=landmarks)
+        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         kernel = self.data[self.data_name]['kernel']
         data = torch.cat([x for x in dict_data.values()],axis=0)
         K = kernel(data,data)
         if not landmarks : 
             K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
+
+    def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
+                         y_landmarks=False,y_condition=None,y_samples=None,y_marked_obs_to_ignore=None,
+                        ):    
+        """
+        Computes the matrix K(X_i,Y_i) where X_i and Y_i are two subsets of the observations contained in the data.
+
+        Parameters
+        ----------
+            x_landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            x_condition (default = None): str
+                    Column of the metadata that specify the dataset X 
+            x_samples (default = None): str 
+                    List of values to select in the column x_condition of the metadata
+            x_marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+            y_landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            y_condition (default = None): str
+                    Column of the metadata that specify the dataset Y 
+            y_samples (default = None): str 
+                    List of values to select in the column x_condition of the metadata
+            y_marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+
+        """
+        xy_data = []
+        for landmarks,condition,samples,marked_obs_to_ignore in zip([x_landmarks,y_landmarks],
+                                                                    [x_condition,y_condition],
+                                                                    [x_samples,y_samples],
+                                                                    [x_marked_obs_to_ignore,y_marked_obs_to_ignore]):
+            dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+            kernel = self.data[self.data_name]['kernel']
+            data = torch.cat([x for x in dict_data.values()],axis=0)
+            xy_data += [data]
+        K = kernel(xy_data[0],xy_data[1])
+    # il faudrait faire une correction d'effet par côté, du rectangle, a voir le jour où j'en ai besoin pour le développer. 
+    # maj center_kmn_matrix_with_respect_to_some_effects en center_matrix_wrt_some_effects(left or right or both)
+    #     if not landmarks : 
+    #         K = self.center_gram_matrix_with_respect_to_some_effects(K)
+        return(K)
+
 
     def center_gram_matrix_with_respect_to_some_effects(self,K):
         '''
@@ -62,25 +112,38 @@ class GramMatrices(CenteringOps):
             return(K)
         else:
             P = self.compute_centering_matrix_with_respect_to_some_effects()
-            return(torch.chain_matmul(P,K,P))
-            # retutn(torch.linalg.multi_dot([P,K,P]))
+            return(torch.linalg.multi_dot([P,K,P]))
 
-    def compute_kmn(self):
+    def compute_kmn(self,condition=None,samples=None,marked_obs_to_ignore=None):
         """
-        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix
+
+            Parameters
+        ----------
+            landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+
+
         """
         assert(self.has_landmarks)
-        
-        dict_data = self.get_data(landmarks=False)
+
+        dict_data = self.get_data(landmarks=False,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         dict_landmarks = self.get_data(landmarks=True)
         kernel = self.data[self.data_name]['kernel']
-        
+
         data = torch.cat([x for x in dict_data.values()],axis=0)
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
-        
+
         kmn = kernel(landmarks,data)        
         kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn)
         return(kmn)
+
 
     def center_kmn_matrix_with_respect_to_some_effects(self,kmn):
         '''
@@ -107,7 +170,7 @@ class GramMatrices(CenteringOps):
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
 
-            outliers_in_obs : None ou string,
+            marked_obs_to_ignore : None ou string,
             nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées.    
 
         """
@@ -143,8 +206,7 @@ class GramMatrices(CenteringOps):
             if self.quantization_with_landmarks_possible:
                 Kmm = self.compute_gram(landmarks=True)
                 A = self.compute_quantization_weights(sample=sample,power=.5)
-                Kw = 1/n * torch.chain_matmul(P,A,Kmm,A,P)
-                # Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
+                Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
             else:
                 print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmark_method='kmeans'")
 
@@ -158,9 +220,7 @@ class GramMatrices(CenteringOps):
                 Lp_inv = torch.diag(Lp**(-1))
                 
                 Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
-                Kw = 1/(n*m*2) * torch.chain_matmul(P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P)            
-                # Kw = 1/(n*r*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
-                # Kw = 1/(n) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
+                Kw = 1/(n*m*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
@@ -187,9 +247,8 @@ class GramMatrices(CenteringOps):
 
                 # Calcul de la matrice à diagonaliser avec Nystrom. 
                 # Comme tu le disais, cette formule est symétrique et on pourrait utiliser une SVD en l'écrivant BB^T
-                # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)
-                Kw = 1/(n*m**2) * torch.chain_matmul(Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12)            
-
+                # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)         
+                Kw = 1/(n*m**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])  
             else:
                 print("nystrom new version impossible, you need compute landmarks and/or anchors")
                     
@@ -197,8 +256,7 @@ class GramMatrices(CenteringOps):
         # version standard 
         elif approximation == 'standard':
             K = self.compute_gram(landmarks=False)
-            Kw = 1/n * torch.chain_matmul(P,K,P)
-            # Kw = 1/n * torch.linalg.multi_dot([P,K,P])
+            Kw = 1/n * torch.linalg.multi_dot([P,K,P])
 
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
         self.verbosity(function_name='compute_centered_gram',
@@ -221,9 +279,6 @@ class GramMatrices(CenteringOps):
             sample (default='xy') : str, on which data do we compute the matrix
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
-
-            outliers_in_obs : None ou string,
-            nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
 
         """
 

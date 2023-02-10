@@ -17,15 +17,14 @@ from sklearn.model_selection import train_test_split
 # from kernels import gauss_kernel_mediane
 # Local 
 
-from .statistics import Statistics
+from .kernel_statistics import Statistics
 from .pvalues import Pvalues
 from .save_data import SaveData
 from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
 from .correlation_operations import Correlations
-
-
-
+from .base import init_kernel_params,init_test_params
+ 
 
 
 def pytorch_eigsy(matrix):
@@ -98,7 +97,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
             s += f'\nmeta : {self.obs.columns.tolist()}\n\n'
         else: 
             s += "View of Tester object with no data.\n" 
-            s += "You can initiate the data with the class function 'init_data()'.\n\n"
+            s += "You can initiate the data with ? ??'.\n\n"
         
         s += '##### Model #### \n'
         if self.has_model:
@@ -128,7 +127,7 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
             s+='\n'
         else:
             s+=f'This Tester object has no kernel.\n'
-            s+=f"You can initiate the kernel function with the class function 'init_kernel()'. \n\n"
+            s+=f"You can initiate the kernel function with the class function 'kernel()'. \n\n"
             
 
 
@@ -212,21 +211,11 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
 
             verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
 
-            outliers_in_obs : None ou string,
-            nom de la colonne de l'attribut obs qui dit quelles cellules doivent être considérées comme des outliers et ignorées. 
-
         """
 
-        # récupération des paramètres du modèle dans les attributs 
 
-
-        # définition du nom de la colonne dans laquelle seront stockées les valeurs de la stat 
-        # dans l'attribut df_kfdat (une DataFrame Pandas)   
-        # je devrais définir une fonction spécifique pour ces lignes qui apparaissent dans plusieurs fonctions. 
-        # name = name if name is not None else outliers_in_obs if outliers_in_obs is not None else f'{cov}{mmd}' 
         kfdat_name = self.get_kfdat_name()
-        # inutile de calculer la stat si elle est déjà calculée (le name doit la caractériser)
-        if kfdat_name in self.df_kfdat :
+        if kfdat_name in self.df_kfdat : # avoid computing twice the same stat 
             if verbose : 
                 print(f'kfdat {kfdat_name} already computed')
 
@@ -268,19 +257,93 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
             self.compute_proj_kpca(t=t,verbose=verbose)
 
 
-def create_and_fit_tester_for_two_sample_test_kfdat(df,meta,data_name,condition,df_var=None,nystrom=False,lm=None,ab=None,m=None,r=None,center_by=None,outliers_in_obs=None,kernel='gauss_median',samples='all',viz=True):
-    t = Tester()
-    t.add_data_to_Tester_from_dataframe(df,meta,data_name=data_name,df_var=df_var)
-    t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
-    t.init_kernel(kernel='gauss_median' if kernel is None else kernel)
-    t.init_model(nystrom=nystrom,landmark_method=lm,anchors_basis=ab,m=m,r=r)
-    t.set_center_by(center_by=center_by)
-    t.set_outliers_in_obs(outliers_in_obs=outliers_in_obs)
-    t.kfdat()
+def ktest_multivariate(
+    data,
+    metadata,
+    data_name,
+    condition,
+    samples='all',
+    var_metadata=None,
+    nystrom=False,
+    test_params=init_test_params(),
+    center_by=None,
+    marked_obs_to_ignore=None,
+    kernel=init_kernel_params(),
+            # df:data,meta:metadata,data_name,condition:test_condition,df_var:var_metadata,
+            # test:test_params,viz:removed
+    ):
+    """
+    Generate a tester object and compute specified comparison
 
-    if viz:
-        t.projections()
-        t.compute_pval(t=len(df))
-        t.residuals()
+    Parameters
+    ----------
+        data : Pandas.DataFrame 
+            the data dataframe
+            
+        metadata : Pandas.DataFrame 
+            the metadata dataframe
+
+        data_name : str 
+            Name of the data (examples : counts, normalized)
+
+        condition : str
+            column of the metadata dataframe containing the labels to test
+
+        samples (default = 'all') : str or iterable of str
+            'all' : test the two categories contained in column condition (does not work for more than two yet)
+            str : category of condition to compare to others as one vs all
+            iterable of str : iterable of the two categories to compare to each other
+            
+        var_metadata (default = None): Pandas.DataFrame 
+            the metainformation about the variables, index must correspond to data columns
+        
+        nystrom (default = False) : boolean
+            if True, the test_params nystrom is set to True with default parameters
+
+        test_params : object specifying the test to execute
+            output of the function get_test_params()
+
+        kernel : obkect specifying the kernel function to use
+            output of the function init_kernel_params()
+
+        center_by (default = None) : str
+            column of the metadata containing a categorial variable to regress 
+
+        marked_obs_to_ignore (default = None) : str
+            column of the metadata containing booleans that are 
+            True if the observation should be ignored from the analysis 
+            and False otherwise.    
+    """
+    t = Tester()
+    t.add_data_to_Tester_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata)
+    t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
+    t.kernel(**kernel)
+    t.kernel_specification = kernel
+
+    if nystrom:
+        test_params['nystrom']=True
+    t.init_test_params(**test_params)
+    t.test_params=test_params
+    t.set_center_by(center_by=center_by)
+    t.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore)
+    t.kfdat()
+    t.compute_pval(t=len(data))
+
     return(t)
+
+
+def ktest_multivariate_from_xy(x,y,names='xy',kernel=init_kernel_params()):
+    x = pd.DataFrame(x,columns = [str(i) for i in range(x.shape[1])])
+    y = pd.DataFrame(y,columns = [str(i) for i in range(x.shape[1])])
+    data = pd.concat([x,y])
+    metadata = pd.DataFrame([names[0]]*len(x)+[names[1]]*len(y),columns=['condition'])
+    t = ktest_multivariate(
+            data,
+            metadata,
+            data_name='data',
+            condition='condition',    
+            kernel=kernel,)
+    return(t)
+
+
 

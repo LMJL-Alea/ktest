@@ -121,7 +121,8 @@ class NystromOps(Model,OutliersOps,Verbosity):
                 z = np.random.choice(ni,size=nlandmarks,replace=False)
                 # print(f'###{sample} \n z{len(z)}{z} \n index{len(index)}{index} \n index[z] {len(index[z])}{index[z]}')
                 # print(f'lm rd {len(index.isin(index[z]))}')
-                self.add_outliers_in_obs(index[z],f'{sample}_{landmarks_name}')
+                self.mark_observations(observations_to_mark=index[z],
+                                       marking_name=f'{sample}_{landmarks_name}')
                 # self.quantization_with_landmarks_possible = False
         self.has_landmarks= True
 
@@ -165,8 +166,7 @@ class NystromOps(Model,OutliersOps,Verbosity):
             assert(len(P)==m)
             assert(len(Km)==m)
             
-            sp_anchors,ev_anchors = ordered_eigsy(1/m*torch.chain_matmul(P,Km,P))        
-            # sp_anchors,ev_anchors = ordered_eigsy(1/r*torch.linalg.multi_dot([P,Km,P]))        
+            sp_anchors,ev_anchors = ordered_eigsy(1/m*torch.linalg.multi_dot([P,Km,P]))        
 
             if sum(sp_anchors>0)<r:
                 self.r = sum(sp_anchors>0).item()
