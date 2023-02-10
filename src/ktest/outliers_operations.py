@@ -35,6 +35,6 @@ class OutliersOps(Data):
         return(observations)
 
     def mark_observations(self,observations_to_mark,marking_name):
-        index = self.get_xy_index()
+        index = self.get_index(in_dict=False)
         self.obs[marking_name] = pd.DataFrame(index.isin(observations_to_mark),index=index)
 

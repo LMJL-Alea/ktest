@@ -15,7 +15,7 @@ class ProjectionOps(KernelTrick):
     def __init__(self):
         super(ProjectionOps,self).__init__()
 
-    def compute_proj_on_eigenvectors(self,t=None,verbose=0):
+    def compute_proj_on_eigenvectors(self,t=None,condition=None,samples=None,marked_obs_to_ignore=None,verbose=0):
         
         self.verbosity(function_name='compute_proj_on_eigenvectors',
                     dict_of_variables={
@@ -31,7 +31,7 @@ class ProjectionOps(KernelTrick):
         t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
 
         pkm=self.compute_pkm()
-        upk=self.compute_upk(t)
+        upk=self.compute_upk(t,proj_condition=condition,proj_samples=samples,proj_marked_obs_to_ignore=marked_obs_to_ignore)
         n1,n2,n = self.get_n1n2n()
 
         if cov == 'standard' or 'nystrom' in cov: 
@@ -49,7 +49,7 @@ class ProjectionOps(KernelTrick):
                     verbose = verbose)
         return(proj,t)
 
-    def projections(self,t=None,verbose=0):
+    def projections(self,t=None,condition=None,samples=None,marked_obs_to_ignore=None,verbose=0):
         # je n'ai plus besoin de trunc, seulement d'un t max 
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
@@ -64,13 +64,13 @@ class ProjectionOps(KernelTrick):
 
         """
 
-        proj_name = self.get_kfdat_name() 
+        proj_name = self.get_kfdat_name(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore) 
 
         if proj_name in self.df_proj_kfda and str(t) in self.df_proj_kfda[proj_name]:
             if verbose : 
                 print('Proj on discriminant axis Already computed')
         else:
-            proj,t = self.compute_proj_on_eigenvectors(t=t)
+            proj,t = self.compute_proj_on_eigenvectors(t=t,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
             proj_kpca = proj
             proj_kfda = proj.cumsum(axis=1)
             trunc = range(1,t+1) 
@@ -79,8 +79,9 @@ class ProjectionOps(KernelTrick):
                 print(f"écrasement de {proj_name} dans df_proj_kfda")
             if proj_name in self.df_proj_kpca:
                 print(f"écrasement de {proj_name} dans df_proj_kpca")
-            self.df_proj_kfda[proj_name] = pd.DataFrame(proj_kfda,index= self.get_xy_index(),columns=[str(t) for t in trunc])
-            self.df_proj_kpca[proj_name] = pd.DataFrame(proj_kpca,index= self.get_xy_index(),columns=[str(t) for t in trunc])
+            index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,in_dict=False)
+            self.df_proj_kfda[proj_name] = pd.DataFrame(proj_kfda,index=index,columns=[str(t) for t in trunc])
+            self.df_proj_kpca[proj_name] = pd.DataFrame(proj_kpca,index=index,columns=[str(t) for t in trunc])
         return(proj_name)
         
 
@@ -166,8 +167,8 @@ class ProjectionOps(KernelTrick):
                 print(f"écrasement de {mmd_name} dans df_proj_mmd")
             if mmd_name in self.df_proj_tmmd:
                 print(f"écrasement de {mmd_name} dans df_proj_tmmdkpca")
-            self.df_proj_mmd[mmd_name] = pd.DataFrame(proj_mmd,index= self.get_xy_index(),columns=['mmd'])
-            self.df_proj_tmmd[mmd_name] = pd.DataFrame(proj_tmmd,index= self.get_xy_index(),columns=[str(t) for t in trunc])
+            self.df_proj_mmd[mmd_name] = pd.DataFrame(proj_mmd,index= self.get_index(in_dict=False),columns=['mmd'])
+            self.df_proj_tmmd[mmd_name] = pd.DataFrame(proj_tmmd,index= self.get_index(in_dict=False),columns=[str(t) for t in trunc])
         return(mmd_name)
 
 

@@ -203,8 +203,11 @@ class Residuals(Statistics):
                 Kmn = self.compute_kmn() 
                 proj_residus = matmul(Kmn.T,epsilon)
 
-            index = self.get_xy_index()
-            columns = [str(i) for i in range(1,ndirections+1)]
+            index = self.get_index(in_dict=False)
+            if proj_residus.shape[1] == ndirections:
+                columns = [str(i) for i in range(1,ndirections+1)]
+            else:
+                columns = [str(i) for i in range(1,proj_residus.shape[1]+1)]
             self.df_proj_residuals[residuals_name] = pd.DataFrame(proj_residus,
                         index= index,columns=columns)
         return(residuals_name)

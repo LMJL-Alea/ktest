@@ -215,35 +215,31 @@ class Univariate:
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
 
-    def create_univariate_tester(self,variable,kernel=None,inform_var=True,viz=False):
+    def ktest_for_one_variable(self,variable,kernel=None,inform_var=True):
         # Get testing info from global object 
-        from .tester import create_and_fit_tester_for_two_sample_test_kfdat
+        from .tester import ktest_multivariate
 
-        dfv = self.init_df_proj(variable)
-        data_name,condition,samples,marked_obs_to_ignore = self.get_data_name_condition_samples_marked_obs()
-        nystrom,lm,ab,m,r = self.get_model()
-        center_by = self.center_by
         # Initialize univariate tester with common covariance 
-        df_var = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
-        t = create_and_fit_tester_for_two_sample_test_kfdat(df=dfv,
-                                                            meta=self.obs.copy(),   
-                                                            df_var=df_var,                                       
-                                                            data_name=data_name,
-                                                            condition=condition,
-                                                            nystrom=nystrom,
-                                                            lm=lm,ab=ab,m=m,r=r,
-                                                            center_by=center_by,
-                                                            marked_obs_to_ignore=marked_obs_to_ignore,
-                                                            kernel=kernel,    
-                                                            viz=viz)  
+        # var_metadata = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
+        
+        t = ktest_multivariate(
+                    data =self.init_df_proj(variable),
+                    metadata =self.obs.copy(),
+                    data_name=  self.data_name,
+                    condition= self.condition,
+                    samples=self.samples,
+                    var_metadata=pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None,
+                    test_params=self.get_test_params(),
+                    center_by=self.center_by,
+                    marked_obs_to_ignore=self.marked_obs_to_ignore,
+                    kernel=self.get_kernel_params() if kernel is None else kernel,)
+
         return(t)
 
-    def compute_univariate_kfda(self,variable,kernel_bandwidth=None):
-        from .tester import Tester,create_and_fit_tester_for_two_sample_test_kfdat
+    def compute_univariate_kfda(self,variable,kernel=None):
         # récupérer la donnée
         
-        kernel = 'gauss_median' if kernel_bandwidth is None else f'gauss_{kernel_bandwidth}'
-        t = self.create_univariate_tester(variable=variable,kernel=kernel)
+        t = self.ktest_for_one_variable(variable=variable,kernel=kernel)
         t.initialize_kfdat()
         kfdat_name = t.kfdat()
 
@@ -258,7 +254,9 @@ class Univariate:
         dname = f'{name}_{kfdat_name}'
         vard = self.get_vard()
 
-        ts = list(range(1,31))
+        tmax = len(vtest.get_explained_difference())
+        ts = list(range(1,31)) if tmax >30 else list(range(1,tmax))
+
         tnames = [str(t) for t in ts]
         tr1 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='first')
         tr2 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='second')
@@ -311,16 +309,18 @@ class Univariate:
         if univariate_name in self.var[dn] and self.var[dn][univariate_name][variable]:
             print(f'{univariate_name} already computed for {variable}')
         else:
-            kernel_bandwidth = None if kernel_bandwidths_col_in_var is None else \
-                    self.get_var()[kernel_bandwidths_col_in_var].loc[variable]
-            t=self.compute_univariate_kfda(variable,kernel_bandwidth=kernel_bandwidth)
+            kernel = self.get_kernel_params()
+            if kernel_bandwidths_col_in_var is not None:
+                kernel['bandwidth'] = self.get_var()[kernel_bandwidths_col_in_var].loc[variable]
+            t=self.compute_univariate_kfda(variable,kernel=kernel)
+
         self.add_results_univariate_kfda_in_var(t,variable,name=name)
         
         if parallel:
             return({'v':variable,**self.vard[dn][variable]})
         return(t) 
  
-    def parallel_univariate_kfda(self,n_jobs=1,lots=100,fromto=[0,-1],save_path=None,name='',kernel_bandwidths_col_in_var=None,verbose=0):
+    def ktest_univariate(self,n_jobs=1,lots=100,fromto=[0,-1],save_path=None,name='',kernel_bandwidths_col_in_var=None,verbose=0):
         """
         parallel univariate testing.
         Variables are tested by groups of `lots` variables in order to save intermediate results if the 
@@ -460,86 +460,4 @@ class Univariate:
         else:
             df_output['trunc'] = self.get_var()[f'{name}_{kfdat_name}_t{tname}_t']
         return(df_output)
-
-    # Trash ? 
-    def create_tester_of_goi(self,goi):
-        """
-        The original idea was to implement a function that filters the genes. 
-        Return a tester object where the variables are only those in 'goi'.
-        The problem is that as it is implemented now the new tester object 
-        looses the var attribute and the non active datasets.
-        Moreover I don't know if this function is really usefull finally. 
-        """
-
-        from .tester import Tester,create_and_fit_tester_for_two_sample_test_kfdat
-
-
-        df = self.get_dataframe_of_all_data()
-        df = df[goi]
-        data_name,condition,samples,marked_obs_to_ignore = self.get_data_name_condition_samples_marked_obs()
-        nystrom,lm,ab,m,r = self.get_model()
-        center_by = self.center_by
-            
-
-        t = create_and_fit_tester_for_two_sample_test_kfdat(df=df,
-                                                            meta=self.obs.copy(),
-                                                            data_name=data_name,
-                                                            condition=condition,
-                                                            nystrom=nystrom,
-                                                            lm=lm,ab=ab,m=m,r=r,
-                                                            center_by=center_by,
-                                                            marked_obs_to_ignore=marked_obs_to_ignore,
-                                                            viz=False)  
-
-        t.set_center_by(center_by)
-        t.init_model(nystrom=nystrom,m=m,r=r,landmark_method=lm,anchors_basis=ab)
-        t.init_kernel('gauss_median')
         
-        return(t)
-
-        
-"""
-Les tests univariés sont couteux, ils nécessitent de faire un test par variable d'intérêt. 
-Ces fonctions permettent de paralleliser ces calculs. 
-Ce sont d'anciennes fonctions que j'ai codées dans un autre contexte et que je n'ai pas encore pris le 
-temps de rendre compatible avec ma nouvelle façon de faire des tests univariés. 
-Ce qui change, c'est les infos que je veux garder à la fin, et le fait que je veux que le calcul univarié
-soit une fonction liée à la classe Tester.  
-"""
-# def concat_kfda_and_pval_from_parallel_simu(output_parallel_simu):
-#     lkfda,lpval = [],[]
-#     for l in output_parallel_simu: 
-#         lkfda += [l[0]]
-#         lpval += [l[1]]
-    
-#     return(pd.concat(lkfda,axis=1),pd.concat(lpval,axis=1))
-
-# def parallel_kfda_univariate(x,y,kernel='gauss_median',params_model={},n_jobs=3):
-#     """
-#     A function to analyse each gene in parallel using the univariate approach
-#     n_job=1 : parallel code is not used, it is usefull for debugging
-#     """
-
-#     outputs_test = Tester()
-#     outputs_test.df_power = pd.DataFrame()
-#     outputs_test.infos = {}
-#     # non parallel 
-#     if n_jobs==1:
-#         a=[]
-#         for c in x.columns:
-#             xc, yc = x[c].to_numpy().reshape(-1,1),y[c].to_numpy().reshape(-1,1)
-#             a+=[compute_standard_kfda(xc,yc,c,kernel=kernel,params_model=params_model)]
-#     elif n_jobs >1:
-#         # with parallel_backend('loky'):
-#         with parallel_backend('loky'):
-#             a = Parallel(n_jobs=n_jobs)(delayed(compute_standard_kfda)(
-#                 x[variable].to_numpy().reshape(-1,1),
-#                 y[variable].to_numpy().reshape(-1,1),
-#                 variable,
-#                 kernel = kernel,
-#                 params_model=params_model,
-#                 ) for variable  in  x.columns)
-#     kfda0,pval0 = concat_kfda_and_pval_from_parallel_simu(a)
-#     outputs_test.df_kfdat = kfda0
-#     outputs_test.df_pval = pval0
-#     return(outputs_test)

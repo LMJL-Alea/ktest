@@ -61,6 +61,12 @@ class Plot_WBerrors(Residuals,Statistics):
         pval = np.log(df_pval[name]) if log else df_pval[name]
         return(pval) 
 
+    def get_kfda(self,contrib=False,log=False,name=None):
+        name = self.get_kfdat_name() if name is None else name
+        df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
+        kfda = np.log(df_kfda[name]) if log else df_kfda[name]
+        return(kfda) 
+
 
     def get_explained_difference_of_t(self,t):
         pe = self.get_explained_difference()
@@ -117,14 +123,16 @@ class Plot_WBerrors(Residuals,Statistics):
 
 
 
-    def plot_explained_difference(self,t=None,fig=None,ax=None,cumul=False,log=False,decreasing=False):
+    def plot_explained_difference(self,t=None,fig=None,ax=None,cumul=False,log=False,decreasing=False,color='xkcd:neon purple',label='difference',legend=True):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
         exd = self.get_explained_difference(cumul=cumul,log=log,decreasing=decreasing)
         t = len(exd) if t is None else t
         trunc = range(1,t+1)
         
-        ax.plot(trunc,exd[:t],lw=1,alpha=1,label='difference',color='xkcd:neon purple')
+        # ax.plot(trunc,exd[:t],lw=1,alpha=1,label=label,color=color)
+        ax.bar(trunc,exd[:t],color=color,alpha=1,label=label)
+        # ax1.bar(xp,ypnorm,color='red',alpha=.2)
 
         ax.set_ylabel(r'Difference',fontsize=30)
         ax.set_xlabel('t',fontsize=30)
@@ -132,7 +140,8 @@ class Plot_WBerrors(Residuals,Statistics):
                 
         if not log:     
             ax.set_ylim(-.05,1.05)
-        
+        if legend:
+            ax.legend(fontsize=20)
         return(fig,ax)
 
     def compute_explained_variability_per_condition(self,cumul=False,log=False,decreasing=False):
@@ -142,7 +151,7 @@ class Plot_WBerrors(Residuals,Statistics):
         upk = self.compute_upk(n)
         if 'nystrom' in self.approximation_cov:
             upk = upk[:,:-1]
-        dfepk = pd.DataFrame(upk,index=self.get_xy_index(),columns=[str(t) for t in range(upk.shape[1])])
+        dfepk = pd.DataFrame(upk,index=self.get_index(in_dict=False),columns=[str(t) for t in range(upk.shape[1])])
         
         exvc = {} 
         for k,v in self.get_index().items():
@@ -160,33 +169,42 @@ class Plot_WBerrors(Residuals,Statistics):
             exv = self.compute_explained_variability_per_condition(cumul=cumul,log=log,decreasing=decreasing)
         return(exv)
 
-    def plot_explained_variability(self,t=None,fig=None,ax=None,within=True,conditions=True,cumul=False,log=False,decreasing=False):
+    def plot_explained_variability(self,t=None,fig=None,ax=None,within=True,conditions=True,cumul=False,log=False,decreasing=False,color_w='xkcd:sea green',colors_g=['xkcd:cerulean','xkcd:light orange'],legend=True):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
-
+        colors_g = [None,None] if colors_g is None else colors_g
         tmax = 0 if t is None else t 
         if within:
             exv = self.get_explained_variability(cumul=cumul,log=log,decreasing=decreasing)
             tw = len(exv) if t is None else t
             trunc = range(1,tw+1)
-            ax.plot(trunc,exv[:tw],lw=1,alpha=1,color='xkcd:sea green',label='w-variability')
+            label = 'w-variability'
+            ax.bar(trunc,exv[:t],color=color_w,alpha=1,label=label)
+            # ax.plot(trunc,exv[:tw],lw=1,alpha=1,color=color_w,label=label)
             tmax = np.max([tmax,tw])
+            ax.set_ylabel(r'w-variability',fontsize=30)
         
         if conditions:
             exv = self.get_explained_variability(within=False,cumul=cumul,log=log,decreasing=decreasing)
             if len(exv)==2:
-                colors = {k:c for k,c in zip(exv.keys(),['xkcd:cerulean','xkcd:light orange'])}
+                colors = {k:c for k,c in zip(exv.keys(),colors_g)}
             else:
                 colors = {k:None for k in exv.keys()}
             for k,v in exv.items():
                 tk = len(v) if t is None else t                   
                 trunc = np.arange(1,tk+1)
-                ax.plot(trunc,v[:tk],label=f'{k}-variability',lw=1,alpha=1,color=colors[k])
+                label=f'{k}-variability'
+                # ax.plot(trunc,v[:tk],label=label,lw=1,alpha=1,color=colors[k])
+                ax.bar(trunc,v[:tk],color=colors[k],alpha=.4,label=label)
                 tmax = np.max([tmax,tk])
+            ax.set_ylabel(r'group variability',fontsize=30)
             
+        if within and conditions:
+            ax.set_ylabel(r'variability',fontsize=30)
+        if legend:
+            ax.legend(fontsize=20)
 
         ax.set_xlabel('t',fontsize=30)
-        ax.set_ylabel(r'variability',fontsize=30)
         if not log:
             ax.set_ylim(-.05,1.05)
         ax.set_xlim(-1,tmax)

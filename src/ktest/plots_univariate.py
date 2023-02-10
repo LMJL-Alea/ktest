@@ -17,7 +17,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         fig,axes = plt.subplots(ncols=3,figsize=(22,7))
         
         ax = axes[0]
-        self.plot_density_of_variable(variable,data_name=data_name,fig=fig,ax=ax)
+        self. _of_variable(variable,data_name=data_name,fig=fig,ax=ax)
         
         if patient:
             ax = axes[1]

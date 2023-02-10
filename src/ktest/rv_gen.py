@@ -31,7 +31,7 @@ def generate_mean(p):
     return(torch.zeros(p))
 
 def add_noise(x,sigma):
-    s = x.shape()
+    s = x.shape
     x += np.random.normal(0,sigma,s)
     return(x)
 

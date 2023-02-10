@@ -27,7 +27,9 @@ class Plot_Standard(Statistics):
     def __init__(self):
         super(Plot_Standard,self).__init__()
 
-    def plot_kfdat(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo',contrib=False,label_asymp=False,asymp_arg=None,legend=True):
+
+
+    def plot_several_kfdat(self,fig=None,ax=None,ylim=None,t=None,columns=None,title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo',contrib=False,label_asymp=False,asymp_arg=None,legend=True):
         # try:
             if columns is None:
                 columns = self.df_kfdat.columns
@@ -78,6 +80,35 @@ class Plot_Standard(Statistics):
 
 
 
+    def plot_kfdat(self,t=20,fig=None,ax=None,title=None,legend=True,
+                    ylim=None,
+                    log=False,contrib=False,aggregated=True,
+                    truncations_of_interest=None,adjust=True,
+                    color_agg='black',color_uni='xkcd:blue',ls_agg='-',ls_uni='-',
+                    label_agg='kfda',label_uni='axis kfda',
+                    asymp_arg=None):
+        fig,ax = init_plot_kfdat(fig=fig,ax=ax,ylim=ylim,t=t,title=title,asymp_arg=asymp_arg)
+            
+        if aggregated:
+            kfda = self.get_kfda(log=log).loc[:t]
+            ax.plot(kfda,label=label_agg,ls=ls_agg,c=color_agg) 
+
+            if truncations_of_interest is not None:
+                values = [0]+kfda 
+                text_truncations_of_interest(truncations_of_interest,ax,values,adjust,log=log)
+
+        if contrib:
+            kfda = self.get_kfda(contrib=contrib,log=log).loc[:t]
+            ax.plot(kfda,label=label_uni,alpha=.5,ls=ls_uni,color=color_uni) 
+
+            if truncations_of_interest is not None and not aggregated:
+                values = [0]+kfda 
+                text_truncations_of_interest(truncations_of_interest,ax,values,adjust,log=log)
+        # ax.set_xlim(0,t)
+        if legend:
+            ax.legend(fontsize=20)
+
+        return(fig,ax)
 
 
     def plot_pvalue(self,t=20,fig=None,ax=None,title=None,legend=True,log=False,contrib=False,aggregated=True,truncations_of_interest=None,adjust=True,
@@ -92,8 +123,6 @@ class Plot_Standard(Statistics):
                 values = [0]+pval 
                 text_truncations_of_interest(truncations_of_interest,ax,values,adjust,log=log)
 
-
-
         if contrib:
             pval = self.get_pvalue(contrib=contrib,log=log).loc[:t]
             ax.plot(pval,label=label_uni,alpha=.5,ls=ls_uni,color=color_uni) 
@@ -102,10 +131,9 @@ class Plot_Standard(Statistics):
                 values = [0]+pval 
                 text_truncations_of_interest(truncations_of_interest,ax,values,adjust,log=log)
                
-
         # ax.set_xlim(0,t)
         if legend:
-            ax.legend()
+            ax.legend(fontsize=20)
 
         return(fig,ax)
 
@@ -167,13 +195,35 @@ class Plot_Standard(Statistics):
             label += f'={lmbda:.1e}' if lmbda<.01 else f'={lmbda:.2f}' 
         return(label)
 
-    def density_proj(self,t,proj='proj_kfda',name=None,orientation='vertical',color=None,fig=None,ax=None,show_conditions=True,legend_fontsize=15):
-        labels = list(self.get_index().keys())
+    def density_proj(self,
+                    t,
+                    proj='proj_kfda',
+                    name=None,
+                    orientation='vertical',
+                    color=None,
+                    fig=None,ax=None,
+                    show_conditions=True,
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    marked_obs_to_ignore=None):
+
+
+        labels = list(self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore).keys())
 
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
-        properties = self.get_plot_properties(color=color,labels=labels,show_conditions=show_conditions)
+        properties = self.get_plot_properties(
+                        color=color,
+                        labels=labels,
+                        show_conditions=show_conditions,
+                        condition=condition,
+                        samples=samples,
+                        color_list=samples_colors,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
         df_proj= self.init_df_proj(proj,name)
         
         # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
@@ -213,69 +263,91 @@ class Plot_Standard(Statistics):
         # fig.tight_layout()
         return(fig,ax)
         
-    def get_plot_properties(self,marker=None,color=None,show_conditions=True,labels='CT',legend=True,
-                            marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                            big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                            color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
+    def get_plot_properties(self,
+                    marker=None,
+                    color=None,
+                    show_conditions=True,
+                    labels='CT',
+                    legend=True,
+                    condition=None,
+                    samples=None,
+                    marked_obs_to_ignore=None,
+                    marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
+                    big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
+                    color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
-
+        if color_list is None:
+            color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
         properties = {}
-        cx_ = 'xkcd:cerulean'
-        cy_ = 'xkcd:light orange'
+        # cx_ = color_list[0] # 'xkcd:cerulean'
+        # cy_ = color_list[1] #'xkcd:light orange'
         mx_ = 'o'
         my_ = 's'
         variables = self.data[self.data_name]['variables']
-        marked_obs_to_ignore = self.marked_obs_to_ignore
+        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+        
+        dict_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        dict_data = self.get_dataframes_of_data(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        samples_list = dict_index.keys() 
+        
+        color_list = color_list if len(color_list)>=len(samples_list) else [None]*len(samples_list)   
+        if not isinstance(color_list,dict): 
+            color_list = {k:c for k,c in zip(samples_list,color_list)}
         coef_bins = 3
         if marker is None and color is None : 
             # print("plot properties marker is None and color is None")
-            dict_index = self.get_index()
-            for i,k in enumerate(dict_index.keys()):
+            for i,k in enumerate(samples_list):
+
                 ipop = dict_index[k]
                 lab = f'{k}({len(ipop)})' if legend else None
                 bins = coef_bins*int(np.floor(np.sqrt(len(ipop))))
+                m = marker_list[i]
+                c = color_list[k]
+                bm = big_marker_list[i]
+
                 properties[k] = {'index':ipop,
-                                 'plot_args':{'marker':marker_list[i]},
-                                 'mean_plot_args':{'marker':big_marker_list[i],'label':lab},
+                                 'plot_args':{'marker':m,'c':c},
+                                 'mean_plot_args':{'marker':bm,'label':lab,'color':c},
                                  'hist_args':{'bins':bins,'label':lab}
                 }
-
+                if c is not None:
+                    properties[k]['hist_args']['color']=c
         
         elif isinstance(color,str) and marker is None:
             # print("plot properties isinstance(color,str) and marker is None")
             if color in list(variables):
                 # print("color in list(variables)")
 
-                dict_data = self.get_dataframes_of_data()
-                dict_index = self.get_index()
-                for i,k in enumerate(dict_data.keys()):
+                for i,k in enumerate(samples_list):
                     
                     ipop = dict_index[k]
                     n = len(ipop)
                     df = dict_data[k]
                     c = df[color]
-                    cm = color_list[i]
+                    cm = color_list[k]
                     lab = f'{k}({n})' if legend else None
+                    m = marker_list[i]
+                    bm = big_marker_list[i]
                     properties[k] = {'index':ipop,
-                                    'plot_args':{'marker':marker_list[i],'c':c},
-                                    'mean_plot_args':{'marker':big_marker_list[i],'label':lab,'color':cm},
+                                    'plot_args':{'marker':m,'c':c},
+                                    'mean_plot_args':{'marker':bm,'label':lab,'color':cm},
                                     }
 
             elif color in list(self.obs.columns):
                 # print("color in list(variables)")
                 if self.obs[color].dtype == 'category':
-                    for pop in self.obs[color].cat.categories:
+                    for i,pop in enumerate(self.obs[color].cat.categories):
                         if show_conditions: 
-                            dict_index = self.get_index()
-                            for i,k in enumerate(dict_index.keys()):
+                            for j,k in enumerate(samples_list):
+
                                 ipop = self.obs.loc[self.obs[color]==pop].index
                                 n = len(ipop)
                                 ipop = ipop[ipop.isin(dict_index[k])]
                                 
-                                m = marker_list[i%len(marker_list)]
-                                mean_m = big_marker_list[i%len(big_marker_list)]
-                        
+                                m = marker_list[j%len(marker_list)]
+                                mean_m = big_marker_list[j%len(big_marker_list)]
+
                                 if marked_obs_to_ignore is not None:
                                     obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
                                     ipop = ipop[~ipop.isin(obs_to_ignore)]
@@ -286,6 +358,7 @@ class Plot_Standard(Statistics):
                                                     'mean_plot_args':{'marker':mean_m,'label':lab},
                                                     'hist_args':{'bins':bins,'label':lab}}
 
+        
                         else:
                             # print('not show conditions')
 
@@ -296,18 +369,18 @@ class Plot_Standard(Statistics):
 
                             lab = f'{pop} ({len(ipop)})' if legend else None
                             bins=coef_bins*int(np.floor(np.sqrt(len(ipop))))
-                            
+                            c = color_list[k]
                             
                             properties[pop] = {'index':ipop,
-                                            'plot_args':{'marker':'.'},
-                                            'mean_plot_args':{'marker':'o','label':lab},
+                                            'plot_args':{'marker':'.','c':c},
+                                            'mean_plot_args':{'marker':'o','label':lab,'color':c},
                                             'hist_args':{'bins':bins,'label':lab}}
-                            
+                            if c is not None:
+                                properties[k]['hist_args']['color']=c
                             
                 else: # pour une info numérique 
                     # print(f'{color} is not categorical in obs')
-                    dict_index = self.get_index()
-                    for i,k in enumerate(dict_index.keys()):
+                    for i,k in enumerate(samples_list):
 
                         m = marker_list[i%len(marker_list)]
                         mean_m = big_marker_list[i%len(big_marker_list)]
@@ -360,10 +433,10 @@ class Plot_Standard(Statistics):
 
                     properties['x']  = {'index':ipopx,
                                         'plot_args':{'marker':m,'c':cx},
-                                        'mean_plot_args':{'marker':mean_m,'c':cx_,'label':labx}}
+                                        'mean_plot_args':{'marker':mean_m,'color':color_list[popm],'label':labx}}
                     properties['y']  = {'index':ipopy,
                                         'plot_args':{'marker':m,'c':cy},
-                                        'mean_plot_args':{'marker':mean_m,'c':cy_,'label':laby}}
+                                        'mean_plot_args':{'marker':mean_m,'color':color_list[popm],'label':laby}}
 
                 elif color in list(self.obs.columns):
                     print('in obs')
@@ -610,10 +683,37 @@ class Plot_Standard(Statistics):
         ax.legend()
         return(fig,ax)
 
-    def hist_discriminant(self,t,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical',legend_fontsize=15):
-        kfdat_name = self.get_kfdat_name()
-        fig,ax = self.density_proj(t,proj='proj_kfda',name=kfdat_name,orientation=orientation,color=color,
-                        fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
+    def hist_discriminant(self,
+                    t,
+                    color=None,
+                    fig=None,
+                    ax=None,
+                    show_conditions=True,
+                    orientation='vertical',
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    marked_obs_to_ignore=None):
+
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
+        fig,ax = self.density_proj(
+                        t,
+                        proj='proj_kfda',
+                        name=kfdat_name,
+                        orientation=orientation,
+                        color=color,
+                        fig=fig,ax=ax,
+                        show_conditions=show_conditions,
+                        legend_fontsize=legend_fontsize,
+                        condition=condition,
+                        samples=samples,
+                        samples_colors=samples_colors,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
         return(fig,ax)
 
 

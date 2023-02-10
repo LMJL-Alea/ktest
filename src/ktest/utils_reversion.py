@@ -1,8 +1,10 @@
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from .tester import create_and_fit_tester_for_two_sample_test_kfdat
+from .tester import ktest_multivariate
+from .base import init_kernel_params,init_test_params
 import numpy as np
+
 
 def get_meta_from_df(df):
     meta = pd.DataFrame()
@@ -12,27 +14,31 @@ def get_meta_from_df(df):
     meta['condition'] = meta['index'].apply(lambda x : x.split(sep='.')[1])
     return(meta)
 
-def get_tester_from_df_and_comparaison(df,comparaison,name,kernel='gauss_median',nystrom=False,center_by=None,condition='condition',meta=None):
+def get_tester_from_df_and_comparaison(df,comparaison,name,kernel=init_kernel_params(),nystrom=False,center_by=None,condition='condition',meta=None):
     if meta is None:
         meta = get_meta_from_df(df)
     cstr = "_".join(comparaison)
     cells = meta[meta[condition].isin(comparaison)].index
-    dfc = df[df.index.isin(cells)] 
-    metac = meta[meta.index.isin(cells)] 
-    null_genes = list(dfc.sum()[dfc.sum()==0].index)
+    data = df[df.index.isin(cells)] 
+    metadata = meta[meta.index.isin(cells)] 
+    null_genes = list(data.sum()[data.sum()==0].index)
     if len(null_genes)>0:
         print('there are null genes')
         print(null_genes)
-        dfc = dfc.drop(columns=null_genes)
+        data = data.drop(columns=null_genes)
     
-    t = create_and_fit_tester_for_two_sample_test_kfdat(df=dfc,
-                                                               meta=metac.copy(),
-                                                           data_name=f'{name}_{cstr}',
-                                                           condition=condition,
-    #                                                             df_var= df_var,
-                                                            kernel=kernel,
-                                                           nystrom=nystrom,
-                                                           center_by=center_by,)
+    t = ktest_multivariate(
+                data,
+                metadata.copy(),
+                data_name=f'{name}_{cstr}',
+                condition=condition,
+                nystrom=nystrom,
+                center_by=center_by,
+                kernel=kernel,
+                        # df:data,meta:metadata,data_name,condition:test_condition,df_var:var_metadata,
+                        # test:test_params,viz:removed
+                )
+    t.projections()
     return(t)
     
 
@@ -74,6 +80,70 @@ def figures_outliers_of_reversion_from_tq(tester,trunc,q_,df,focus=None,color=No
     
     ax = axes[2]
     ax.axvline(q,color='crimson',ls='--')
+
+    if return_outliers:
+        return(fig,axes,outliers_list)
+    else:
+        return(fig,axes)
+
+
+def figures_outliers_of_reversion_from_tq2(tester,trunc,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
+    # suptitle = f'{cstr} {name} t{trunc} q{q_}'
+    
+    str_focus = '' if focus is None else f'_{focus}'
+    outliers_name= f't{trunc}_q{q_}{str_focus}'
+    
+    dfproj = tester.init_df_proj(proj='proj_kfda',name=tester.get_kfdat_name())[str(trunc)]#.sort_values(ascending=False)
+    meta = get_meta_from_df(df)
+    if focus is not None:
+        dfproj = dfproj[dfproj.index.isin(meta[meta['condition']==focus].index)]
+    q = dfproj.quantile(q_)
+    if q_<.5:
+        outliers_list = dfproj[dfproj<q].index
+        remaining = dfproj[dfproj>q].index
+    else:
+        outliers_list = dfproj[dfproj>q].index
+        remaining = dfproj[dfproj<q].index
+    
+    fig,axes = figures_outliers_of_reversion2(
+        tester=tester,
+        trunc=trunc,
+        df=df,
+        outliers_list=outliers_list,
+        outliers_name=outliers_name,
+        color=color,
+        marker=marker,
+        contrib=contrib)
+    
+    fig,axes = figures_outliers_of_reversion2(
+        tester=tester,
+        trunc=trunc,
+        df=df,
+        outliers_list=remaining,
+        outliers_name=outliers_name,
+        color=color,
+        marker=marker,
+        contrib=contrib)
+
+    ax = axes[1]
+    ax.axvline(q,color='crimson',ls='--')
+    ax.set_title(f't{trunc} q{q_}',fontsize=30)
+    
+    ax = axes[2]
+    ax.axvline(q,color='crimson',ls='--')
+
+ 
+    fig,axes = figures_outliers_of_reversion2(
+        tester=tester,
+        trunc=trunc,
+        df=df,
+        outliers_list=remaining,
+        outliers_name=outliers_name,
+        color=color,
+        marker=marker,
+        contrib=contrib)
+
+
 
     if return_outliers:
         return(fig,axes,outliers_list)
@@ -196,6 +266,53 @@ def figures_outliers_of_reversion(tester,trunc,df,outliers_list,outliers_name,co
         axes[3].set_title('no outliers',fontsize=30)
     fig.tight_layout()
     return(fig,axes)
+
+
+def figures_outliers_of_reversion2(tester,trunc,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
+    
+    
+    fig,axes = plt.subplots(ncols=3,figsize=(28,7)) 
+                
+    ax = axes[0]
+    tester.plot_pvalue(fig=fig,ax=ax,t=20,contrib=contrib,color_agg=None,log=True,label_agg='all',)
+
+    ax = axes[1]
+    tester.hist_discriminant(t=trunc,fig=fig,ax=ax,)
+
+    ax = axes[2]
+    tester.plot_residuals(t=trunc,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
+    ax.set_title(outliers_name,fontsize=30)
+
+    ax = axes[0]
+    tester.fit_tester_with_ignored_observations(list_of_observations_to_ignore = outliers_list,
+                                                list_name=outliers_name)
+    tester.set_marked_obs_to_ignore(marked_obs_to_ignore=outliers_name)
+    tester.plot_pvalue(fig=fig,ax=ax,t=20,contrib=contrib,color_agg=None,log=True,label_agg='without pop',)
+    tester.set_marked_obs_to_ignore()
+    
+
+    if color is not None:
+        true_condition = tester.condition
+        tester.condition = color
+    effectifs_outliers = " ".join([f'{k}:{len(v[v.isin(outliers_list)])}' for k,v in tester.get_index().items()])
+    ax.set_title(f'without\n{effectifs_outliers}', fontsize=30)
+    if color is not None:
+        tester.condition = true_condition
+
+    if len(outliers_list)>0:
+
+        dtest = get_dict_testers_outliers_vs_each_condition(df,outliers_list,outliers_name)
+        fig,ax = plt.subplots(figsize=(12,6))     
+        for condition in ['0H','24H','48HDIFF','48HREV']:
+            dtest[condition].plot_pvalue(
+                fig=fig,ax=ax,t=20,contrib=contrib,color_agg=None,log=True,label_agg=f'out vs {condition}')
+
+            # ax.set_title(f'out vs {condition}',fontsize=30)
+    # else:
+    #     axes[3].set_title('no outliers',fontsize=30)
+    fig.tight_layout()
+    return(fig,axes)
+
 
 def plot_densities_of_conditions_for_a_variable_reversion(df,meta,condition,g,
         datasets=['0H','48HREV0','48HREV24','24H','48HDIFF'],

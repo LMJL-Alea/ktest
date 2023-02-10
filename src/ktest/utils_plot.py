@@ -16,7 +16,8 @@ def text_truncations_of_interest(truncations_of_interest,ax,values,adjust=True,l
     if adjust:
         adjust_text(texts,only_move={'points': 'y', 'text': 'y', 'objects': 'y'})
 
-def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,asymp_arg=None):
+def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,
+                    title=None,title_fontsize=40,asymp_arg=None):
 
     assert(t is not None)
     trunc=range(1,t)
@@ -30,7 +31,7 @@ def init_plot_kfdat(fig=None,ax=None,ylim=None,t=None,label=False,title=None,tit
         ax.set_title(title,fontsize=title_fontsize)
     
     ax.set_xlabel(r'regularization $t$',fontsize= 20)
-    ax.set_ylabel(r'$\frac{n_1 n_2}{n} \Vert \widehat{\Sigma}_{W}^{-1/2}(t)(\widehat{\mu}_2 - \widehat{\mu}_1) \Vert _\mathcal{H}^2$',fontsize= 20)
+    ax.set_ylabel(r'Statistic',fontsize= 20)
     ax.set_xlim(0,trunc[-1])
     
     yas = [chi2.ppf(0.95,t) for t in trunc] 
@@ -46,7 +47,8 @@ def adjusted_xticks(xmax):
     xticks = np.arange(0,xmax) if xmax<20 else np.arange(0,xmax,2) if xmax<50 else np.arange(0,xmax,10) if xmax<200 else np.arange(0,xmax,20) if xmax < 500 else np.arange(0,xmax,50)
     return(xticks)
 
-def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,title_fontsize=40,log=False):
+def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,
+                    title=None,title_fontsize=40,log=False):
 
     assert(t is not None)
     trunc=range(1,t)
@@ -58,8 +60,8 @@ def init_plot_pvalue(fig=None,ax=None,ylim=None,t=None,label=False,title=None,ti
     if title is not None:
         ax.set_title(title,fontsize=title_fontsize)
     
-    ax.set_xlabel(r'regularization $t$',fontsize= 20)
-    ax.set_ylabel(r'p-value',fontsize= 20)
+    ax.set_xlabel(r'$t$',fontsize= 30)
+    ax.set_ylabel('log p-value' if log else 'p-value',fontsize= 30)
     ax.set_xlim(0,trunc[-1])
     ax.set_xticks(adjusted_xticks(t))
     

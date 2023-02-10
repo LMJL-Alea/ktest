@@ -170,52 +170,55 @@ class KernelTrick(GramMatrices):
         except UnboundLocalError:
             print(f'UnboundLocalError: pkm was not computed for cov:{cov},mmd:{mmd}')
 
-    def compute_upk(self,t):
+
+    def compute_upk(self,t,proj_condition=None,proj_samples=None,proj_marked_obs_to_ignore=None):
         """
         epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
         This functions computes the corresponding block with respect to the model parameters. 
-        
+
         warning: some work remains to be done to :
             - normalize the vecters with respect to r as in pkm 
             - separate the different nystrom approaches 
         """
-        
+
         cov = self.approximation_cov
         quantization = cov=='quantization'
-        
-        
+        proj = False if (proj_condition is None and proj_samples is None) else True
+
+
         sp,ev = self.get_spev('covw')
-            
+
         Pbi = self.compute_covariance_centering_matrix(quantization=quantization,landmarks=False)
-        
+
         if 'nystrom' in cov: 
-            Kzx = self.compute_kmn()
-            
-            
+            Kzx = self.compute_kmn(condition=proj_condition,samples=proj_samples,marked_obs_to_ignore=proj_marked_obs_to_ignore)
             m = self.get_ntot(landmarks=True)
             _,Uz = self.get_spev(slot='anchors')
-            
-        
+
+
         if cov == 'standard':
-            Kx = self.compute_gram(landmarks=False)
+            if proj:
+                Kx = self.compute_rectangle_gram(
+                                y_condition=proj_condition,y_samples=proj_samples,y_marked_obs_to_ignore=proj_marked_obs_to_ignore)
+            else:    
+                Kx = self.compute_gram(landmarks=False)
             epk = torch.linalg.multi_dot([ev.T[:t],Pbi,Kx]).T
-            
+
         if cov == 'nystrom3':
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             # print(f'm:{m} evt:{ev.T[:t].shape} Lz12{Lz12.shape} Uz{Uz.shape} Kzx{Kzx.shape}')
             epk = 1/m**(1/2) * torch.linalg.multi_dot([ev.T[:t],Lz12,Uz.T,Kzx]).T
 
-        elif 'nystrom' in cov:
-            Lz,_ = self.get_spev(slot='anchors')
-            Lz1 = diag(Lz**-1)
-            # print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
-            epk = 1/m*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz1,Uz.T,Kzx]).T
-        # pas à jour 
-        if cov == 'quantization':
-            Kzx = self.compute_kmn()
-            A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-            epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
-        
-        return(epk)
+        # elif 'nystrom' in cov:
+        #     Lz,_ = self.get_spev(slot='anchors')
+        #     Lz1 = diag(Lz**-1)
+        #     # print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
+        #     epk = 1/m*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz1,Uz.T,Kzx]).T
+        # # pas à jour 
+        # if cov == 'quantization':
+        #     Kzx = self.compute_kmn()
+        #     A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
+        #     epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
 
+        return(epk)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 from ktest.tester import Tester
 # from ktest.pvalues import correct_BenjaminiHochberg_pval_of_dfcolumn,correct_BenjaminiHochberg_pval_of_dataframe
-from ktest.functions import compute_standard_kfda,compute_standard_mmd
+# from ktest.functions import compute_standard_kfda,compute_standard_mmd
 from ktest.utils_pandas import pd_select_df_from_index
 
 

@@ -16,21 +16,28 @@ class GramMatrices(CenteringOps):
     def __init__(self):
         super(GramMatrices,self).__init__()
 
-    def compute_gram(self,landmarks=False): 
+    def compute_gram(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None): 
         """
         Computes the Gram matrix of the data corresponding to the parameters sample and landmarks. 
-        
+
         The kernel used is the kernel stored in the attribute `kernel`. 
-        ( The attribute `kernel` can be initialized with the method init_kernel() ) 
+        ( The attribute `kernel` can be initialized with the method kernel() ) 
 
         The computed Gram matrix is centered with respect to the attribute `center_by`.
         ( The attribute `center_by` can be initialized with the method init_center_by())
-        
+
         The Gram matrix is not stored in memory because it is usually large and fast to compute. 
 
         Parameters
         ----------
-
+            landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
 
         Returns
         -------
@@ -39,13 +46,56 @@ class GramMatrices(CenteringOps):
         """
 
 
-        dict_data = self.get_data(landmarks=landmarks)
+        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         kernel = self.data[self.data_name]['kernel']
         data = torch.cat([x for x in dict_data.values()],axis=0)
         K = kernel(data,data)
         if not landmarks : 
             K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
+
+    def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
+                         y_landmarks=False,y_condition=None,y_samples=None,y_marked_obs_to_ignore=None,
+                        ):    
+        """
+        Computes the matrix K(X_i,Y_i) where X_i and Y_i are two subsets of the observations contained in the data.
+
+        Parameters
+        ----------
+            x_landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            x_condition (default = None): str
+                    Column of the metadata that specify the dataset X 
+            x_samples (default = None): str 
+                    List of values to select in the column x_condition of the metadata
+            x_marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+            y_landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            y_condition (default = None): str
+                    Column of the metadata that specify the dataset Y 
+            y_samples (default = None): str 
+                    List of values to select in the column x_condition of the metadata
+            y_marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+
+        """
+        xy_data = []
+        for landmarks,condition,samples,marked_obs_to_ignore in zip([x_landmarks,y_landmarks],
+                                                                    [x_condition,y_condition],
+                                                                    [x_samples,y_samples],
+                                                                    [x_marked_obs_to_ignore,y_marked_obs_to_ignore]):
+            dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+            kernel = self.data[self.data_name]['kernel']
+            data = torch.cat([x for x in dict_data.values()],axis=0)
+            xy_data += [data]
+        K = kernel(xy_data[0],xy_data[1])
+    # il faudrait faire une correction d'effet par côté, du rectangle, a voir le jour où j'en ai besoin pour le développer. 
+    # maj center_kmn_matrix_with_respect_to_some_effects en center_matrix_wrt_some_effects(left or right or both)
+    #     if not landmarks : 
+    #         K = self.center_gram_matrix_with_respect_to_some_effects(K)
+        return(K)
+
 
     def center_gram_matrix_with_respect_to_some_effects(self,K):
         '''
@@ -64,22 +114,36 @@ class GramMatrices(CenteringOps):
             P = self.compute_centering_matrix_with_respect_to_some_effects()
             return(torch.linalg.multi_dot([P,K,P]))
 
-    def compute_kmn(self):
+    def compute_kmn(self,condition=None,samples=None,marked_obs_to_ignore=None):
         """
-        Computes an (nxanchors+nyanchors)x(n1+n2) conversion gram matrix
+        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix
+
+            Parameters
+        ----------
+            landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+
+
         """
         assert(self.has_landmarks)
-        
-        dict_data = self.get_data(landmarks=False)
+
+        dict_data = self.get_data(landmarks=False,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         dict_landmarks = self.get_data(landmarks=True)
         kernel = self.data[self.data_name]['kernel']
-        
+
         data = torch.cat([x for x in dict_data.values()],axis=0)
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
-        
+
         kmn = kernel(landmarks,data)        
         kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn)
         return(kmn)
+
 
     def center_kmn_matrix_with_respect_to_some_effects(self,kmn):
         '''

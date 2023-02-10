@@ -22,30 +22,12 @@ Ces fonctions calculent la stat à partir de données et renvoie directement la 
 L'objet tester reste en back et n'est pas accessible. 
 """
 
-def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
+# def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
+    # removed function that returned test.df_kfdat,test.df_pval
 
-    test = Tester()
-    test.init_data(x,y,kernel=kernel)
-    test.init_model(**params_model)
-    test.kfdat(name=name,pval=pval)
-    if pval:
-        return(test.df_kfdat,test.df_pval)
-    else:
-        return(test.df_kfdat)
+# def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
+    # removed function that returned test.dict_mmd
 
-def compute_standard_mmd(x,y,name,kernel='gauss_median',params_model={}):
-    if isinstance(x,pd.DataFrame) or isinstance(x,pd.Series):
-        if len(x.shape)==1:
-            x = x.to_numpy().reshape(-1,1)
-            y = y.to_numpy().reshape(-1,1)
-        else:
-            x = x.to_numpy()
-            y = y.to_numpy()
-    test = Tester()
-    test.init_data(x,y,kernel=kernel)
-    test.init_model(**params_model)
-    test.mmd(name=name)
-    return(test.dict_mmd)
 
 """
 Dans le cas d'un grid search pour tuner plusieurs paramètres, ces fonctions 
