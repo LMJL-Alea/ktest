@@ -102,14 +102,64 @@ class Pvalues:
         
         self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
-    def correct_BenjaminiHochberg_pval_univariate(self,trunc,name='',exceptions=[],focus=None,add_to_prefix=''):
-        var_prefix = f'{name}_{self.get_kfdat_name()}_t{trunc}'
-        pval = self.var[self.data_name][f'{var_prefix}_pval']
-        pval = pval if focus is None else pval[pval.index.isin(focus)]
-        pval = pval[~pval.index.isin(exceptions)]
-        pval = pval[~pval.isna()]
-        pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
-        self.var[self.data_name][f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
+  
+
+    def get_corrected_variables(self,t,name=None,verbose=0):
+        var = self.get_var()
+        col = self.get_column_name_in_var(t=t,name=name,output='corrected')
+        
+        if col not in var:
+            if verbose>0:
+                print(f'- Not any variable has been corrected yet')
+            return([])
+        
+        else:
+            var_corrected = var[var[col]==1].index
+            ncorrected = len(var_corrected)
+            ntested = self.get_ntested_variables(name=name)
+            if verbose>0:
+                if ncorrected != ntested:
+                    print(f'Warning : only {ncorrected} variables were corrected out of {ntested} tested variables')
+            return(var_corrected)
+
+    def get_ncorrected_variables(self,t,name=None,verbose=0):
+        return(len(self.get_corrected_variables(t=t,name=name,verbose=verbose)))
+
+    def correct_BenjaminiHochberg_pval_univariate(self,trunc,name='',exceptions=[],focus=None,add_to_prefix='',verbose=0):
+        
+        ncorrected = self.get_ncorrected_variables(t=trunc,name=name,verbose=verbose)
+        nvar = self.get_nvariables()
+        if ncorrected == nvar:
+            if verbose:
+                print(f'All the {nvar} variables are already corrected for multiple testing')
+        else:
+
+        
+            col = self.get_column_name_in_var(t=trunc,
+                                                corrected=False,
+                                                name=name,
+                                                output='pval') 
+
+            pval = self.var[self.data_name][col]
+            pval = pval if focus is None else pval[pval.index.isin(focus)]
+            pval = pval[~pval.index.isin(exceptions)]
+            pval = pval[~pval.isna()]
+            ngenes_to_correct = len(pval)
+
+            if ngenes_to_correct > ncorrected:
+                if verbose >0:
+                    print(f"- Updating corrected pvals with {ngenes_to_correct - ncorrected} tested variables out of {ngenes_to_correct}.")
+                dfc = pd.DataFrame(index=self.get_variables())
+                dfc[col+'BHc'] = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
+                colc = self.get_column_name_in_var(t=trunc,name=name,output='corrected')
+
+                corrected_genes = pval.index       
+                dfc[colc] = False
+                series = dfc[colc].copy()
+                series[corrected_genes] = True
+                dfc[colc] = series
+        
+                self.update_var_from_dataframe(dfc)
 
     # def get_rejected_variables_univariate(self,var_prefix,BH=False):
     #     BH_str = 'BHc' if BH else ''

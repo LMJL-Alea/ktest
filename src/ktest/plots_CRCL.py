@@ -1,9 +1,9 @@
 
 from time import time 
 import matplotlib.pyplot as plt
-from .tester import Tester
+from .tester import Ktest
 
-class Tester_CRCL(Tester):
+class Ktest_CRCL(Ktest):
     def prepare_visualization(self,t,outliers_in_obs=None):
         t0 = time()
         kfda_name = self.kfdat(outliers_in_obs=outliers_in_obs)  

@@ -1,6 +1,6 @@
 from scipy.stats import chi2
 import pandas as pd
-from ktest.tester import Tester
+from ktest.tester import Ktest
 import numpy as np
 from joblib import parallel_backend
 from joblib import Parallel, delayed
@@ -14,12 +14,12 @@ from scipy.cluster.hierarchy import dendrogram
 Ce fichier est un fichier fourre tout où j'ai mis la plupart des fonctions dont j'ai régulièrement 
 besoin et qui ne sont pas directement à intégrer au package, il y a notamment toute une 
 série de méta-fonctions qui me permettent de gérer plus facilement une situation où j'ai plusieurs 
-objets tester en parallèle correspondant à différents modèles ou jeux de données. 
+objets Ktest en parallèle correspondant à différents modèles ou jeux de données. 
 """
 
 """
 Ces fonctions calculent la stat à partir de données et renvoie directement la stat 
-L'objet tester reste en back et n'est pas accessible. 
+L'objet Ktest reste en back et n'est pas accessible. 
 """
 
 # def compute_standard_kfda(x,y,name,pval=True,kernel='gauss_median',params_model={}):
@@ -84,17 +84,17 @@ def plot_xrepcol(res,xs,reps,cols,cats,d): # pas de row mais rep
 ##### Functions specific to my notebooks for CRCL data and ccdf illustrations 
 """
 J'ai souvent l'occasion de faire des tests de deux échantillons sur plus de deux jeux de données. 
-La solution simple et efficace que j'ai trouvée pour gérer les multiples instances de l'objet Tester, 
+La solution simple et efficace que j'ai trouvée pour gérer les multiples instances de l'objet Ktest, 
 une pour chaque couple d'échantillons comparés, consiste à nommer chaque instance et de toutes les 
 stocker dans un dictionnaire que j'appelle toujours "dict_tests". 
 Dans ce genre de situation, les données sont réutilisées plusieurs fois, je nomme chaque jeu de données 
 et le stocke dans un dictionnaire que j'appelle "dict_data". 
-En général, les noms des instances de Tester dans "dict_tests" correspondent aux noms dans "dict_data" qu'ont 
+En général, les noms des instances de Ktest dans "dict_tests" correspondent aux noms dans "dict_data" qu'ont 
 les deux jeux de données comparés, séparés par un "_". 
 Quand je veux comparer des concaténations de jeux de données présents dans dict_data, le nom dans "dict_tests" 
 contient les noms des jeux de données séparés par une virgule ",". 
 
-Tout ça est explicité plus en détail dans la description de la fonction "add_tester_to_dict_tests_from_name_and_dict_data"
+Tout ça est explicité plus en détail dans la description de la fonction "add_Ktest_to_dict_tests_from_name_and_dict_data"
 
 Plusieurs fonctions ci-dessous servent uniquement à construire le dendrogramme d'un clustering hierarchique 
 qui prend la statistique KFDA comme metrique. La fonctions correspondante est "plot_custom_dendrogram_from_cats"
@@ -151,11 +151,11 @@ def get_data_in_dict_data_from_name(name,dict_data):
     return(df1,df2)
 
 
-def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={},center_by=None,free_memory=True):
+def add_Ktest_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,dict_meta=None,params_model={},center_by=None,free_memory=True):
     '''
     This function was specifically developped for the analysis of the CRCL data but it can be generalized. 
     This function takes the parameter name to determine which datasets stored in dict_data to compare and store 
-    the resultant Tester object at the key name of the dictionnary dict_tests. 
+    the resultant Ktest object at the key name of the dictionnary dict_tests. 
     
     The syntax for name is the following: 
     concatenated datasets are separated by a comma, 
@@ -169,7 +169,7 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
     ----------
         name : str,
         Contains the information of the datasets on which we want to compute a statistic,
-        It is also the key in which the resulting tester object will be stored in dict_tests. 
+        It is also the key in which the resulting Ktest object will be stored in dict_tests. 
         The syntax for name is the following: 
         concatenated datasets are separated by a comma, 
         compared datasets are separated by an underscore '_'. 
@@ -182,7 +182,7 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
         These keys are refered as categories or cat. 
         
         dict_tests : dict,
-        The dictionnary to update by adding the tester object of the comparison defined by the parameter name. 
+        The dictionnary to update by adding the Ktest object of the comparison defined by the parameter name. 
         
         dict_meta (optionnal) : dict,
         Contains the pandas.DataFrames of the metadata of every single dataset of interest, 
@@ -196,17 +196,17 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
             'approximation_cov' in 'standard','nystrom1', 'nystrom2','nystrom3'
             'approximation_mmd' in 'standard','nystrom1', 'nystrom2','nystrom3'
             if nystrom is used in one of the two approximations : 
-                'm' (int): the number of landmarks
-                'r' (int): the number of anchors
+                'nlandmarks' (int): the number of landmarks
+                'nanchors' (int): the number of anchors
                 'landmark_method' in 'random', 'kmeans'
-                'anchors_basis' in 'W','S','K'
+                'anchor_basis' in 'W','S','K'
         
         center_by (optionnal): str,
         A parameter to correct some effects corresponding to the metadata. 
-        More information in the description of the function init_center_by of Tester
+        More information in the description of the function init_center_by of Ktest
         
         free_memory (default = True): boolean,
-        If True, the data and the eigenvectors are not stored in the Tester object. 
+        If True, the data and the eigenvectors are not stored in the Ktest object. 
         This is usefull when many comparisons are done and stored in dict_tests to save place in the RAM. 
         
         
@@ -214,7 +214,7 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
                 
     Returns
     ------- 
-        A new Tester object is added in dict_tests at the key name. 
+        A new Ktest object is added in dict_tests at the key name. 
     '''
 
     if name not in dict_tests:
@@ -268,7 +268,7 @@ def add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,d
         if len(df1)>10 and len(df2)>10:
             t0=time()
             print(name,len(df1),len(df2),end=' ')
-            test = Tester()
+            test = Ktest()
 #             center_by = 'cat' if center_by_cat else None
             test.init_data_from_dataframe(df1,df2,dfx_meta = df1_meta,dfy_meta=df2_meta,center_by=center_by)
             test.obs['cat']=test.obs['cat'].astype('category')
@@ -413,7 +413,7 @@ def kfda_similarity_of_datasets_from_cats(cats,dict_data,dict_tests,kernel='gaus
                 
             if c1<c2:
                 name = f'{c1}_{c2}'
-                add_tester_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,params_model=params_model)
+                add_Ktest_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,params_model=params_model)
                 kfda = get_kfda_from_name_and_dict_tests(name,dict_tests)
                 
                 similarities[c1][c2] = kfda

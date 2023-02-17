@@ -59,11 +59,11 @@ class TruncationSelection(Residuals):
         return(tressaut)
 
 
-    def select_trunc(self,selection_procedure='ressaut',selection_params={}):
-        if selection_procedure == 'ressaut':
-            self.t = self.select_trunc_by_between_reconstruction_ressaut(**selection_params)
-        if selection_procedure == 'ratio':
-            self.t = self.select_trunc_by_between_reconstruction_ratio(**selection_params)
+    # def select_trunc(self,selection_procedure='ressaut',selection_params={}):
+    #     if selection_procedure == 'ressaut':
+    #         self.t = self.select_trunc_by_between_reconstruction_ressaut(**selection_params)
+    #     if selection_procedure == 'ratio':
+    #         self.t = self.select_trunc_by_between_reconstruction_ratio(**selection_params)
 
 
 # def get_trunc(self):

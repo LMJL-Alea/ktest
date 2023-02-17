@@ -104,7 +104,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         return(fig,axes)
 
 
-    def plot_pval_and_errors_of_variable(self,variable,t=30,name='',fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True,
+    def plot_pval_and_errors_of_variable(self,variable,t=30,name=None,fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True,
                     pval=True,var=True,diff=True):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
@@ -115,11 +115,13 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             self.plot_pvalue_of_variable(variable=variable,name=name,t=t,fig=fig,ax=ax,truncations_of_interest=truncations_of_interest,adjust=adjust,)
         
         if var:
-            errW = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errW'][variable] for trunc in range(1,t)]
+            colw = self.get_column_name_in_var(t=trunc,name=name,output='errW')
+            errW = [1]+[self.get_var()[colw][variable] for trunc in range(1,t)]
             ax.plot(range(t),errW,label='w-variability')
         
         if diff:
-            errB = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errB'][variable] for trunc in range(1,t)]
+            colB = self.get_column_name_in_var(t=trunc,name=name,output='errB')
+            errB = [1]+[self.get_var()[colB][variable] for trunc in range(1,t)]
             ax.plot(range(t),errB,label='difference')
         
         
@@ -132,11 +134,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         ax.set_xlim(-1,t+1)
         return(fig,ax)
 
-    def plot_pvalue_of_variable(self,variable,name='',t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
+    def plot_pvalue_of_variable(self,variable,name=None,t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
-        pval = [self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_pval'][variable] for trunc in range(1,t)]
+        col = self.get_column_name_in_var(t=trunc,name=name,output='pval')
+        pval = [self.get_var()[col][variable] for trunc in range(1,t)]
         label = f'{variable} p-value' if label is None else label
         ax.plot(range(1,t),pval,label=label,color=color,ls=ls)
         if truncations_of_interest is not None:
@@ -318,32 +321,33 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         return(fig,axd)
    
     def volcano_plot(self,trunc,name='',color=None,exceptions=[],
-                    focus=None,zero_pvals=False,fig=None,ax=None,BH=False,threshold=1,plot_others=False):
+                    focus=None,zero_pvals=False,fig=None,ax=None,corrected=False,threshold=1,plot_others=False):
         # quand la stat est trop grande, la fonction chi2 de scipy.stat renvoie une pval nulle
         # on ne peut pas placer ces gènes dans le volcano plot alors ils ont leur propre graphe
 
         if fig is None:
             fig,ax = plt.subplots(figsize=(4,10))
 
-        var_prefix = self.get_univariate_results_in_var(trunc,name)
+        col = self.get_column_name_in_var(t=trunc,corrected=corrected,name=name,output='pval') 
         
-        BH_str = 'BHc' if BH else ''
         zpval_str = '= 0' if zero_pvals else '>0'
         var = self.get_var()
+        BH_str = 'after correction' if corrected else ''
 
-
-        pval_name = f'{var_prefix}_pval{BH_str}' 
-        if BH and pval_name not in var:
+        if corrected and col not in var:
             self.correct_BenjaminiHochberg_pval_univariate(trunc=trunc,name=name)
-        pval = var[pval_name]
+        pval = var[col]
         pval = filter_genes_wrt_pval(pval,exceptions,focus,zero_pvals,threshold)
         
-        print(f'{var_prefix} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
+        print(f'{col} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
         
         genes = []
         if len(pval) != 0:
-            kfda = var[f'{var_prefix}_kfda']
-            errB = var[f'{var_prefix}_errB']
+            col_kfda = self.get_column_name_in_var(t=trunc,corrected=corrected,name=name,output='kfda') 
+            col_errB = self.get_column_name_in_var(t=trunc,corrected=corrected,name=name,output='errB') 
+        
+            kfda = var[col_kfda]
+            errB = var[col_errB]
             logkfda = np.log(kfda[kfda.index.isin(pval.index)])
             errB = errB[errB.index.isin(pval.index)]
 
@@ -356,7 +360,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
             if zero_pvals:
         #         print('zero')
-                ax.set_title(f'{var_prefix} \ng enes strongly rejected',fontsize=30)
+                ax.set_title(f'col \ngenes strongly rejected',fontsize=30)
                 ax.set_xlabel(f'log(kfda)',fontsize=20)
                 ax.set_ylabel(f'errB',fontsize=20)
 
@@ -371,7 +375,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
             else:
         #         print('nz')
-                ax.set_title(f'{var_prefix}\n non zero pvals',fontsize=30)
+                ax.set_title(f'{col}\n non zero pvals',fontsize=30)
                 ax.set_xlabel(f'log(kfda)',fontsize=20)
                 ax.set_ylabel(f'-log(pval)',fontsize=20)
                 logpval = -np.log(pval)
@@ -410,12 +414,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             for g in corr.index[::-1]:
                 dout = {}
                 for tpval in range(1,tpvalmax+1):
-                    pval_name = f'{self.get_univariate_results_in_var(trunc,name)}_pvalBHc'
+                    col = self.get_column_name_in_var(t=trunc,corrected=True,name=name,output='pval') 
                     # pval_name = f'{prefix}_{self.get_kfdat_name()}_t{tpval}_pvalBHc'
-                    if pval_name not in self.get_var().columns:
+                    if col not in self.get_var().columns:
                         self.correct_BenjaminiHochberg_pval_univariate(trunc=trunc,name=name)
                             # var_prefix=pval_name[:-8])
-                    dout[f't{tpval}'] = -np.log(self.get_var()[pval_name][g]+1)/np.log(10)
+                    dout[f't{tpval}'] = -np.log(self.get_var()[col][g]+1)/np.log(10)
                 out += [dout]
 
             dfout = pd.DataFrame(out,index=corr.index)
@@ -437,11 +441,10 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         for tpval,ax in zip(range(1,tpvalmax+1),axes):
             
-            # pval_name = f'{prefix}_{self.get_kfdat_name()}_t{tpval}_pvalBHc'
-            pval_name = f'{self.get_univariate_results_in_var(trunc,name)}_pvalBHc'
-            if pval_name not in self.get_var().columns:
+            col = self.get_column_name_in_var(t=trunc,corrected=True,name=name,output='pval') 
+            if col not in self.get_var().columns:
                 self.correct_BenjaminiHochberg_pval_univariate(trunc,name)
-            pval = self.get_var()[pval_name]
+            pval = self.get_var()[col]
             pval = pval.sort_values()
 
             out = []

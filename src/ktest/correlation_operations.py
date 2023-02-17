@@ -1,12 +1,12 @@
 import torch
 import numpy as np
 import pandas as pd
-from .base import Data,Model
+from .base import Base
 """
 On peut vouloir calculer la corrélation entre les variables d'origine et les directions déterminées par 
 nos méthodes. Ces fonctions permettent de le faire simplement. 
 """
-class Correlations(Data):
+class Correlations(Base):
 
     def compute_corr_proj_var(self,t=None,proj='proj_kfda',verbose=0): 
             # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):

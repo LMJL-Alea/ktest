@@ -82,7 +82,7 @@ class Plot_WBerrors(Residuals,Statistics):
         Can be cumulated and log. 
         Parameters
         ----------
-            self : Tester, 
+            self : Ktest, 
             Should contain the eigenvectors and eigenvalues of the within covariance operator in the attribute `spev`
             
         Returns 
@@ -101,15 +101,15 @@ class Plot_WBerrors(Residuals,Statistics):
         om = self.compute_omega()
         
         if cov != 'standard':
-            m = self.get_ntot(landmarks=True)
+            nlandmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             Kzx = self.compute_kmn()
             # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
-            mmdt = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
-                (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
-            tot = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
+            mmdt = (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
+                (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
+            tot = (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
             exd = mmdt/tot
         else:
             pkm = self.compute_pkm()

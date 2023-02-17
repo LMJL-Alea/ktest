@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2
 import scanpy as sc
-from tester import Tester
+from tester import Ktest
 from importlib import reload 
 
 
@@ -46,7 +46,7 @@ def select_adata(adata,obs_col,obs_val):
     cells = adata.obs[obs_col]==obs_val
     return(adata[cells])
 
-def tester_of_Controle_Traite(adata,obs_col='treatment',obs_values=('Control','BH3'),layer='norm_data',spec=None):
+def Ktest_of_Controle_Traite(adata,obs_col='treatment',obs_values=('Control','BH3'),layer='norm_data',spec=None):
     """
     spec values in 'bool','H0CC','H0TT'
     """
@@ -60,7 +60,7 @@ def tester_of_Controle_Traite(adata,obs_col='treatment',obs_values=('Control','B
         ix,iy = adata1.obs.index,adata2.obs.index
         if spec=='bool':
             x,y = 1.*np.array(x,dtype=bool),1.*np.array(y,dtype=bool)
-    return(Tester(x=x,y=y,x_index=ix,y_index=iy,variables=adata.var.index))
+    return(Ktest(x=x,y=y,x_index=ix,y_index=iy,variables=adata.var.index))
 
 def get_ncells_from_proj(df_proj,xy):
     return(len(df_proj.loc[df_proj['sample']==xy]))
