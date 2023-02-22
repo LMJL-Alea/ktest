@@ -1,7 +1,7 @@
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from .tester import ktest
+from .tester import Ktest
 from .base import init_kernel_params,init_test_params
 import numpy as np
 
@@ -27,7 +27,7 @@ def get_Ktest_from_df_and_comparaison(df,comparaison,name,kernel=init_kernel_par
         print(null_genes)
         data = data.drop(columns=null_genes)
     
-    t = ktest(
+    t = Ktest(
                 data,
                 metadata.copy(),
                 data_name=f'{name}_{cstr}',
@@ -49,13 +49,13 @@ def get_name_in_dict_data(k):
     name += '_batch_corrected' if '_batch_corrected' in k else ''
     return(name)
 
-def figures_outliers_of_reversion_from_tq(ktest,trunc,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
+def figures_outliers_of_reversion_from_tq(ktest,t,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
     # suptitle = f'{cstr} {name} t{trunc} q{q_}'
     
     str_focus = '' if focus is None else f'_{focus}'
-    outliers_name= f't{trunc}_q{q_}{str_focus}'
+    outliers_name= f't{t}_q{q_}{str_focus}'
     
-    dfproj = ktest.init_df_proj(proj='proj_kfda',name=ktest.get_kfdat_name())[str(trunc)]#.sort_values(ascending=False)
+    dfproj = ktest.init_df_proj(proj='proj_kfda',name=ktest.get_kfdat_name())[str(t)]#.sort_values(ascending=False)
     meta = get_meta_from_df(df)
     if focus is not None:
         dfproj = dfproj[dfproj.index.isin(meta[meta['condition']==focus].index)]
@@ -67,7 +67,7 @@ def figures_outliers_of_reversion_from_tq(ktest,trunc,q_,df,focus=None,color=Non
     
     fig,axes = figures_outliers_of_reversion(
         ktest=ktest,
-        trunc=trunc,
+        t=t,
         df=df,
         outliers_list=outliers_list,
         outliers_name=outliers_name,
@@ -77,7 +77,7 @@ def figures_outliers_of_reversion_from_tq(ktest,trunc,q_,df,focus=None,color=Non
     
     ax = axes[1]
     ax.axvline(q,color='crimson',ls='--')
-    ax.set_title(f't{trunc} q{q_}',fontsize=30)
+    ax.set_title(f't{t} q{q_}',fontsize=30)
     
     ax = axes[2]
     ax.axvline(q,color='crimson',ls='--')
@@ -88,13 +88,13 @@ def figures_outliers_of_reversion_from_tq(ktest,trunc,q_,df,focus=None,color=Non
         return(fig,axes)
 
 
-def figures_outliers_of_reversion_from_tq2(ktest,trunc,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
+def figures_outliers_of_reversion_from_tq2(ktest,t,q_,df,focus=None,color=None,marker=None,return_outliers=False,contrib=False):
     # suptitle = f'{cstr} {name} t{trunc} q{q_}'
     
     str_focus = '' if focus is None else f'_{focus}'
-    outliers_name= f't{trunc}_q{q_}{str_focus}'
+    outliers_name= f't{t}_q{q_}{str_focus}'
     
-    dfproj = ktest.init_df_proj(proj='proj_kfda',name=ktest.get_kfdat_name())[str(trunc)]#.sort_values(ascending=False)
+    dfproj = ktest.init_df_proj(proj='proj_kfda',name=ktest.get_kfdat_name())[str(t)]#.sort_values(ascending=False)
     meta = get_meta_from_df(df)
     if focus is not None:
         dfproj = dfproj[dfproj.index.isin(meta[meta['condition']==focus].index)]
@@ -108,7 +108,7 @@ def figures_outliers_of_reversion_from_tq2(ktest,trunc,q_,df,focus=None,color=No
     
     fig,axes = figures_outliers_of_reversion2(
         ktest=ktest,
-        trunc=trunc,
+        t=t,
         df=df,
         outliers_list=outliers_list,
         outliers_name=outliers_name,
@@ -118,7 +118,7 @@ def figures_outliers_of_reversion_from_tq2(ktest,trunc,q_,df,focus=None,color=No
     
     fig,axes = figures_outliers_of_reversion2(
         ktest=ktest,
-        trunc=trunc,
+        t=t,
         df=df,
         outliers_list=remaining,
         outliers_name=outliers_name,
@@ -128,7 +128,7 @@ def figures_outliers_of_reversion_from_tq2(ktest,trunc,q_,df,focus=None,color=No
 
     ax = axes[1]
     ax.axvline(q,color='crimson',ls='--')
-    ax.set_title(f't{trunc} q{q_}',fontsize=30)
+    ax.set_title(f't{t} q{q_}',fontsize=30)
     
     ax = axes[2]
     ax.axvline(q,color='crimson',ls='--')
@@ -136,7 +136,7 @@ def figures_outliers_of_reversion_from_tq2(ktest,trunc,q_,df,focus=None,color=No
  
     fig,axes = figures_outliers_of_reversion2(
         ktest=ktest,
-        trunc=trunc,
+        t=t,
         df=df,
         outliers_list=remaining,
         outliers_name=outliers_name,
@@ -168,12 +168,13 @@ def get_dict_ktests_outliers_vs_each_condition(df,outliers_list,outliers_name):
 
         dfoutvscond = pd.concat([dfout,dfr])
         metaoutvscond = pd.concat([metaout,metar])
-        toutvscondition = create_and_fit_tester_for_two_sample_test_kfdat(df=dfoutvscond,
-                                                    meta=metaoutvscond.copy(),
-                                                    data_name=f'{outliers_name}_{condition}',
-                                                    condition='population',
-                                                    nystrom=False,
-                                                    center_by=None,)
+        toutvscondition = Ktest(data=dfoutvscond,
+                                metadata=metaoutvscond.copy(),
+                                data_name=f'{outliers_name}_{condition}',
+                                condition='population',
+                                nystrom=False,
+                                center_by=None,)
+        toutvscondition.multivariate_test()
         dict_output[condition] = toutvscondition
     return(dict_output)
 
@@ -193,12 +194,14 @@ def get_dict_ktests_condition_vs_each_other_condition(df,condition_of_interest='
 
             dfout = pd.concat([dfc,dfr])
             metaout = pd.concat([metac,metar])
-            tout = create_and_fit_tester_for_two_sample_test_kfdat(df=dfout,
-                                                        meta=metaout.copy(),
-                                                        data_name=f'{condition_of_interest}_{condition}',
-                                                        condition='population',
-                                                        nystrom=False,
-                                                        center_by=None,)
+            tout = Ktest(
+                        data=dfout,
+                        metadata=metaout.copy(),
+                        data_name=f'{condition_of_interest}_{condition}',
+                        condition='population',
+                        nystrom=False,
+                        center_by=None,)
+            tout.multivariate_test()
             dict_output[condition] = tout
     return(dict_output)
 
@@ -215,15 +218,17 @@ def get_ktest_outliers_vs_all(df,outliers_list,outliers_name):
     
     dfoutvsothers = pd.concat([dfout,dfothers])
     metaoutvsothers = pd.concat([metaout,metaothers])
-    toutvsothers = create_and_fit_tester_for_two_sample_test_kfdat(df=dfoutvsothers,
-                                                    meta=metaoutvsothers.copy(),
-                                                    data_name=f'{outliers_name}_all_other_cells',
-                                                    condition='population',
-                                                    nystrom=False,
-                                                    center_by=None,)
+    toutvsothers = Ktest(
+                    data=dfoutvsothers,
+                    metadata=metaoutvsothers.copy(),
+                    data_name=f'{outliers_name}_all_other_cells',
+                    condition='population',
+                    nystrom=False,
+                    center_by=None,)
+    toutvsothers.multivariate_test()
     return(toutvsothers)
 
-def figures_outliers_of_reversion(ktest,trunc,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
+def figures_outliers_of_reversion(ktest,t,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
     
     fig,axes = plt.subplots(ncols=4,figsize=(28,7)) 
                 
@@ -231,11 +236,11 @@ def figures_outliers_of_reversion(ktest,trunc,df,outliers_list,outliers_name,col
     ktest.plot_pval_and_errors(fig=fig,ax=ax,truncations_of_interest=[1,3,5],t=20,pval_contrib=contrib)
 
     ax = axes[1]
-    ktest.hist_discriminant(t=trunc,fig=fig,ax=ax,)
+    ktest.hist_discriminant(t=t,fig=fig,ax=ax,)
 
 
     ax = axes[2]
-    ktest.plot_residuals(t=trunc,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
+    ktest.plot_residuals(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
     ax.set_title(outliers_name,fontsize=30)
 
     ax = axes[3]
@@ -268,7 +273,7 @@ def figures_outliers_of_reversion(ktest,trunc,df,outliers_list,outliers_name,col
     return(fig,axes)
 
 
-def figures_outliers_of_reversion2(ktest,trunc,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
+def figures_outliers_of_reversion2(ktest,t,df,outliers_list,outliers_name,color=None,marker=None,contrib=False):
     
     
     fig,axes = plt.subplots(ncols=3,figsize=(28,7)) 
@@ -277,14 +282,14 @@ def figures_outliers_of_reversion2(ktest,trunc,df,outliers_list,outliers_name,co
     ktest.plot_pvalue(fig=fig,ax=ax,t=20,contrib=contrib,color_agg=None,log=True,label_agg='all',)
 
     ax = axes[1]
-    ktest.hist_discriminant(t=trunc,fig=fig,ax=ax,)
+    ktest.hist_discriminant(t=t,fig=fig,ax=ax,)
 
     ax = axes[2]
-    ktest.plot_residuals(t=trunc,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
+    ktest.plot_residuals(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
     ax.set_title(outliers_name,fontsize=30)
 
     ax = axes[0]
-    ktest.fit_ktest_with_ignored_observations(list_of_observations_to_ignore = outliers_list,
+    ktest.fit_Ktest_with_ignored_observations(list_of_observations_to_ignore = outliers_list,
                                                 list_name=outliers_name)
     ktest.set_marked_obs_to_ignore(marked_obs_to_ignore=outliers_name)
     ktest.plot_pvalue(fig=fig,ax=ax,t=20,contrib=contrib,color_agg=None,log=True,label_agg='without pop',)

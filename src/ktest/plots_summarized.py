@@ -14,7 +14,7 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
 
 
     # reconstructions error 
-    def plot_pval_and_errors(self,truncations_of_interest=[1,3,5],t=30,fig=None,ax=None,marked_obs_to_ignore=None,
+    def plot_pval_and_errors(self,truncations_of_interest=[1,3,5],t=20,fig=None,ax=None,marked_obs_to_ignore=None,
                             log=False,cumul=False,adjust=True,decreasing=False,
                             log_spectrum=False,
                             pval_aggregated=True,pval_contrib=False,
@@ -73,7 +73,7 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
 
         self.mark_observations(observations_to_mark=observations,marking_name=oname)
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=oname)
-        self.kfdat()    
+        self.multivariate_test()    
         self.projections(t=20)
         self.set_marked_obs_to_ignore()
 
@@ -115,7 +115,7 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         else:
             self.mark_observations(observations_to_mark=list_of_observations_to_ignore,marking_name=list_name)
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=list_name)
-        self.kfdat() 
+        self.multivariate_test() 
         self.projections(t=20)
         self.set_marked_obs_to_ignore()
 

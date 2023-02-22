@@ -188,8 +188,8 @@ class Plot_Standard(Statistics):
             pval = self.df_pval[self.get_kfdat_name()].loc[t]
             label += f' pval={pval:.1e}' if pval<.01 else f' pval={pval:1.2f}'
                     
-        sp,ev = self.get_spev('covw')
         if proj in ['proj_kfda','proj_kpca']:
+            sp,ev = self.get_spev('covw')
             lmbda = sp[t-1]
             label += r' $\lambda$'
             label += f'={lmbda:.1e}' if lmbda<.01 else f'={lmbda:.2f}' 

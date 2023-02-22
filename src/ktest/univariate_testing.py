@@ -5,7 +5,7 @@ from joblib import Parallel, delayed, parallel_backend
 import os
 import numpy as np
 from .utils_univariate import filter_genes_wrt_pval
-
+from .pvalues import correct_BenjaminiHochberg_pval_of_dfcolumn
 '''
 La question du test univarié sur des données univariées est difficile notamment par rapport à ce qu'on veut
 retenir de chaque test univarié unique. 
@@ -250,7 +250,7 @@ class Univariate:
 
     def ktest_for_one_variable(self,variable,kernel=None,inform_var=True,verbose=0):
         # Get testing info from global object 
-        from .tester import ktest
+        from .tester import Ktest
 
         # Initialize univariate Ktest with common covariance 
         # var_metadata = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
@@ -267,7 +267,7 @@ class Univariate:
             print(f'\tkernel : {self.get_kernel_params}')
 
 
-        t = ktest(
+        t = Ktest(
                     data =self.init_df_proj(variable),
                     metadata =self.obs.copy(),
                     data_name=  self.data_name,
@@ -296,12 +296,59 @@ class Univariate:
             t.df_pval[variable] = t.df_pval[kfdat_name]        
         return(t)
         
-    def add_results_univariate_kfda_in_var(self,vtest,variable,name='',tmax=31,verbose=0):
+    def add_results_univariate_kfda_in_vard(self,vtest,variable,name='',tmax=31,
+                truncations_of_interest=list(range(1,31)),diagnostic=False,t_diagnostic=31,verbose=0):
+        if verbose >0:
+            print('- Add results univariate kfda in vard')
+        
+        vard = self.get_vard()
+        not_tested = vtest.df_kfdat.empty
+        ### stat and pvals 
+        if not_tested:
+            if verbose >0 : 
+                print(f'\tAdding NA because variable {variable} was not tested')
+
+        tmax = np.min((np.max(truncations_of_interest),len(vtest.get_explained_difference())))
+
+        for t in truncations_of_interest:
+            if t<tmax:            
+                colpval = self.get_column_name_in_var(t=t,corrected=False,name=name,output='pval')
+                colkfda = self.get_column_name_in_var(t=t,corrected=False,name=name,output='kfda')
+                
+                
+                pval = np.NaN if not_tested else vtest.df_pval[variable][t]
+                kfda = np.NaN if not_tested else vtest.df_kfdat[variable][t]
+                
+                vard[variable][colpval]=pval
+                vard[variable][colkfda]=kfda
+
+        #### diagnostics
+        if diagnostic:
+            tmax = np.min((t_diagnostic,len(vtest.get_explained_difference())))
+            ts_diagnostic = list(range(1,tmax))
+            for t in ts_diagnostic:
+                colB = self.get_column_name_in_var(t=t,corrected=False,name=name,output='errB')
+                colW = self.get_column_name_in_var(t=t,corrected=False,name=name,output='errW')
+                
+                errB = np.NaN if not_tested else vtest.get_explained_difference_of_t(t)
+                errW = np.NaN if not_tested else vtest.get_explained_variability_of_t(t)
+
+                vard[variable][colB] = errB
+                vard[variable][colW] = errW
+
+        col_univariate = self.get_column_name_in_var(name=name,output='univariate')
+        vard[variable][col_univariate] = True
+
+    def add_results_univariate_kfda_in_vard_old(self,vtest,variable,name='',tmax=31,
+                truncations_of_interest=list(range(1,31)),diagnostic=False,t_diagnostic=31,verbose=0):
         if verbose >0:
             print('- Add results univariate kfda in var')
         
         vard = self.get_vard()
         
+        ts_test = truncations_of_interest
+        ts_diagnostic = list(range(1,t_diagnostic))
+
         ts = list(range(1,tmax)) 
         tnames = [str(t) for t in ts]
         tnames += ['r1','r2','r3','rmax']
@@ -316,8 +363,10 @@ class Univariate:
                     col = self.get_column_name_in_var(t=tname,corrected=False,name=name,output='')
                     vard[variable][f'{col}pval'] = np.NaN
                     vard[variable][f'{col}kfda'] = np.NaN 
-                    vard[variable][f'{col}errB'] = np.NaN
-                    vard[variable][f'{col}errW'] = np.NaN
+
+                    if diagnostic :
+                        vard[variable][f'{col}errB'] = np.NaN
+                        vard[variable][f'{col}errW'] = np.NaN
                     if 'r' in tname:
                         vard[variable][f'{col}t'] = np.NaN
         else:
@@ -363,7 +412,15 @@ class Univariate:
             # string = f'{variable} {tab} {zp_string} \t pval{tr1:1.0f}:{pval1:1.0e}  r{tr1:1.0f}:{errB1:.2f} \t pval{tr2:1.0f}:{pval2:1.0e}  r{tr2:1.0f}:{errB2:.2f}'
             # print(string)
 
-    def univariate_kfda(self,variable,name=None,kernel_bandwidths_col_in_var=None,parallel=False,verbose=0):
+    def univariate_test_of_variable(self,
+                                    variable,
+                                    name=None,
+                                    kernel_bandwidths_col_in_var=None,
+                                    parallel=False,
+                                    truncations_of_interest=list(range(1,31)),
+                                    diagnostic=False,
+                                    t_diagnostic=31,
+                                    verbose=0):
 
         col = self.get_column_name_in_var(name=name,output='univariate')
         var = self.get_var()
@@ -378,27 +435,100 @@ class Univariate:
                 kernel['bandwidth'] = var[kernel_bandwidths_col_in_var].loc[variable]
             t=self.compute_univariate_kfda(variable,kernel=kernel,verbose=verbose)
 
-        self.add_results_univariate_kfda_in_var(t,variable,name=name,verbose=verbose)
+        self.add_results_univariate_kfda_in_vard(t,variable,name=name,
+                    truncations_of_interest=truncations_of_interest,diagnostic=diagnostic,t_diagnostic=t_diagnostic,verbose=verbose)
         
         if parallel:
             return({'v':variable,**vard[variable]})
         return(t) 
  
-
-    def univariate_test(self,n_jobs=1,lots=100,fromto=[0,-1],variables_to_test=None,save_path=None,name='',kernel_bandwidths_col_in_var=None,verbose=0):
+    def univariate_test(self,
+                        variables_to_test=None,
+                        fromto=[0,-1],
+                        name=None,
+                        save_path=None,
+                        overwrite=False,
+                        truncations_of_interest=list(range(1,31)),
+                        n_jobs=1,
+                        lots=100,
+                        diagnostic=False,
+                        t_diagnostic=31,
+                        kernel_bandwidths_col_in_var=None,
+                        verbose=0):
         """
-        parallel univariate testing.
-        Variables are tested by groups of `lots` variables in order to save intermediate results if the 
-        procedure is interupted before the end. 
+        Perform univariate testing or Differential Expression Analysis on each variable.
+        The results are stored in the var dataframe accessible through `ktest.get_var()`
+        and saved in `save_path` if specified. 
+        The results stored are the kfda statistics and p-values associated to each truncation present in
+        `truncations_of_interest`. 
+        If `diagnostic` is True, the explained variabilities and explained differences 
+            are added to the result dataframe for truncations from 1 to `t_diagnostic`            
+
+        Parameters
+        ----------
+            variables_to_test (default = None) : iterable of variables
+                List of variables of interest to be tested. 
+                Has priority over `fromto`.
+            
+            fromto (default = [0,-1]) : list of two int 
+                Position in the object variables list of the first and last variable to test
+                If the second entry is -1, the last variable to test is the last one in the variables list.     
+                Warning : not designed to test a specific set of variables (e.g. genes pathway), 
+                        parameter `variables_to_test` is.   
+                Warning : ignored if `variables_to_test` is specified. 
+
+            name (default = None) : int 
+                A name to refer to this set of tests if you aim at testing different groups
+                 of variables separately (e.g. different gene pathways)
+
+            save_path (default = None) : str
+                path of the directory in which to save the resulting .csv file. 
+                the file is automatically named with respect to test info. 
+                if None : the results are not written in a .csv file
+                
+            overwrite (default = False) : bool
+                ignored if `save_path` is not specified
+                if True : the written .csv file will contain current results only
+                if False :if the result file to be saved already exists in the directory `save_path`, 
+                    its results are loaded and added to the current results so that all the results
+                    are saved. 
+            
+            truncations_of_interest (default = list(range(1,31)) : List of int
+                List of truncations to compute the results of. 
+
+            n_jobs (default = 1) : int 
+                Number of CPUs to use for parallel computing. 
+                
+            lots (default = 100) : int
+                Number of tested variables between each save of intermediate results.
+
+            diagnostic (default = False) : bool
+                if True, the diagnostic quantities (explained variabilities and explained differences)
+                are added to the results. 
+
+            t_diagnostic (default = 31) : int
+                ignored if `diagnostic` is False
+                the diagnostic quantities are added to the result dataframe 
+                for truncations from 1 to `t_diagnostic`  
+            
+            kernel_bandwidth_col_in_var (default = None) : str 
+                Specify the kernel bandwidth to use for each variable with a column of the var dataframe (e.g. a column containing the variances) 
+                Ignored if the kernel is not gaussian
+
+            verbose (default = 0) : int
+                The higher, the more verbose is the function.     
         """
 
+        if name is None:
+            name = '' if self.univariate_name is None else self.univariate_name
         self.univariate_name=name
-        self.load_univariate_test_results_in_var_if_possible(save_path,name=name,verbose=verbose) # load data if necessary
+
+        if not overwrite:
+            self.load_univariate_test_results_in_var_if_possible(save_path,name=name,verbose=verbose) # load data if necessary
         self.update_var_from_vard(verbose=verbose)
         voi = self.determine_variables_to_test(fromto=fromto,variables_to_test=variables_to_test,
                                                 name=name,verbose=verbose) # determine variables to test
         t00 = time()
-        # not parallel testing
         if len(voi)==0:
             if verbose>0:
                 print(f'- No variable to test')
@@ -422,25 +552,37 @@ class Univariate:
                                 print(v,end=' ')
                             elif verbose >1:
                                 print('\n',v)
-                            results+=[self.univariate_kfda(v,name=name,
-                                                    kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
-                                                    parallel=True,
-                                                    verbose=verbose-1)]
+                            results+=[
+                                self.univariate_test_of_variable(
+                                                v,name=name,
+                                                kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
+                                                parallel=True,
+                                                truncations_of_interest=truncations_of_interest,
+                                                diagnostic=diagnostic,
+                                                t_diagnostic=t_diagnostic,
+                                                verbose=verbose-1
+                                    )]
                         print('')
                     elif n_jobs >1:
                         with parallel_backend('loky'):
-                            results = Parallel(n_jobs=n_jobs)(delayed(self.univariate_kfda)(v,name=name,
-                            kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
-                            parallel=True,
-                            verbose=verbose-1) for v  in  vs)
+                            results = Parallel(n_jobs=n_jobs)(
+                                delayed(self.univariate_test_of_variable)(
+                                    v,name=name,
+                                    kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
+                                    truncations_of_interest=truncations_of_interest,
+                                    diagnostic=diagnostic,
+                                    t_diagnostic=t_diagnostic,
+                                    parallel=True,
+                                    verbose=verbose-1
+                                ) for v  in  vs)
                     
                     if verbose>0:
                         print(f'\tDone in {time() - t0}')
                         print(f' \n\t{i}/{len(voi)} variables tested in {time() - t00}')
                     self.update_vard_from_parallel_univariate_kfda_results(results=results,tested_variables=vs,verbose=verbose) # update vard attribute with the results of vs genes tested
-                    self.save_intermediate_results(save_path,name,verbose=verbose) # save intermediate results in file in case of early interuption
+                    self.save_univariate_results(save_path=save_path,name=name,overwrite=overwrite,verbose=verbose) # save intermediate results in file in case of early interuption
 
-
+        self.save_univariate_results(save_path,name,verbose=verbose) # save intermediate results in file in case of early interuption
 
     # functions for parallel univariate testing        
     def load_univariate_test_results_in_var_if_possible(self,save_path,name=None,verbose=0):
@@ -449,8 +591,8 @@ class Univariate:
             name=self.univariate_name
 
         if save_path is None:
-            if verbose>0 : 
-                print("- No test results loaded. Inform 'save_path' to load univariate test results")
+            if verbose>1 : 
+                print("- You can load previously computed univariate test results with parameter 'save_path'.")
         else:
             file_name = self.get_column_name_in_var(name=name,output='univariate')+'.csv'
             file_exists = os.path.isfile(save_path+file_name)
@@ -464,17 +606,37 @@ class Univariate:
                     print(f'- File to load univariate test results not found')
                     print(f'\tdir: {save_path} \n\tfile: {file_name} ')
                 
-
     def update_var_from_vard(self,verbose=0):
         self.update_var_from_dataframe(pd.DataFrame(self.get_vard()).T,verbose=verbose)
 
-    def save_intermediate_results(self,save_path,name,verbose=0):
+    def save_univariate_results(self,save_path,name,overwrite=False,verbose=0):
+        """
+        Save univariate tests results in a .csv file
+
+        Parameters 
+        ----------
+            save_path : str
+                path of the directory in which to save the resulting .csv file. 
+                the file is automatically named with respect to test info. 
+                
+            name : str
+                Refers to the set of test results to save
+
+            overwrite (default = False) : bool
+                if True : the written .csv file will contain current results only
+                if False :if the result file to be saved already exists in the directory `save_path`, 
+                    its results are loaded and added to the current results so that all the results
+                    are saved. 
+                        
+        """
+
         self.update_var_from_vard(verbose=verbose)
         if save_path is not None:
             if verbose>1:
                 print('- Saving intermediate results')
-            self.load_univariate_test_results_in_var_if_possible(save_path,name,verbose=verbose)
-            self.save_univariate_test_results_in_var(save_path,verbose=verbose)
+            if not overwrite:   
+                self.load_univariate_test_results_in_var_if_possible(save_path,name,verbose=verbose)
+            self.save_univariate_test_results_in_var(save_path,name=name,verbose=verbose)
 
     def determine_variables_to_test(self,fromto,name,variables_to_test=None,verbose=0): 
         """
@@ -509,22 +671,37 @@ class Univariate:
             tested = var[var[col]==1].index
             voi = voi[~voi.isin(tested)]
         
+
+        # verbose stuff
         if verbose >0:
-            if len(voi)>0 and variables_to_test is None:
-                v0,v1 = voi[0],voi[-1]
-                print(f'- Determined {len(voi)}/{nvtot} variables to test (from {v0} to {v1})')
-            elif len(voi)>0 and variables_to_test is not None:
-                print(f'- Determined {len(voi)}/{nvtot} variables to test')
+            if len(voi)>0 :
+                s=f'- Determined {len(voi)}/{nvtot} variables to test'
+                if verbose == 1:
+                    if variables_to_test is None:
+                        v0,v1 = voi[0],voi[-1]            
+                        s+= f'(from {v0} to {v1})'
+                else:
+                    s+= ":\n"+" ".join(voi.tolist())
+                print(s)
 
             else:
-                v0,v1 = fromto[0],fromto[1]
-                print(f'- Nothing to test in [{v0},{v1}]')
+
+                s=f'-No variable to test'
+                if variables_to_test is None:
+                    v0,v1 = fromto[0],fromto[1]
+                    s+=f' in [{v0},{v1}]'
+
+                    
+
         return(voi)
 
     def update_vard_from_parallel_univariate_kfda_results(self,results,tested_variables,verbose=0):
         if verbose>0:
-            v0,v1 = tested_variables[0],tested_variables[-1]
-            print(f'\tUpdate {len(tested_variables)} tested variables in vard (from {v0} to {v1})')
+            s=f'- Update vard with {len(tested_variables)} tested variables'
+            if verbose >1:
+                v0,v1 = tested_variables[0],tested_variables[-1]
+                s+= f'({v0} to {v1})'
+            print(s)
         for a_,v in zip(results,tested_variables):
             if a_ is None : 
                 print(f'{v} was not tested')
@@ -535,11 +712,13 @@ class Univariate:
                         vard = self.get_vard()
                         vard[v][key] = value
 
-    def save_univariate_test_results_in_var(self,path,verbose=0):
+    def save_univariate_test_results_in_var(self,path,name=None,verbose=0):
+        if name is None:
+            name = self.univariate_name
         dn = self.data_name
-        print(f'- Saving univariate test results in \n\tdir: {path}')   
+        print(f'- Saving univariate test results of {name} in \n\tdir: {path}')   
         for cu in self.var[dn].columns:
-            if 'univariate' in cu:
+            if 'univariate' in cu and name in cu:
 
                 dname = cu.split(sep='_univariate')[0]
                 cols = [c for c in self.var[dn].columns if f'{dname}_' in c]
@@ -551,13 +730,12 @@ class Univariate:
 
     def load_univariate_test_results_in_var(self,path,file,verbose=0):
         df = pd.read_csv(f'{path}{file}',index_col=0)
+        df = df[~df.index.duplicated(keep='first')]
         if verbose >0:
             print(f'- Loaded univariate test results : {df.shape}')
         self.update_var_from_dataframe(df,verbose=verbose)
     
-
     # pvalue related
-
     def get_rejected_genes_for_toi(self,name=None):
         if name is None:
             name = self.univariate_name
@@ -590,7 +768,6 @@ class Univariate:
             df_output['trunc'] = self.get_var()[f'{name}_{kfdat_name}_t{tname}_t']
         return(df_output)
         
-
     def get_tested_variables(self,name=None,verbose=0):
         var = self.get_var()
         col = self.get_column_name_in_var(name=name,output='univariate')
@@ -612,33 +789,14 @@ class Univariate:
     def get_ntested_variables(self,name=None,verbose=0):
         return(len(self.get_tested_variables(name=name,verbose=verbose)))
 
-        # def get_ntested_variables_(self,name=None,verbose=0):
-
-        #     var = self.get_var()
-        #     col = self.get_column_name_in_var(name=name,output='univariate')
-            
-        #     if col not in var:
-        #         if verbose>0:
-        #             print(f'- Specified univariate tests not performed, you can run ktest.univariate_test(name={name})')
-        #         return(0)
-
-        #     else:
-        #         nvar = self.get_nvariables()
-        #         ntested = int(var[col].sum())
-        #         if verbose>0:
-        #             if nvar != ntested:
-        #                 print(f'Warning : only {ntested} variables were tested out of {nvar}')
-        #         return(ntested)
-
-
-    def get_pvals_univariate(self,t,name=None,corrected=True,verbose=0):
+    def get_pvals_univariate(self,t=10,name=None,corrected=True,verbose=0):
         """
         Returns the pandas.Series of pvalues.
 
         Parameters 
         ----------
 
-        t : int
+        t (default = 10): int
             Truncation parameter 
         
         name (default = ktest.univariate_name):
@@ -656,23 +814,23 @@ class Univariate:
         
         if ntested>0:
 
+            
+            if corrected :
+                self.correct_BenjaminiHochberg_pval_univariate(t=t,name=name,verbose=verbose)
+            
             var = self.get_var()
             col = self.get_column_name_in_var(t=t,name=name,corrected=corrected,output='pval')
             
-            if corrected :
-                self.correct_BenjaminiHochberg_pval_univariate(trunc=t,name=name,verbose=verbose)
-
-            return(var[col][var.index.isin(tested)])
+            return(var[col][var.index.isin(tested)].sort_values())
         
-
-    def get_DE_genes(self,t,name=None,corrected=True,threshold=.05,verbose=0):
+    def get_DE_genes(self,t=10,name=None,corrected=True,threshold=.05,verbose=0):
         """
         Returns the pandas.Series of pvalues lower than 'threshold'.
 
         Parameters 
         ----------
 
-        t : int
+        t (default = 10): int
             Truncation parameter 
         
         name (default = ktest.univariate_name):
@@ -687,8 +845,6 @@ class Univariate:
 
         verbose (default = 0) ; int 
             The greater, the more verbose is the output.
-
-
         """
 
         pvals = self.get_pvals_univariate(t=t,name=name,corrected=corrected,verbose=verbose)
@@ -711,3 +867,61 @@ class Univariate:
         
         return(col)
             
+    def get_corrected_variables(self,t,name=None,verbose=0):
+        var = self.get_var()
+        col = self.get_column_name_in_var(t=t,name=name,output='corrected')
+        
+        if col not in var:
+            if verbose>0:
+                print(f'- Not any variable has been corrected yet')
+            return([])
+        
+        else:
+            var_corrected = var[var[col]==1].index
+            ncorrected = len(var_corrected)
+            ntested = self.get_ntested_variables(name=name)
+            if verbose>0:
+                if ncorrected != ntested:
+                    print(f'Warning : only {ncorrected} variables were corrected out of {ntested} tested variables')
+            return(var_corrected)
+
+    def get_ncorrected_variables(self,t,name=None,verbose=0):
+        return(len(self.get_corrected_variables(t=t,name=name,verbose=verbose)))
+
+    def correct_BenjaminiHochberg_pval_univariate(self,t,name=None,
+                        exceptions=[],focus=None,
+                        verbose=0):
+        
+        ncorrected = self.get_ncorrected_variables(t=t,name=name,verbose=verbose)
+        nvar = self.get_nvariables()
+        if ncorrected == nvar:
+            if verbose:
+                print(f'All the {nvar} variables are already corrected for multiple testing')
+        else:
+
+        
+            col = self.get_column_name_in_var(t=t,
+                                                corrected=False,
+                                                name=name,
+                                                output='pval') 
+
+            pval = self.var[self.data_name][col]
+            pval = pval if focus is None else pval[pval.index.isin(focus)]
+            pval = pval[~pval.index.isin(exceptions)]
+            pval = pval[~pval.isna()]
+            ngenes_to_correct = len(pval)
+
+            if ngenes_to_correct > ncorrected:
+                if verbose >0:
+                    print(f"- Updating corrected pvals with {ngenes_to_correct - ncorrected} tested variables out of {ngenes_to_correct}.")
+                dfc = pd.DataFrame(index=self.get_variables())
+                dfc[col+'BHc'] = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
+                colc = self.get_column_name_in_var(t=t,name=name,output='corrected')
+
+                corrected_genes = pval.index       
+                dfc[colc] = False
+                series = dfc[colc].copy()
+                series[corrected_genes] = True
+                dfc[colc] = series
+        
+                self.update_var_from_dataframe(dfc)

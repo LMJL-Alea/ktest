@@ -6,8 +6,8 @@ from .tester import Ktest
 class Ktest_CRCL(Ktest):
     def prepare_visualization(self,t,outliers_in_obs=None):
         t0 = time()
-        kfda_name = self.kfdat(outliers_in_obs=outliers_in_obs)  
-        self.compute_pval() 
+        kfda_name = self.kfdat_statistic(outliers_in_obs=outliers_in_obs)  
+        self.compute_pvalue() 
         print('calcul KFDA :',time()-t0)
         
         t0 = time()

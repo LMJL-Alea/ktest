@@ -46,27 +46,6 @@ class Plot_WBerrors(Residuals,Statistics):
         
     # def get_between_covariance_projection_error(self,return_total=False):
 
-    def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
-        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
-        spp = (sp/sum(sp)) if part_of_inertia else sp
-        spp = spp.cumsum(0) if cumul else spp
-        spp = 1-spp if decreasing else spp
-        spp = torch.log(spp) if log else spp
-
-        return(spp)
-
-    def get_pvalue(self,contrib=False,log=False,name=None):
-        name = self.get_kfdat_name() if name is None else name
-        df_pval = self.df_pval_contributions if contrib else self.df_pval
-        pval = np.log(df_pval[name]) if log else df_pval[name]
-        return(pval) 
-
-    def get_kfda(self,contrib=False,log=False,name=None):
-        name = self.get_kfdat_name() if name is None else name
-        df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
-        kfda = np.log(df_kfda[name]) if log else df_kfda[name]
-        return(kfda) 
-
 
     def get_explained_difference_of_t(self,t):
         pe = self.get_explained_difference()

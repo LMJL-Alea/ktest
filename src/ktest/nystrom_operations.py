@@ -38,19 +38,19 @@ class NystromOps(OutliersOps,Verbosity):
             if ntot >500:
                 self.nlandmarks_initial = 500
                 self.nlandmarks = 500
-                if verbose >0:
+                if verbose >1:
                     print("\tnlandmarks not specified, by default, nlandmarks = 500")
             else:
                 self.nlandmarks_initial = ntot//10
                 self.nlandmarks = ntot//10
-                if verbose >0:
+                if verbose >1:
                     print("\tnlandmarks not specified, by default, nlandmarks = (n1+n2)//10 (less than 500 obs)")
 
         try:
             nlandmarks = sum([int(np.floor(n/ntot*self.nlandmarks_initial)) for k,n in self.get_nobs().items() if k!='ntot'])
             if nlandmarks != self.nlandmarks:
                 self.nlandmarks = nlandmarks   
-                if verbose>0:
+                if verbose>1:
                     print(f"\tReduced from {self.nlandmarks_initial} to {self.nlandmarks} landmarks for proportion issues")
                 if self.nanchors is not None and self.nanchors>nlandmarks:
                     old_nanchors = self.nanchors
@@ -99,10 +99,13 @@ class NystromOps(OutliersOps,Verbosity):
         self.init_nystrom(verbose=verbose)
 
         if verbose>0:
-            print('- Compute nystrom landmarks') 
-            print(f'\tlandmark_method : {self.landmark_method}\n\tm (nlandmarks total) : {self.nlandmarks} ')  
+            s = '- Compute nystrom landmarks'
+            if verbose == 1:
+                s += f' ({self.nlandmarks} landmarks)'
+            else :
+                s+= f'\n\tlandmark_method : {self.landmark_method}\n\tnlandmarks total : {self.nlandmarks} ' 
 
-        
+            print(s)
         if self.landmark_method == 'kmeans':
             self.compute_nystrom_landmarks_kmeans(verbose=verbose)
         elif self.landmark_method == 'random':
@@ -123,7 +126,8 @@ class NystromOps(OutliersOps,Verbosity):
         for sample in dict_index.keys():
             ni,index,nlandmarks = dict_nobs[sample],dict_index[sample],dict_nlandmarks[sample]
             data = dict_data[sample]
-            if verbose>0:
+            if verbose>1:
+                
                 print(f'\tnlandmarks in {sample} : {nlandmarks}')
             if data.shape[1]==1:
                 c = data.columns[0]
@@ -134,14 +138,14 @@ class NystromOps(OutliersOps,Verbosity):
                 # if there are less non-zero observation that the number of landmarks, we chose them all
                 if nz != 0:
                     if nz<nlandmarks:
-                        if verbose >0:
+                        if verbose >2:
                             print(f'\tnon-zero {nz} < {nlandmarks} : forcing non-zero obs in landmarks')
                         index_nz = data[data[c]!=0].index
                         index_z = data[data[c]==0].index[:nlandmarks-nz]
                         index_landmarks = index_nz.union(index_z)
 
                     else:
-                        if verbose >0:
+                        if verbose >2:
                             print(f'\tnon-zero {nz}> {nlandmarks} nlandmarks')
                         z = np.random.choice(ni,size=nlandmarks,replace=False)
                         is_chosen = data.index.isin(index[z])
@@ -214,8 +218,7 @@ class NystromOps(OutliersOps,Verbosity):
         """
         
         if verbose>0:
-            print('- Compute nystrom anchors')
-            print(f'\tnanchors : {self.nanchors}')
+            print(f'- Compute nystrom anchors ({self.nanchors} anchors)')
 
         assert(self.anchor_basis is not None)
         anchors_name = self.get_anchors_name()
@@ -244,7 +247,7 @@ class NystromOps(OutliersOps,Verbosity):
                     self.nanchors = sum(sp_anchors>0).item()
                     nanchors = self.nanchors
                     # ajout suite aux simu univariées ou le spectre était parfois négatif, ce qui provoquait des abérations quand on l'inversait. La solution que j'ai choisie est de tronquer le spectre uniquement aux valeurs positives et considérer les autres comme nulles. 
-                    if verbose>0:
+                    if verbose>1:
                         print(f'\tThe number of anchors is reduced from {old_nanchors} to {sum(sp_anchors>0)} for numerical stability')
 
                 self.spev['anchors'][anchors_name] = {'sp':sp_anchors[:nanchors],'ev':ev_anchors[:,:nanchors]}

@@ -45,17 +45,26 @@ def get_kernel_name(function,bandwidth,median_coef):
         n='user_specified'
     return(n)
 
-def init_test_params(test='kfda',nystrom=False,
-                    nlandmarks=None,nanchors=None,
-                    landmark_method='random',anchor_basis='w'):
+def init_test_params(stat='kfda',
+                    nystrom=False,
+                    nlandmarks=None,
+                    nanchors=None,
+                    landmark_method='random',
+                    anchor_basis='w',
+                    permutation=False,
+                    npermutation=500,
+                    seed_permutation=0):
 
-    return({'test':test,
+    return({'stat':stat,
             'nystrom':nystrom,
             'nlandmarks':nlandmarks,
             'nanchors':nanchors,
             'landmark_method':landmark_method,
-            'anchor_basis':anchor_basis
-    })
+            'anchor_basis':anchor_basis,
+            'permutation':permutation,
+            'npermutation':npermutation,
+            'seed_permutation':seed_permutation
+            })
 
 def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
     """
@@ -98,21 +107,31 @@ class Base:
         self.condition = 'sample'
         self.samples = 'all'
         self.marked_obs_to_ignore = None
-        # self.data = {'x':{},'y':{}}
         self.main_data=None
 
-        # Results
+        # Statistics 
         self.df_kfdat = pd.DataFrame()
         self.df_kfdat_contributions = pd.DataFrame()
+        self.dict_mmd = {}
+
+        # p-values
         self.df_pval = pd.DataFrame()
         self.df_pval_contributions = pd.DataFrame()
+        self.dict_pval_mmd = {}
+
+        # Permutation statistics
+        self.df_kfdat_perm = {}
+        self.df_mmd_perm = pd.DataFrame()
+
+        # Projections and Correlations
+        self.corr = {}     
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
         self.df_proj_tmmd = {}
         self.df_proj_residuals = {}
-        self.corr = {}     
-        self.dict_mmd = {}
+        
+        # Eigenvectors
         self.spev = {'covw':{},'anchors':{},'residuals':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
@@ -120,36 +139,76 @@ class Base:
         self.start_times = {}
 
 
-    def set_test_params(self,test='kfda',nystrom=False,nlandmarks=None,nanchors=None,
-                    landmark_method='random',anchor_basis='w',verbose=0):
+    def set_test_params(self,
+                    stat='kfda',
+                    nystrom=False,
+                    nlandmarks=None,
+                    nanchors=None,
+                    landmark_method='random',
+                    anchor_basis='w',
+                    permutation=False,
+                    npermutation=500,
+                    seed_permutation=0,
+                    verbose=0):
         '''
-        
+        It is not possible to use nystrom for small datasets (n<100)
+
         Parameters
         ----------
-            test : 'kfda' or 'mmd'
+            stat (default=): str in ['kfda','mmd']
+                Test statistic to be computed.
+
             nystrom (default = False) : bool
                 Whether to use the nystrom approximation or not.
-            nlandmarks : int, the total number of landmarks. 
-            nanchors : int, the total number of anchors. 
-            landmark_method : str in 'random','kmeans', the method to determine the landmarks. 
-            anchor_basis : str in 'k','s','w'. The anchors are determined as the eigenvectors of:  
+
+            nlandmarks : int, 
+                the total number of landmarks. 
+
+            nanchors : int, 
+                the total number of anchors. 
+
+            landmark_method : str in 'random','kmeans', 
+                the method to determine the landmarks. 
+
+            anchor_basis (default = 'w') : str in ['k','s','w']. 
+                The anchors are determined as the eigenvectors of:  
                             'k' : the gram matrix of the landmarks. 
                             's' : the centered covariance of the landmarks
                             'w' : the within group covariance of the landmarks (possible only if 'landmark_method' is 'random'.
-        Returns
-        ------- 
-        It is not possible to use nystrom for small datasets (n<100)
+
+            permutation (default = False): bool
+                If `stat == 'kfda'`:
+                    If True : a permutation p-value is computed with the function `ktest.multivariate_test()`
+                    Else : an asymptotic p-value is computed
+                If `stat == 'mmd'`, permutation is automatically set to True
+
+            npermutation (default = 500) : int
+                Number of permutation wanted to obtain a permutation p-value
+            
+            seed_permutation (default=0) : int
+                Random seed of the first permutation, each permutation seed is 
+                then obtained by an unit incrementation of the previous seed. 
+
         '''
 
         input_params = {
-            'test':test,'nystrom':nystrom,'nlandmarks':nlandmarks,'nanchors':nanchors,
-            'landmark_method':landmark_method,'anchor_basis':anchor_basis}
+            'stat':stat,
+            'nystrom':nystrom,
+            'nlandmarks':nlandmarks,
+            'nanchors':nanchors,
+            'landmark_method':landmark_method,
+            'anchor_basis':anchor_basis,
+            'permutation':permutation,
+            'nperm':npermutation,
+            'seed_permutation':seed_permutation,
+            }
 
         if input_params != self.input_params:
             self.input_params=input_params
-            self.test = test
+            self.stat = stat
             self.nystrom = nystrom
-            
+            self.permutation = True if stat == 'mmd' else permutation
+                
             if nystrom:
                 self.nystrom_initialized = False
                 self.nlandmarks_initial = nlandmarks 
@@ -166,25 +225,40 @@ class Base:
                 self.approximation_cov = 'standard'
                 self.approximation_mmd = 'standard'
 
+            if self.permutation:
+                self.npermutation = npermutation
+                self.seed_permutation = seed_permutation
+                
             self.has_model = True
 
     def get_input_params(self):
         return(self.input_params)
 
     def get_test_params(self):
+        test_params = {
+                'stat':self.stat,
+                'nystrom':self.nystrom,
+                'permutation':self.permutation}
+
         if self.nystrom:
-            return({'test':self.test,
-            'nystrom':self.nystrom,
-            'nlandmarks':self.nlandmarks_initial,
-            'nanchors':self.nanchors,
-            'landmark_method':self.landmark_method,
-            'anchor_basis':self.anchor_basis
-            })
-        else:
-            return({'test':self.test,
-            'nystrom':self.nystrom,
-            })
+            test_params = {
+                'nlandmarks':self.nlandmarks_initial,
+                'nanchors':self.nanchors,
+                'landmark_method':self.landmark_method,
+                'anchor_basis':self.anchor_basis,
+                **test_params
+            }
+        
+        if self.permutation:
+            test_params = {
+                'npermutation':self.npermutation,
+                'seed_permutation':self.seed_permutation,
+                **test_params
+            }
+        return(test_params)
                 
+
+
     def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None,verbose=0):
         '''
         
@@ -208,14 +282,18 @@ class Base:
         '''
 
         if verbose >0:
-            print(f'- Kernel\n\tfunction : {function}')
-            if function == 'gauss':
-                print(f'\tbandwidth : {bandwidth}')
-            if bandwidth == 'median' and median_coef != 1:
-                print(f'\tmedian_coef : {median_coef}')
-            if kernel_name is not None:
-                print(f'\tkernel_name : {kernel_name}')
-
+            s=f'- Define kernel function'
+            if verbose ==1:
+                s+=f' ({function})'
+            else:
+                s+='\n\tfunction : {function}'
+                if function == 'gauss':
+                    s+=f'\n\tbandwidth : {bandwidth}'
+                if bandwidth == 'median' and median_coef != 1:
+                    s+=f'\n\tmedian_coef : {median_coef}'
+                if kernel_name is not None:
+                    s+=f'\n\tkernel_name : {kernel_name}'
+            print(s)
         x,y = self.get_xy()
         verbose = self.verbose
         has_bandwidth = False
@@ -382,7 +460,11 @@ class Base:
                 naft = sum(var[c]==1)
         if verbose >0:
             if len(c_to_add)>0:
-                print(f'\tUpdate var ({var.shape}) with {len(c_to_add)} columns' )
+                s=f'- Update var'
+                if verbose>1:
+                    s+= f' {var.shape}'
+                s+= f' with {len(c_to_add)} columns'
+                print(s)
         df_to_add = df[c_to_add]
         self.var[self.data_name] = var.join(df_to_add)
 
@@ -830,8 +912,15 @@ class Base:
            
     def set_test_data_info(self,data_name,condition,samples='all',verbose=0):
         if verbose>0:
-            print(f"- Set test data info")
-            print(f"\tdata : {data_name}\n\tcondition : {condition}\n\tsamples : {samples}")
+            s=f"- Set test data info"
+            if verbose == 1:
+                if samples == 'all':
+                    s+=f' (condition={condition})'
+                else:
+                    s+=' ('+",".join(samples)+f' from {condition})'
+            if verbose >1:
+                s+=f"\n\tdata : {data_name}\n\tcondition : {condition}\n\tsamples : {samples}"
+            print(s)
         self.data_name = data_name
         self.condition = condition
         if condition in self.obs:
@@ -925,7 +1014,6 @@ class Base:
     def get_mmd_name(self):
         dtn = self.get_data_to_test_str()
         mn = self.get_model_str()
-
         return(f'{mn}_{dtn}')
 
     def get_corr_name(self,proj):

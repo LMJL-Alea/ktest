@@ -275,14 +275,14 @@ def add_Ktest_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,di
             test.obs['sexe']=test.obs['sexe'].astype('category')
             test.obs['patient']=test.obs['patient'].astype('category')
             test.init_model(**params_model)
-            test.kfdat(name = 'kfda')
+            test.kfdat_statistic(name = 'kfda')
             t = test.t
             
                         
             test.compute_proj_kfda(t=20,name='kfda')
             
             kfda = test.df_kfdat['kfda'][t]
-            test.compute_pval(t=t)
+            test.compute_pvalue()
             pval = test.df_pval['kfda'][t]
             if free_memory:
                 test.x = np.array(0)
