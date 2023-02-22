@@ -14,6 +14,7 @@ src/ktest/kernel_trick.py
 src/ktest/kernels.py
 src/ktest/nystrom_operations.py
 src/ktest/outliers_operations.py
+src/ktest/permutation.py
 src/ktest/plots_CRCL.py
 src/ktest/plots_standard.py
 src/ktest/plots_summarized.py

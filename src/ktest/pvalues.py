@@ -73,25 +73,58 @@ class Pvalues:
     def __init__(self):        
         super(Pvalues, self).__init__()
 
-    def compute_pval(self,t=None):
+    def compute_kfda_asymptotic_pvalue(self):
         """
         Computes the asymptotic pvalues of the kfda statistic. 
-        
-        Calcul des pvalue asymptotique d'un df_kfdat pour chaque valeur de t. 
-        Attention, la présence de Nan augmente considérablement le temps de calcul. 
         """
-        pvals = {}
-        pvals_contrib = {}
-        t = min(100,len(self.df_kfdat)) if t is None else min(t,len(self.df_kfdat))
-        trunc=range(1,t+1)
 
-        for t_ in trunc:
-            pvals[t_] = self.df_kfdat.T[t_].apply(lambda x: chi2.sf(x,int(t_)))
-            pvals_contrib[t_] = self.df_kfdat_contributions.T[t_].apply(lambda x: chi2.sf(x,1))
+        kn = self.get_kfdat_name()
+        kfda = self.get_kfda(contrib=False).to_frame()
+        kfda_contrib = self.get_kfda(contrib=True).to_frame()
+        
+        self.df_pval[kn] = kfda.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
+        self.df_pval_contributions[kn] = kfda_contrib.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
 
-        self.df_pval = pd.DataFrame(pvals).T 
-        self.df_pval_contributions = pd.DataFrame(pvals_contrib).T
-  
+
+
+    def compute_pvalue(self,
+                    stat=None,
+                    permutation=None,
+                    npermutation=None,
+                    seed_permutation=None,
+                    n_jobs=1,
+                    keep_permutation_statistics=False,
+                    verbose=0
+                    ):
+        """
+        Computes the p-value of the statistic of `stat`.         
+        """
+
+        if permutation is None:
+            permutation = self.permutation
+        else:
+            self.permutation = permutation
+
+        if stat is None:
+            stat = self.stat 
+        else:
+            self.stat = stat
+
+
+
+        if stat == 'kfda' and not permutation:
+            self.compute_kfda_asymptotic_pvalue()
+        else:
+            self.permutation_pvalue(stat=stat, 
+                                    npermutation=npermutation,
+                                    seed=seed_permutation,
+                                    n_jobs=n_jobs,
+                                    keep_permutation_statistics=keep_permutation_statistics,
+                                    verbose=verbose)
+
+
+
+   
     def correct_BenjaminiHochberg_pval(self,t=20):
         """
         Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.
@@ -102,14 +135,7 @@ class Pvalues:
         
         self.df_pval_BH_corrected = correct_BenjaminiHochberg_pval_of_dataframe(self.df_pval,t=t)
 
-    def correct_BenjaminiHochberg_pval_univariate(self,trunc,name='',exceptions=[],focus=None,add_to_prefix=''):
-        var_prefix = f'{name}_{self.get_kfdat_name()}_t{trunc}'
-        pval = self.var[self.data_name][f'{var_prefix}_pval']
-        pval = pval if focus is None else pval[pval.index.isin(focus)]
-        pval = pval[~pval.index.isin(exceptions)]
-        pval = pval[~pval.isna()]
-        pvalBH = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
-        self.var[self.data_name][f'{var_prefix}{add_to_prefix}_pvalBHc'] = pvalBH.copy()
+  
 
     # def get_rejected_variables_univariate(self,var_prefix,BH=False):
     #     BH_str = 'BHc' if BH else ''
@@ -118,4 +144,3 @@ class Pvalues:
     #     pval = pval[pval<.05]
     #     return(pval.sort_values())
 
- 

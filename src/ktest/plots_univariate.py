@@ -104,7 +104,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         return(fig,axes)
 
 
-    def plot_pval_and_errors_of_variable(self,variable,t=30,name='',fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True,
+    def plot_pval_and_errors_of_variable(self,variable,t=30,name=None,fig=None,ax=None,truncations_of_interest=[1,3,6],adjust=True,
                     pval=True,var=True,diff=True):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
@@ -115,11 +115,13 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             self.plot_pvalue_of_variable(variable=variable,name=name,t=t,fig=fig,ax=ax,truncations_of_interest=truncations_of_interest,adjust=adjust,)
         
         if var:
-            errW = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errW'][variable] for trunc in range(1,t)]
+            errW = [1]+[self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='errW')][variable] \
+                for trunc in range(1,t)]
             ax.plot(range(t),errW,label='w-variability')
         
         if diff:
-            errB = [1]+[self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_errB'][variable] for trunc in range(1,t)]
+            errB = [1]+[self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='errB')][variable] \
+                for trunc in range(1,t)]
             ax.plot(range(t),errB,label='difference')
         
         
@@ -132,18 +134,20 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         ax.set_xlim(-1,t+1)
         return(fig,ax)
 
-    def plot_pvalue_of_variable(self,variable,name='',t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
+    def plot_pvalue_of_variable(self,variable,name=None,t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
-        pval = [self.get_var()[f'{name}_{self.get_kfdat_name()}_t{trunc}_pval'][variable] for trunc in range(1,t)]
+
+        pval = [self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='pval')][variable] \
+            for trunc in range(1,t)]
         label = f'{variable} p-value' if label is None else label
         ax.plot(range(1,t),pval,label=label,color=color,ls=ls)
         if truncations_of_interest is not None:
             text_truncations_of_interest(truncations_of_interest,ax,[0]+pval,adjust=adjust)
         ax.set_ylim(-.05,1.05)  
         ax.legend(fontsize=20)
-    def plot_discriminant_of_expression_univariate(self,variable,trunc,
+    def plot_discriminant_of_expression_univariate(self,variable,t,
                                                 color=None,marker=None,highlight=None,
                                                 previous_discriminant=False,
                                                 ):
@@ -153,16 +157,16 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         
         
         # Pval and errors 
-        self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
+        self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[t],adjust=False)
         
         self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
-        self.scatter_proj(projection=[variable,trunc],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
+        self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        if previous_discriminant and trunc>1:
-            self.scatter_proj(projection=[variable,trunc-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
+        if previous_discriminant and t>1:
+            self.scatter_proj(projection=[variable,t-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'],
                         alpha=.2,legend=False)
-        self.hist_discriminant(t=trunc,fig=fig,ax=axd['D'],orientation='horizontal')
+        self.hist_discriminant(t=t,fig=fig,ax=axd['D'],orientation='horizontal')
         
         axd['A'].legend([])
         axd['A'].set_xlabel('')
@@ -171,44 +175,44 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         axd['B'].legend(fontsize=15)
         axd['C'].set_title('')
         axd['D'].legend([])
-        axd['D'].set_title(f'Discriminant t={trunc}',fontsize=30)
+        axd['D'].set_title(f'Discriminant t={t}',fontsize=30)
         axd['D'].set_ylabel('')
         axd['D'].sharey(axd['C'])
         #     axd['A'].set_title(f'{g} expression',fontsize=30)
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         #     axd['A'].legend(bbox_to_anchor=(.98,1.02),fontsize=30)
-        pval = self.df_pval[self.get_kfdat_name()].loc[trunc]
-        title = f'{variable} DA{trunc} pval='
+        pval = self.df_pval[self.get_kfdat_name()].loc[t]
+        title = f'{variable} DA{t} pval='
         title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
         fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()
         
         return(fig,axd)
 
-    def plot_mmd_discriminant_of_expression_univariate(self,variable,trunc,
+    def plot_mmd_discriminant_of_expression_univariate(self,variable,t,
                                                 color=None,marker=None,highlight=None,
                                                 previous_discriminant=False,
                                                 ):
 
         fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
         axd = fig.subplot_mosaic("AB\nCD",gridspec_kw=dict(height_ratios=[1, 2],width_ratios=[3,2]),)
-        yproj = 'proj_mmd' if trunc == 'mmd' else 'proj_tmmd'
+        yproj = 'proj_mmd' if t == 'mmd' else 'proj_tmmd'
 
         # Pval and errors 
     #     self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
 
         self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
         
-        self.scatter_proj(projection=[variable,trunc],xproj=variable,yproj=yproj,yname=self.get_mmd_name(),
+        self.scatter_proj(projection=[variable,t],xproj=variable,yproj=yproj,yname=self.get_mmd_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        if previous_discriminant and trunc>1:
-            self.scatter_proj(projection=[variable,trunc-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
+        if previous_discriminant and t>1:
+            self.scatter_proj(projection=[variable,t-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'],
                         alpha=.2,legend=False)
-        if trunc == 'mmd':
+        if t == 'mmd':
             self.hist_mmd_discriminant(fig=fig,ax=axd['D'],orientation='horizontal')
         else:
-            self.hist_tmmd_discriminant(trunc,fig=fig,ax=axd['D'],orientation='horizontal')
+            self.hist_tmmd_discriminant(t,fig=fig,ax=axd['D'],orientation='horizontal')
             
         axd['A'].legend([])
         axd['A'].set_xlabel('')
@@ -217,21 +221,21 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
     #     axd['B'].legend(fontsize=15)
         axd['C'].set_title('')
         axd['D'].legend([])
-        axd['D'].set_title(f'Discriminant t={trunc}',fontsize=30)
+        axd['D'].set_title(f'Discriminant t={t}',fontsize=30)
         axd['D'].set_ylabel('')
         axd['D'].sharey(axd['C'])
         #     axd['A'].set_title(f'{g} expression',fontsize=30)
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         #     axd['A'].legend(bbox_to_anchor=(.98,1.02),fontsize=30)
     #     pval = self.df_pval[self.get_kfdat_name()].loc[trunc]
-        title = f'{variable} DA{trunc}'
+        title = f'{variable} DA{t}'
     #     title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
         fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()
 
         return(fig,axd)
 
-    def plot_pc_of_expression_univariate(self,variable,trunc,
+    def plot_pc_of_expression_univariate(self,variable,t,
                                                 color=None,marker=None,highlight=None,
                                                 ):
         
@@ -239,111 +243,112 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         axd = fig.subplot_mosaic("AB\nCD",gridspec_kw=dict(height_ratios=[1, 2],width_ratios=[3,2]),)
         
         # Pval and errors 
-        toi = [trunc] if trunc <=30 else []
+        toi = [t] if t <=30 else []
         self.plot_pval_and_errors(t=30,fig=fig,ax=axd['B'],truncations_of_interest=toi,adjust=False)
         
         self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
-        self.scatter_proj(projection=[variable,trunc],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
+        self.scatter_proj(projection=[variable,trutc],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        self.hist_pc(t=trunc,fig=fig,ax=axd['D'],orientation='horizontal')
+        self.hist_pc(t=t,fig=fig,ax=axd['D'],orientation='horizontal')
         axd['A'].legend([])
         axd['A'].set_xlabel('')
         axd['B'].legend(fontsize=15)
         axd['B'].set_ylabel('')
         axd['B'].set_xlabel('')
         axd['C'].set_title('')
-        axd['D'].set_title(f'PC{trunc}',fontsize=30)
+        axd['D'].set_title(f'PC{t}',fontsize=30)
         axd['D'].legend([])
         axd['D'].set_ylabel('')
         axd['D'].sharey(axd['C'])
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         
-        pval = self.df_pval[self.get_kfdat_name()].loc[trunc]
-        title = f'{variable} PC{trunc} pval='
+        pval = self.df_pval[self.get_kfdat_name()].loc[t]
+        title = f'{variable} PC{t} pval='
         title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
         fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()
         
         return(fig,axd)
 
-    def plot_pc_and_discriminant_of_expression_univariate(self,variable,trunc,
+    def plot_pc_and_discriminant_of_expression_univariate(self,variable,t,
                                                 color=None,marker=None,highlight=None,
                                                 previous_discriminant=False):
         
         fig = plt.figure(figsize=(15,15),constrained_layout=True)
         axd = fig.subplot_mosaic("AB\nCD\nEF",gridspec_kw=dict(height_ratios=[1, 2,2],width_ratios=[3,2]),)
         # Pval and errors 
-        self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
+        self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[t],adjust=False)
         
         # expression
         self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
         
         # PC
-        self.scatter_proj(projection=[variable,trunc],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
+        self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        self.hist_pc(t=trunc,fig=fig,ax=axd['D'],orientation='horizontal')
+        self.hist_pc(t=t,fig=fig,ax=axd['D'],orientation='horizontal')
         # Discriminant 
-        self.scatter_proj(projection=[variable,trunc],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
+        self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['E'])
-        if previous_discriminant and trunc>1:
-            self.scatter_proj(projection=[variable,trunc-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
+        if previous_discriminant and t>1:
+            self.scatter_proj(projection=[variable,t-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['E'],
                         alpha=.2,legend=False)
-        self.hist_discriminant(t=trunc,fig=fig,ax=axd['F'],orientation='horizontal')
+        self.hist_discriminant(t=t,fig=fig,ax=axd['F'],orientation='horizontal')
         
         
         axd['A'].legend([])
         axd['A'].set_xlabel('')
         axd['B'].set_ylabel('')
         axd['B'].legend(fontsize=15)
-        axd['C'].set_title(f'PC{trunc}',fontsize=30)
+        axd['C'].set_title(f'PC{t}',fontsize=30)
         axd['D'].legend([])
         axd['D'].set_ylabel('')
-        axd['D'].set_title(f'PC{trunc}',fontsize=30)
+        axd['D'].set_title(f'PC{t}',fontsize=30)
         axd['D'].sharey(axd['C'])
-        axd['E'].set_title(f'DA{trunc}',fontsize=30)
-        axd['F'].set_title(f'DA{trunc}',fontsize=30)
+        axd['E'].set_title(f'DA{t}',fontsize=30)
+        axd['F'].set_title(f'DA{t}',fontsize=30)
         axd['F'].legend([])
         axd['F'].set_ylabel('')
 
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         #     axd['D'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         
-        pval = self.df_pval[self.get_kfdat_name()].loc[trunc]
-        title = f'{variable} PC{trunc} pval='
+        pval = self.df_pval[self.get_kfdat_name()].loc[t]
+        title = f'{variable} PC{t} pval='
         title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
         fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()
         
         return(fig,axd)
    
-    def volcano_plot(self,trunc,name='',color=None,exceptions=[],
-                    focus=None,zero_pvals=False,fig=None,ax=None,BH=False,threshold=1,plot_others=False):
+    def volcano_plot(self,t,name='',color=None,exceptions=[],
+                    focus=None,zero_pvals=False,fig=None,ax=None,corrected=False,threshold=1,plot_others=False):
         # quand la stat est trop grande, la fonction chi2 de scipy.stat renvoie une pval nulle
         # on ne peut pas placer ces gènes dans le volcano plot alors ils ont leur propre graphe
 
         if fig is None:
             fig,ax = plt.subplots(figsize=(4,10))
 
-        var_prefix = self.get_univariate_results_in_var(trunc,name)
+        col = self.get_column_name_in_var(t=t,corrected=corrected,name=name,output='pval') 
         
-        BH_str = 'BHc' if BH else ''
         zpval_str = '= 0' if zero_pvals else '>0'
         var = self.get_var()
+        BH_str = 'after correction' if corrected else ''
 
-
-        pval_name = f'{var_prefix}_pval{BH_str}' 
-        if BH and pval_name not in var:
-            self.correct_BenjaminiHochberg_pval_univariate(trunc=trunc,name=name)
-        pval = var[pval_name]
+        if corrected and col not in var:
+            self.correct_BenjaminiHochberg_pval_univariate(t=t,name=name)
+        pval = var[col]
         pval = filter_genes_wrt_pval(pval,exceptions,focus,zero_pvals,threshold)
         
-        print(f'{var_prefix} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
+        print(f'{col} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
         
         genes = []
         if len(pval) != 0:
-            kfda = var[f'{var_prefix}_kfda']
-            errB = var[f'{var_prefix}_errB']
+            col_kfda = self.get_column_name_in_var(t=t,corrected=corrected,name=name,output='kfda') 
+            col_errB = self.get_column_name_in_var(t=t,corrected=corrected,name=name,output='errB') 
+        
+            kfda = var[col_kfda]
+            errB = var[col_errB]
             logkfda = np.log(kfda[kfda.index.isin(pval.index)])
             errB = errB[errB.index.isin(pval.index)]
 
@@ -356,7 +361,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
             if zero_pvals:
         #         print('zero')
-                ax.set_title(f'{var_prefix} \ng enes strongly rejected',fontsize=30)
+                ax.set_title(f'col \ngenes strongly rejected',fontsize=30)
                 ax.set_xlabel(f'log(kfda)',fontsize=20)
                 ax.set_ylabel(f'errB',fontsize=20)
 
@@ -371,7 +376,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
             else:
         #         print('nz')
-                ax.set_title(f'{var_prefix}\n non zero pvals',fontsize=30)
+                ax.set_title(f'{col}\n non zero pvals',fontsize=30)
                 ax.set_xlabel(f'log(kfda)',fontsize=20)
                 ax.set_ylabel(f'-log(pval)',fontsize=20)
                 logpval = -np.log(pval)
@@ -390,7 +395,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         return(genes,fig,ax)
     
-    def plot_pval_of_correlated_genes(self,tcorrmax,tpvalmax,proj,trunc,name,fig=None,axes=None):
+    def plot_pval_of_correlated_genes(self,tcorrmax,tpvalmax,proj,t,name,fig=None,axes=None):
         if fig is None:
             fig,axes = plt.subplots(ncols=tcorrmax,figsize=(8*tcorrmax,10))
 
@@ -410,12 +415,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             for g in corr.index[::-1]:
                 dout = {}
                 for tpval in range(1,tpvalmax+1):
-                    pval_name = f'{self.get_univariate_results_in_var(trunc,name)}_pvalBHc'
+                    col = self.get_column_name_in_var(t=t,corrected=True,name=name,output='pval') 
                     # pval_name = f'{prefix}_{self.get_kfdat_name()}_t{tpval}_pvalBHc'
-                    if pval_name not in self.get_var().columns:
-                        self.correct_BenjaminiHochberg_pval_univariate(trunc=trunc,name=name)
+                    if col not in self.get_var().columns:
+                        self.correct_BenjaminiHochberg_pval_univariate(t=t,name=name)
                             # var_prefix=pval_name[:-8])
-                    dout[f't{tpval}'] = -np.log(self.get_var()[pval_name][g]+1)/np.log(10)
+                    dout[f't{tpval}'] = -np.log(self.get_var()[col][g]+1)/np.log(10)
                 out += [dout]
 
             dfout = pd.DataFrame(out,index=corr.index)
@@ -429,7 +434,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         fig.tight_layout()
         return(fig,axes)
 
-    def plot_correlation_of_DEgenes(self,tcorrmax,tpvalmax,proj,trunc,name,fig=None,axes=None,highlightDE=False):
+    def plot_correlation_of_DEgenes(self,tcorrmax,tpvalmax,proj,t,name,fig=None,axes=None,highlightDE=False):
         if fig is None:
             fig,axes = plt.subplots(ncols=tpvalmax,figsize=(8*tpvalmax,10))
 
@@ -437,11 +442,10 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         for tpval,ax in zip(range(1,tpvalmax+1),axes):
             
-            # pval_name = f'{prefix}_{self.get_kfdat_name()}_t{tpval}_pvalBHc'
-            pval_name = f'{self.get_univariate_results_in_var(trunc,name)}_pvalBHc'
-            if pval_name not in self.get_var().columns:
-                self.correct_BenjaminiHochberg_pval_univariate(trunc,name)
-            pval = self.get_var()[pval_name]
+            col = self.get_column_name_in_var(t=t,corrected=True,name=name,output='pval') 
+            if col not in self.get_var().columns:
+                self.correct_BenjaminiHochberg_pval_univariate(t,name)
+            pval = self.get_var()[col]
             pval = pval.sort_values()
 
             out = []

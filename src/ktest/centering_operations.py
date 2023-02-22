@@ -3,7 +3,7 @@ import numpy as np
 from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
 
-from .base import Data,Model
+from .base import Base
 from ktest.nystrom_operations import NystromOps
 
 """
@@ -157,7 +157,7 @@ class CenteringOps(NystromOps):
 
         Parameters
         ----------
-            self : Tester, 
+            self : Ktest, 
             should contain a metadata dataframe self.obs
 
             center_by (default = None) : str, 
@@ -240,7 +240,7 @@ class CenteringOps(NystromOps):
 
         dict_nobs = self.get_nobs(landmarks=landmarks)
         n = dict_nobs['ntot']
-        ab = self.anchors_basis.lower() if landmarks else 'w'
+        ab = self.anchor_basis.lower() if landmarks else 'w'
 
         if quantization and not landmarks:
             print('quantization not implemented yet')
@@ -287,7 +287,7 @@ class CenteringOps(NystromOps):
         
 
 # Test application 
-# a = Tester()
+# a = Ktest()
 # a.center_by = '#-cat_+sexe'
 # a.obs = pd.DataFrame({'cat':np.array([0,0,0,1,1,1,2,2,2])[[1,3,5,7,0,2,4,6,8]],
 #                      'sexe':np.array(['M','M','M','W','W','W','W','W','W',])[[1,3,5,7,0,2,4,6,8]]})

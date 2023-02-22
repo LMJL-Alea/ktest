@@ -46,27 +46,6 @@ class Plot_WBerrors(Residuals,Statistics):
         
     # def get_between_covariance_projection_error(self,return_total=False):
 
-    def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
-        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
-        spp = (sp/sum(sp)) if part_of_inertia else sp
-        spp = spp.cumsum(0) if cumul else spp
-        spp = 1-spp if decreasing else spp
-        spp = torch.log(spp) if log else spp
-
-        return(spp)
-
-    def get_pvalue(self,contrib=False,log=False,name=None):
-        name = self.get_kfdat_name() if name is None else name
-        df_pval = self.df_pval_contributions if contrib else self.df_pval
-        pval = np.log(df_pval[name]) if log else df_pval[name]
-        return(pval) 
-
-    def get_kfda(self,contrib=False,log=False,name=None):
-        name = self.get_kfdat_name() if name is None else name
-        df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
-        kfda = np.log(df_kfda[name]) if log else df_kfda[name]
-        return(kfda) 
-
 
     def get_explained_difference_of_t(self,t):
         pe = self.get_explained_difference()
@@ -82,7 +61,7 @@ class Plot_WBerrors(Residuals,Statistics):
         Can be cumulated and log. 
         Parameters
         ----------
-            self : Tester, 
+            self : Ktest, 
             Should contain the eigenvectors and eigenvalues of the within covariance operator in the attribute `spev`
             
         Returns 
@@ -101,15 +80,15 @@ class Plot_WBerrors(Residuals,Statistics):
         om = self.compute_omega()
         
         if cov != 'standard':
-            m = self.get_ntot(landmarks=True)
+            nlandmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             Kzx = self.compute_kmn()
             # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
-            mmdt = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
-                (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
-            tot = (m**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
+            mmdt = (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \
+                (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2)**(1/2)
+            tot = (nlandmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).sum(0)**(1/2)
             exd = mmdt/tot
         else:
             pkm = self.compute_pkm()

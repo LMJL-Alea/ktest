@@ -21,7 +21,7 @@ class Residuals(Statistics):
         super(Residuals,self).__init__()
 
 
-    def compute_discriminant_axis_qh(self,t=None):
+    def compute_discriminant_axis_qh(self,t):
         '''
         The kernel trick on discriminant axis is a vector qh such that 
         h = kx qh/|| kx qh || = Sigma_t^-1/2 (\mu_2 - \mu_1)/ || Sigma_t^-1/2 (\mu_2 - \mu_1) ||
@@ -31,9 +31,7 @@ class Residuals(Statistics):
     
         13/06/2022 : an amelioration would be to scale the projection with n1n2/n as it is done in proj_kfda
         '''
-        
-        if t is None:
-            t = self.t
+
         
         n = self.get_ntot(landmarks=False)
         K = self.compute_gram()
@@ -51,13 +49,13 @@ class Residuals(Statistics):
         elif cov == 'nystrom3':
             # pas totalement sûr de cette partie 
 
-            m = self.get_ntot(landmarks=True)
+            nlandmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))   
             P = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             Kmn = self.compute_kmn() 
 
-            qh = 1/m * mv(P,mv(Uz,mv(Lz12,mv(Ut,mv(Lt32,mv(Ut.T,mv(Lz12,mv(Uz.T,mv(P,mv(Kmn,omega))))))))))
+            qh = 1/nlandmarks * mv(P,mv(Uz,mv(Lz12,mv(Ut,mv(Lt32,mv(Ut.T,mv(Lz12,mv(Uz.T,mv(P,mv(Kmn,omega))))))))))
         else:
             print(f'approximation {cov} not computed yet for residuals')
         return(qh)
@@ -104,10 +102,10 @@ class Residuals(Statistics):
             K  = self.compute_gram()
             P_epsilon = In - matmul(ger(qh,qh),K)/dot(mv(K,qh),qh)
         if cov == 'nystrom3':
-            m = self.get_ntot(landmarks=True)
+            nlandmarks = self.get_ntot(landmarks=True)
             K  = self.compute_gram(landmarks=True)
             Kmn = self.compute_kmn()
-            P_epsilon = In[:m] - matmul(ger(qh,qh),Kmn)/dot(mv(K,qh),qh)
+            P_epsilon = In[:nlandmarks] - matmul(ger(qh,qh),Kmn)/dot(mv(K,qh),qh)
 
         return(P_epsilon)
 
@@ -134,23 +132,22 @@ class Residuals(Statistics):
         if cov == 'nystrom3':
             
             n = self.get_ntot(landmarks=False)
-            m = self.get_ntot(landmarks=True)
+            nlandmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))  
             Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
             Kmn = self.compute_kmn() 
 
             if center.lower() in 'tw':
-                K_epsilon = 1/(n*m) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P,P_epsilon,
+                K_epsilon = 1/(n*nlandmarks) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P,P_epsilon,
                 Kmn.T,Pz,Uz,Lz12])
             else : 
-                K_epsilon = 1/(n*m) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P_epsilon,
+                K_epsilon = 1/(n*nlandmarks) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P_epsilon,
                 Kmn.T,Pz,Uz,Lz12])
         return(K_epsilon)
 
-    def diagonalize_residual_covariance(self,t=None,center='W'):
-        if t is None:
-            t=self.t
+    def diagonalize_residual_covariance(self,t,center='W'):
+
         cov = self.approximation_cov    
         
         residuals_name = self.get_residuals_name(t=t,center=center)
@@ -173,7 +170,7 @@ class Residuals(Statistics):
                 fv = 1/sqrt(n)* torch.linalg.multi_dot([P_epsilon,P,ev,L_12])
             if cov == 'nystrom3':
                 anchors_name = self.get_anchors_name()
-                m = self.get_ntot(landmarks=True)
+                nlandmarks = self.get_ntot(landmarks=True)
                 Lz1,Uz = self.get_spev(slot='anchors')
                 Lz = diag(Lz1**-1)
                 Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
@@ -181,13 +178,12 @@ class Residuals(Statistics):
                 
                 if len(ev) != len(P):
                     P = P[:,:len(ev)]
-                fv = 1/sqrt(n) * 1/m * torch.linalg.multi_dot([Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12])
+                fv = 1/sqrt(n) * 1/nlandmarks * torch.linalg.multi_dot([Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12])
             self.spev['residuals'][residuals_name] = {'sp':sp,'ev':fv}
             return(residuals_name)
             
-    def proj_residus(self,t = None,ndirections=10,center='w'):
-        if t is None:
-            t = self.t
+    def proj_residus(self,t,ndirections=10,center='w'):
+
         cov = self.approximation_cov    
         
         residuals_name = self.get_residuals_name(t=t,center=center,)

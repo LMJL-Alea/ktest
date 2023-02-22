@@ -45,17 +45,26 @@ def get_kernel_name(function,bandwidth,median_coef):
         n='user_specified'
     return(n)
 
+def init_test_params(stat='kfda',
+                    nystrom=False,
+                    nlandmarks=None,
+                    nanchors=None,
+                    landmark_method='random',
+                    anchor_basis='w',
+                    permutation=False,
+                    npermutation=500,
+                    seed_permutation=0):
 
-def init_test_params(test='kfda',nystrom=False,m=None,r=None,landmark_method='random',
-            anchors_basis='w'):
-    return({'test':test,
+    return({'stat':stat,
             'nystrom':nystrom,
-            'm':m,
-            'r':r,
+            'nlandmarks':nlandmarks,
+            'nanchors':nanchors,
             'landmark_method':landmark_method,
-            'anchors_basis':anchors_basis
-    })
-
+            'anchor_basis':anchor_basis,
+            'permutation':permutation,
+            'npermutation':npermutation,
+            'seed_permutation':seed_permutation
+            })
 
 def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
     """
@@ -70,74 +79,23 @@ def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_
     )
     
 
-class Model:
-    def __init__(self):        
-        super(Model, self).__init__()
-        self.has_model = False
-        
-    def init_test_params(self,test='kfda',nystrom=False,m=None,r=None,landmark_method='random',anchors_basis='w'):
-        '''
-        
-        Parameters
-        ----------
-            test : 'kfda' or 'mmd'
-            nystrom (default = False) : bool
-                Whether to use the nystrom approximation or not.
-            m : int, the total number of landmarks. 
-            r : int, the total number of anchors. 
-            landmark_method : str in 'random','kmeans', the method to determine the landmarks. 
-            anchors_basis : str in 'k','s','w'. The anchors are determined as the eigenvectors of:  
-                            'k' : the gram matrix of the landmarks. 
-                            's' : the centered covariance of the landmarks
-                            'w' : the within group covariance of the landmarks (possible only if 'landmark_method' is 'random'.
-        Returns
-        ------- 
-        It is not possible to use nystrom for small datasets (n<100)
-        '''
-
-        self.test = test
-        self.nystrom = nystrom
-        if nystrom:
-            self.approximation_cov = 'nystrom3'
-            self.approximation_mmd = 'standard'
-        else:
-            self.approximation_cov = 'standard'
-            self.approximation_mmd = 'standard'
-
-        # m_specified permet d'éviter une erreur d'arrondi sur m quand on initialise nystrom plusieurs fois et fait diminuer m
-        self.m_initial = m 
-        self.m = m
-        self.r = r
-        self.landmark_method = landmark_method
-        self.anchors_basis = anchors_basis
-
-        self.has_model = True
-        self.nystrom_initialized = False
-
-    def get_test_params(self):
-        
-        return({'test':self.test,
-            'nystrom':self.nystrom,
-            'm':self.m_initial,
-            'r':self.r,
-            'landmark_method':self.landmark_method,
-            'anchors_basis':self.anchors_basis
-        })
-
-
-
-class Data:
+class Base:
 
     def __init__(self,verbose=0):        
-        super(Data, self).__init__()
+        super(Base, self).__init__()
         self.center_by = None        
-        self.has_data = False   
+        self.has_data = False 
+        self.has_model = False  
         self.has_landmarks = False
+        self.has_anchors = False
         self.has_kernel = False
+        self.has_kfda_statistic = False
+        self.univariate_name=None
         self.quantization_with_landmarks_possible = False
 
         # attributs initialisés 
         self.data = {}
+        self.input_params={}
         self.obs = pd.DataFrame(columns=['sample'])
         self.obs['sample'] = self.obs['sample'].astype('category')
         self.verbose=verbose
@@ -145,31 +103,163 @@ class Data:
         self.vard = {}
         
         self.data_name = None
+        self.log2fc_data = None
         self.condition = 'sample'
         self.samples = 'all'
         self.marked_obs_to_ignore = None
-        # self.data = {'x':{},'y':{}}
         self.main_data=None
 
-        # Results
+        # Statistics 
         self.df_kfdat = pd.DataFrame()
         self.df_kfdat_contributions = pd.DataFrame()
+        self.dict_mmd = {}
+
+        # p-values
         self.df_pval = pd.DataFrame()
         self.df_pval_contributions = pd.DataFrame()
+        self.dict_pval_mmd = {}
+
+        # Permutation statistics
+        self.df_kfdat_perm = {}
+        self.df_mmd_perm = pd.DataFrame()
+
+        # Projections and Correlations
+        self.corr = {}     
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
         self.df_proj_tmmd = {}
         self.df_proj_residuals = {}
-        self.corr = {}     
-        self.dict_mmd = {}
+        
+        # Eigenvectors
         self.spev = {'covw':{},'anchors':{},'residuals':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
         self.start_times = {}
+
+
+    def set_test_params(self,
+                    stat='kfda',
+                    nystrom=False,
+                    nlandmarks=None,
+                    nanchors=None,
+                    landmark_method='random',
+                    anchor_basis='w',
+                    permutation=False,
+                    npermutation=500,
+                    seed_permutation=0,
+                    verbose=0):
+        '''
+        It is not possible to use nystrom for small datasets (n<100)
+
+        Parameters
+        ----------
+            stat (default=): str in ['kfda','mmd']
+                Test statistic to be computed.
+
+            nystrom (default = False) : bool
+                Whether to use the nystrom approximation or not.
+
+            nlandmarks : int, 
+                the total number of landmarks. 
+
+            nanchors : int, 
+                the total number of anchors. 
+
+            landmark_method : str in 'random','kmeans', 
+                the method to determine the landmarks. 
+
+            anchor_basis (default = 'w') : str in ['k','s','w']. 
+                The anchors are determined as the eigenvectors of:  
+                            'k' : the gram matrix of the landmarks. 
+                            's' : the centered covariance of the landmarks
+                            'w' : the within group covariance of the landmarks (possible only if 'landmark_method' is 'random'.
+
+            permutation (default = False): bool
+                If `stat == 'kfda'`:
+                    If True : a permutation p-value is computed with the function `ktest.multivariate_test()`
+                    Else : an asymptotic p-value is computed
+                If `stat == 'mmd'`, permutation is automatically set to True
+
+            npermutation (default = 500) : int
+                Number of permutation wanted to obtain a permutation p-value
+            
+            seed_permutation (default=0) : int
+                Random seed of the first permutation, each permutation seed is 
+                then obtained by an unit incrementation of the previous seed. 
+
+        '''
+
+        input_params = {
+            'stat':stat,
+            'nystrom':nystrom,
+            'nlandmarks':nlandmarks,
+            'nanchors':nanchors,
+            'landmark_method':landmark_method,
+            'anchor_basis':anchor_basis,
+            'permutation':permutation,
+            'nperm':npermutation,
+            'seed_permutation':seed_permutation,
+            }
+
+        if input_params != self.input_params:
+            self.input_params=input_params
+            self.stat = stat
+            self.nystrom = nystrom
+            self.permutation = True if stat == 'mmd' else permutation
                 
-    def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
+            if nystrom:
+                self.nystrom_initialized = False
+                self.nlandmarks_initial = nlandmarks 
+                self.nlandmarks = nlandmarks
+                self.nanchors = nanchors
+                self.landmark_method = landmark_method
+                self.anchor_basis = anchor_basis
+                self.approximation_cov = 'nystrom3'
+                self.approximation_mmd = 'standard'
+                if self.has_data:
+                    self.compute_nystrom_landmarks(verbose=verbose)
+                    self.compute_nystrom_anchors(verbose=verbose)
+            else:
+                self.approximation_cov = 'standard'
+                self.approximation_mmd = 'standard'
+
+            if self.permutation:
+                self.npermutation = npermutation
+                self.seed_permutation = seed_permutation
+                
+            self.has_model = True
+
+    def get_input_params(self):
+        return(self.input_params)
+
+    def get_test_params(self):
+        test_params = {
+                'stat':self.stat,
+                'nystrom':self.nystrom,
+                'permutation':self.permutation}
+
+        if self.nystrom:
+            test_params = {
+                'nlandmarks':self.nlandmarks_initial,
+                'nanchors':self.nanchors,
+                'landmark_method':self.landmark_method,
+                'anchor_basis':self.anchor_basis,
+                **test_params
+            }
+        
+        if self.permutation:
+            test_params = {
+                'npermutation':self.npermutation,
+                'seed_permutation':self.seed_permutation,
+                **test_params
+            }
+        return(test_params)
+                
+
+
+    def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None,verbose=0):
         '''
         
         Parameters
@@ -191,6 +281,19 @@ class Data:
         ------- 
         '''
 
+        if verbose >0:
+            s=f'- Define kernel function'
+            if verbose ==1:
+                s+=f' ({function})'
+            else:
+                s+='\n\tfunction : {function}'
+                if function == 'gauss':
+                    s+=f'\n\tbandwidth : {bandwidth}'
+                if bandwidth == 'median' and median_coef != 1:
+                    s+=f'\n\tmedian_coef : {median_coef}'
+                if kernel_name is not None:
+                    s+=f'\n\tkernel_name : {kernel_name}'
+            print(s)
         x,y = self.get_xy()
         verbose = self.verbose
         has_bandwidth = False
@@ -344,8 +447,6 @@ class Data:
         var = self.get_var()
         c_to_add = []
         for c in df.columns:
-            if verbose>1:
-                print(c,end=' ')
             token = False
             if 'univariate' in c and c in var:
                 token = True
@@ -354,13 +455,16 @@ class Data:
                 c_to_add += [c]
                 df[c] = df[c].astype('float64')
             else:
-                if verbose>1:
-                    print('update',end= '|')
                 var[c].update(df[c].astype('float64'))
             if token:
                 naft = sum(var[c]==1)
-                if verbose >0:
-                    print(f'\n tested from {nbef} to {naft}')
+        if verbose >0:
+            if len(c_to_add)>0:
+                s=f'- Update var'
+                if verbose>1:
+                    s+= f' {var.shape}'
+                s+= f' with {len(c_to_add)} columns'
+                print(s)
         df_to_add = df[c_to_add]
         self.var[self.data_name] = var.join(df_to_add)
 
@@ -403,14 +507,18 @@ class Data:
         self.var[data_name] = pd.DataFrame(index=variables)
         self.vard[data_name] = {v:{} for v in variables}
 
-    def add_data_to_Tester(self,x,
+    def add_data_to_Ktest(self,x,
                            data_name,
                            index=None,
                            variables=None,
                            metadata=None,
                            var_metadata=None,
-                           update_current_data_name = True
+                           update_current_data_name = True,
+                           verbose=0
                            ):
+        
+        if verbose>0:
+            print(f"- Add data '{data_name}' to Ktest, dimensions={x.shape}")
         nobs = len(x)
         if index is None and metadata is not None:
             index = metadata.index
@@ -418,16 +526,19 @@ class Data:
             old_index = self.data[data_name]['index']
 
             if len(index[index.isin(old_index)])==0:
-                print('There is only new data')
+                if verbose>0:
+                    print('\tThere is only new data')
                 self._update_dict_data(x,data_name,update_current_data_name)
                 index = self._update_index(nobs,index,data_name)
                 self._update_meta_data(metadata=metadata)
                 self._update_variables(variables,data_name)
 
             elif len(index[~index.isin(old_index)])==len(index):
-                print('This dataset is already stored in tester.')
+                if verbose>0:
+                    print('\tThis dataset is already stored in Ktest.')
             else:
-                print('There is some new data and already stored data, this situation is not implemented yet. ')
+                if verbose>0:
+                    print('\tThere are index conflicts with new data and stored data, add only new data or change their index.')
         else:
             self._update_dict_data(x,data_name)
             index = self._update_index(nobs,index,data_name)
@@ -436,8 +547,8 @@ class Data:
         if var_metadata is not None:
             self.update_var_from_dataframe(var_metadata)
 
-    def add_data_to_Tester_from_dataframe(self,df,metadata=None,var_metadata=None,data_name='data',
-                           update_current_data_name = True):
+    def add_data_to_Ktest_from_dataframe(self,df,metadata=None,var_metadata=None,data_name='data',
+                           update_current_data_name = True,verbose=0):
         '''
         
         '''
@@ -445,8 +556,13 @@ class Data:
         index = df.index
         variables = df.columns
 
-        self.add_data_to_Tester(x,data_name,index,variables,metadata,var_metadata,
-                           update_current_data_name = update_current_data_name)
+        self.add_data_to_Ktest(x,data_name,index,variables,metadata,var_metadata,
+                           update_current_data_name = update_current_data_name,verbose=verbose)
+
+    def get_samples_list(self,condition=None,samples=None):
+        condition = self.condition if condition is None else condition
+        samples = self.samples if samples is None else samples    
+        return(self.obs[condition].cat.categories.to_list() if samples == 'all' else samples)    
 
     def get_index(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,in_dict=True):
 
@@ -457,8 +573,8 @@ class Data:
         samples = self.samples if samples is None else samples
         marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
             
-        samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
-
+        samples_list = self.get_samples_list(condition,samples)
+        
         index_output = {} if in_dict else pd.Index([])
 
         for sample in samples_list: 
@@ -499,15 +615,16 @@ class Data:
         condition = self.condition
         samples = self.samples
         
-        samples_list = self.obs[condition].cat.categories.to_list() if samples == 'all' else samples
+        samples_list = self.get_samples_list(condition,samples)
         dict_data = {}
         for sample in samples_list:
             kmeans_landmarks_name = self.get_kmeans_landmarks_name_for_sample(sample)
             dict_data[sample] = self.data[kmeans_landmarks_name]['X']
         return(dict_data)
     
-    def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
-        data_name = self.data_name
+    def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+        if data_name is None:    
+            data_name = self.data_name
     
         if landmarks and self.landmark_method =='kmeans':
             dict_data = self.get_kmeans_landmarks()
@@ -540,10 +657,14 @@ class Data:
         dict_nobs = self.get_nobs(landmarks=landmarks)
         return(dict_nobs['ntot'])
 
-    def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
-        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+    def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+        
+        if data_name is None:
+            data_name = self.data_name
+
+        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
         dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        variables = self.data[self.data_name]['variables']
+        variables = self.data[data_name]['variables']
 
         dict_df = {}
         for s in dict_data.keys():
@@ -551,20 +672,36 @@ class Data:
             dict_df[s] = pd.DataFrame(x,i,v)
         return(dict_df)
     
-    def get_dataframe_of_all_data(self,landmarks=False):
-        x = self.data[self.data_name]['X']
+    def get_dataframe_of_all_data(self,landmarks=False,data_name=None):
+        if data_name is None:
+            data_name = self.data_name
+        if landmarks:
+            print('Warning : this function is not implemented for landmarks yet')
+        x = self.data[data_name]['X']
         i = self.obs.index
-        v = self.data[self.data_name]['variables']
+        v = self.data[data_name]['variables']
+
         return(pd.DataFrame(x,i,v))
 
-    def get_variables(self):
-        return(self.data[self.data_name]['variables'])
+    def get_variables(self,data_name=None):
+        if data_name is None:
+            data_name = self.data_name
+        return(self.data[data_name]['variables'])
 
-    def get_var(self):
-        return(self.var[self.data_name])
+    def get_nvariables(self,data_name=None):
+        if data_name is None:
+            data_name = self.data_name
+        return(self.data[data_name]['p'])
 
-    def get_vard(self):
-        return(self.vard[self.data_name])   
+    def get_var(self,data_name=None):
+        if data_name is None:
+            data_name = self.data_name
+        return(self.var[data_name])
+
+    def get_vard(self,data_name=None):
+        if data_name is None:
+            data_name = self.data_name
+        return(self.vard[data_name])   
         
     # Two sample 
     def get_n1n2n(self,landmarks=False):
@@ -647,7 +784,7 @@ class Data:
             sample_list = [f'x{l}' for l in range(1,L+1)]
 
         for x,sample,index,metadata in zip(data_list,sample_list,index_list,metadata_list):
-            self.add_data_to_Tester(x,sample,data_name,index,variables,metadata,var_metadata=var_metadata)
+            self.add_data_to_Ktest(x,sample,data_name,index,variables,metadata,var_metadata=var_metadata)
  
     def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,metadata_list=None,kernel='gauss_median',var_metadata=None):
         L = len(df_list)
@@ -656,7 +793,7 @@ class Data:
         if sample_list is None:
             sample_list = [f'x{l}' for l in range(1,L+1)]
         for df,sample,metadata in zip(df_list,sample_list,metadata_list):
-            self.add_data_to_Tester_from_dataframe(df,sample,metadata,data_name,var_metadata=var_metadata)
+            self.add_data_to_Ktest_from_dataframe(df,sample,metadata,data_name,var_metadata=var_metadata)
 
 
     def init_df_proj(self,proj,name=None,data_name=None):
@@ -733,11 +870,18 @@ class Data:
         self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
         self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
-    def set_marked_obs_to_ignore(self,marked_obs_to_ignore=None):
-        if marked_obs_to_ignore in self.obs.columns or marked_obs_to_ignore is None:
+    def set_marked_obs_to_ignore(self,marked_obs_to_ignore=None,verbose=0):
+        if marked_obs_to_ignore is None:
             self.marked_obs_to_ignore = marked_obs_to_ignore
+        elif marked_obs_to_ignore in self.obs.columns:
+            if verbose>0:
+                print(f'- Observations in column {marked_obs_to_ignore} will be ignored from the analysis')
+            self.marked_obs_to_ignore = marked_obs_to_ignore
+        else:
+            print(f"- marked_obs_to_ignore={marked_obs_to_ignore} is not recognised. \n\t Use function 'mark_observations' to mark observations")
+            self.marked_obs_to_ignore = None
 
-    def set_center_by(self,center_by=None):
+    def set_center_by(self,center_by=None,verbose=0):
         '''
         Initializes the attribute `center_by` which allow to automatically center the data with respect 
         to a stratification of the datasets informed in the meta information dataframe `obs`. 
@@ -758,13 +902,25 @@ class Data:
         Attributes Initialized
         ---------- ----------- 
             center_by : str,
-                is set to None if center_by is a string but the Tester object doesn't have an `obs` dataframe. 
+                is set to None if center_by is a string but the Ktest object doesn't have an `obs` dataframe. 
 
         '''
-        
+        if verbose>0:
+            if center_by is not None:
+                print(f"- Using '{center_by}' to center the embeddings in the feature space.")
         self.center_by = center_by      
            
-    def set_test_data_info(self,data_name,condition,samples='all'):
+    def set_test_data_info(self,data_name,condition,samples='all',verbose=0):
+        if verbose>0:
+            s=f"- Set test data info"
+            if verbose == 1:
+                if samples == 'all':
+                    s+=f' (condition={condition})'
+                else:
+                    s+=' ('+",".join(samples)+f' from {condition})'
+            if verbose >1:
+                s+=f"\n\tdata : {data_name}\n\tcondition : {condition}\n\tsamples : {samples}"
+            print(s)
         self.data_name = data_name
         self.condition = condition
         if condition in self.obs:
@@ -808,8 +964,8 @@ class Data:
     def get_model_str(self):
         ny = self.nystrom
         nys = 'ny' if self.nystrom else 'standard'
-        ab = f'_basis{self.anchors_basis}' if ny else ''
-        lm = f'_lm{self.landmark_method}_m{self.m}' if ny else ''
+        ab = f'_basis{self.anchor_basis}' if ny else ''
+        lm = f'_lm{self.landmark_method}_m{self.nlandmarks}' if ny else ''
         return(f'{nys}{lm}{ab}')
 
     def get_landmarks_name(self):
@@ -817,9 +973,9 @@ class Data:
 
 
         lm = self.landmark_method
-        m = f'_m{self.m}'
+        nlandmarks = f'_m{self.nlandmarks}'
         
-        return(f'lm{lm}{m}_{dtn}')
+        return(f'lm{lm}{nlandmarks}_{dtn}')
 
     def get_kmeans_landmarks_name_for_sample(self,sample):
         landmarks_name = self.get_landmarks_name()
@@ -830,10 +986,10 @@ class Data:
         dtn = self.get_data_to_test_str()
 
         lm = self.landmark_method
-        ab = self.anchors_basis
-        m = f'_m{self.m}'
+        ab = self.anchor_basis
+        nlandmarks = f'_m{self.nlandmarks}'
         # r = f'_r{self.r}' # je ne le mets pas car il change en fonction des abérations du spectre
-        return(f'lm{lm}{m}_basis{ab}_{dtn}')
+        return(f'lm{lm}{nlandmarks}_basis{ab}_{dtn}')
 
     def get_covw_spev_name(self):
         dtn = self.get_data_to_test_str()
@@ -858,7 +1014,6 @@ class Data:
     def get_mmd_name(self):
         dtn = self.get_data_to_test_str()
         mn = self.get_model_str()
-
         return(f'{mn}_{dtn}')
 
     def get_corr_name(self,proj):

@@ -1,7 +1,7 @@
-from ktest.base import Data
+from ktest.base import Base
 import pandas as pd
 
-class OutliersOps(Data):
+class OutliersOps(Base):
     
     def __init__(self):
         super(OutliersOps,self).__init__()

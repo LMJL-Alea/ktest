@@ -50,7 +50,7 @@ class ProjectionOps(KernelTrick):
         return(proj,t)
 
     def projections(self,t=None,condition=None,samples=None,marked_obs_to_ignore=None,verbose=0):
-        # je n'ai plus besoin de trunc, seulement d'un t max 
+
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
         to the KFDA statistic with a truncation parameter equal to t and stores the results as a column 

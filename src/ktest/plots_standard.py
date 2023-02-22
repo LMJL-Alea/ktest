@@ -188,8 +188,8 @@ class Plot_Standard(Statistics):
             pval = self.df_pval[self.get_kfdat_name()].loc[t]
             label += f' pval={pval:.1e}' if pval<.01 else f' pval={pval:1.2f}'
                     
-        sp,ev = self.get_spev('covw')
         if proj in ['proj_kfda','proj_kpca']:
+            sp,ev = self.get_spev('covw')
             lmbda = sp[t-1]
             label += r' $\lambda$'
             label += f'={lmbda:.1e}' if lmbda<.01 else f'={lmbda:.2f}' 
@@ -289,7 +289,7 @@ class Plot_Standard(Statistics):
         
         dict_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         dict_data = self.get_dataframes_of_data(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        samples_list = dict_index.keys() 
+        samples_list = self.get_samples_list(condition,samples) 
         
         color_list = color_list if len(color_list)>=len(samples_list) else [None]*len(samples_list)   
         if not isinstance(color_list,dict): 
@@ -694,7 +694,11 @@ class Plot_Standard(Statistics):
                     condition=None,
                     samples=None,
                     samples_colors=None,
-                    marked_obs_to_ignore=None):
+                    marked_obs_to_ignore=None,
+                    verbose=0):
+
+        self.projections(t=t,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
 
         kfdat_name = self.get_kfdat_name(
                         condition=condition,

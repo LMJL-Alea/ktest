@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from ktest.tester import Tester
+from ktest.tester import Ktest
 # from ktest.pvalues import correct_BenjaminiHochberg_pval_of_dfcolumn,correct_BenjaminiHochberg_pval_of_dataframe
 # from ktest.functions import compute_standard_kfda,compute_standard_mmd
 from ktest.utils_pandas import pd_select_df_from_index
@@ -24,7 +24,7 @@ def non_parallel_permutation_from_dataframe(x,y,c,seeds,stat='kfda',kernel='gaus
     xc,yc = x[c],y[c]
     if stat == 'kfda':
         
-        test_orig = Tester()
+        test_orig = Ktest()
         test_orig.df_kfdat = compute_standard_kfda(xc,yc,name='orig',pval=False,kernel=kernel,params_model=params_model)
         
         outputs=[]
@@ -257,7 +257,7 @@ def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
             'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
          'DE':TDR_per_alternative(x,truth_DE),'DM':TDR_per_alternative(x,truth_DM),
          'DP':TDR_per_alternative(x,truth_DP),'DB':TDR_per_alternative(x,truth_DB),
-         'EE':TDR_per_alternative(x,truth_EE),#'EB':TDR_per_alternative(x,truth_EB)
+         'EE':TDR_per_alternative(x,truth_EE),'EB':TDR_per_alternative(x,truth_EB)
         } 
     return([{**perfs,**dict_hyperparams}])
 

@@ -9,7 +9,7 @@ from time import time
 
 
 """
-Les fonctions de ce scripts initialisent les informations liées au modèle ou aux données dans l'objet Tester(). 
+Les fonctions de ce scripts initialisent les informations liées au modèle ou aux données dans l'objet Ktest(). 
 """
 
 class Verbosity:

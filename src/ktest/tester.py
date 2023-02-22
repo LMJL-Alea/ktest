@@ -22,6 +22,7 @@ from .pvalues import Pvalues
 from .save_data import SaveData
 from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
+from .permutation import Permutation
 from .correlation_operations import Correlations
 from .base import init_kernel_params,init_test_params
  
@@ -64,104 +65,333 @@ def pytorch_eigsy(matrix):
     #     self.x0,self.y0 = z[p[:nH0//2]],z[p[nH0//2:]]
 
 
-class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
+class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
     """
-    Tester is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
+    Ktest is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
     It also provides a range of visualisations based on the discrimination between two groups.  
     """
 
-    def __init__(self):
-        """\
+    def __init__(self,
+                data,
+                metadata,
+                condition,
+                data_name='data',
+                samples='all',
+                var_metadata=None,
+                stat='kfda',
+                nystrom=False,
+                permutation=False,
+                npermutation=500,
+                seed_permutation=0,
+                test_params=None,
+                center_by=None,
+                marked_obs_to_ignore=None,
+                kernel=None,
+                verbose=0):
 
-        Returns
-        -------
-        :obj:`Tester`
+        """
+        Generate a Ktest object and compute specified comparison
+
+        Parameters
+        ----------
+            data : Pandas.DataFrame 
+                the data dataframe
+                
+            metadata : Pandas.DataFrame 
+                the metadata dataframe
+
+            condition : str
+                column of the metadata dataframe containing the labels to test
+
+            data_name (default = 'data'): str 
+                Name of the data (examples : counts, normalized)
+
+            samples (default = 'all') : str or iterable of str
+                'all' : test the two categories contained in column condition (does not work for more than two yet)
+                str : category of condition to compare to others as one vs all
+                iterable of str : iterable of the two categories to compare to each other
+                
+            var_metadata (default = None): Pandas.DataFrame 
+                the metainformation about the variables, index must correspond to data columns
+
+            stat (default = 'kfda') : str in ['kfda','mmd']
+                The test statistic to use. If `stat == mmd`, `permutation` is set to `True`
+
+            permutation (default = False) : bool
+                Whether to compute permutation or asymptotic p-values.
+                Set to `True` if `stat == mmd`
+
+            npermutation (default = 500) : int
+                Number of permutation needed to compute the permutation p-value.
+                Ignored if permutation is False. 
+            
+            seed_permutation (default = 0) : int
+                Seed of the first permutation. The other seeds are obtained by incrementation. 
+
+            nystrom (default = False) : boolean
+                if True, the test_params nystrom is set to True with default parameters
+
+            test_params : object specifying the test to execute
+                output of the function get_test_params()
+
+            kernel : obkect specifying the kernel function to use
+                output of the function init_kernel_params()
+
+            center_by (default = None) : str
+                column of the metadata containing a categorial variable to regress 
+
+            marked_obs_to_ignore (default = None) : str
+                column of the metadata containing booleans that are 
+                True if the observation should be ignored from the analysis 
+                and False otherwise.    
         """
         
-        super(Tester,self).__init__()
+        super(Ktest,self).__init__()
 
-    def __str__(self):
+        if kernel is None:
+            kernel = init_kernel_params()
 
-        s = '##### Data ##### \n'
+        if test_params is None:
+            test_params = init_test_params(
+                                stat=stat,
+                                nystrom=nystrom,
+                                permutation=permutation,
+                                npermutation=npermutation,
+                                seed_permutation=seed_permutation,
+                                )
+
+
+        self.add_data_to_Ktest_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata,verbose=verbose)
+        self.set_test_data_info(data_name=data_name,condition=condition,samples=samples,verbose=verbose)
+        self.kernel(verbose=verbose,**kernel)
+        self.kernel_specification = kernel
+        self.set_test_params(verbose=verbose,**test_params)
+        self.test_params_initial=test_params
+        self.set_center_by(center_by=center_by,verbose=verbose)
+        self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         
-        if self.has_data:
-            s+='Data : '
-            for dn in self.data.keys():
-                s+=f'{dn}, '
-            s+=f'\t active : {self.data_name}'
-            s+='\nObservations: '
-            dict_nobs = self.get_nobs()
-            for k,n in dict_nobs.items():
-                s+=f'{k}:n={n} '
-            # s += f'variables : {self.var[self.data_name][:3].tolist()}...\n'
-            s += f'\nmeta : {self.obs.columns.tolist()}\n\n'
-        else: 
-            s += "View of Tester object with no data.\n" 
-            s += "You can initiate the data with ? ??'.\n\n"
+
+    def str_add_test_info(self,s,long=False):
+
+        # if long:
+        #     s+=f'\n'
+
+        tp = self.get_test_params()
+        stat = tp['stat']
+        ny = tp['nystrom']
+        s+=f'\nTest statistic : {stat}'
         
-        s += '##### Model #### \n'
-        if self.has_model:
+        if ny: 
+            s+= f" with the nystrom approximation ({tp['nanchors']} anchors)"
 
-            ny = self.nystrom
-            nys = 'nystrom' if ny else 'standard'
-            s += f"Model: {nys}"
+            if long:
+                s += f"\n\t{tp['nlandmarks']} landmarks"
+                lm = tp['landmark_method']
+                ab = tp['anchor_basis']
+                if lm == 'random':
+                    s += f" (determined through random sampling)"
+                if lm == 'kmeans':
+                    s += f" (determined as kmeans centroids of each group)"
+                
+                s += f"\n\t{tp['nanchors']} anchors"
+                if ab == 'w':
+                    s += " (the eigenvectors of the within group covariance operator of the landmarks)"
+                elif ab == 'k':
+                    s += " (the eigenvectors of the empirical second moment of the landmarks)"
+                elif ab == 's':
+                    s += " (the eigenvectors of the total covariance of the landmarks)"
+        return(s)
 
-            if ny : 
-                ab = self.anchors_basis
-                lm = self.landmark_method
-                m=self.m
-                r=self.r
-                s += f' {lm} (m={m}), {ab} (r={r})'
-            s+= '\n\n'
-        else: 
-            s += "This Tester object has no model.\n"
-            s += "You can initiate the model with the class function 'init_model()'.\n\n"
+    def str_add_data_info(self,s,long=False):
 
+        nfeatures = self.data[self.data_name]['p']
+        nobs = self.get_ntot()
+        nassays = len(self.data)
+        dn = self.get_nobs()
+        dn.pop('ntot')
+
+        # if long:
+        #     s+='\n'
+        s+=f"\n{nfeatures} features accros {nobs} observations within {nassays} assays (active : {self.data_name})"
+        s+= f"\nComparison : "
+        for k,n in list(dn.items())[:-1]:
+            s+=f"{k} ({n} obs), "
+        s=s[:-2]
+        k,n = list(dn.items())[-1]
+        s+= f" and {k} ({n} obs) "
+        s+= f"(from column '{self.condition}' in metadata)"
         
-        s += '##### Kernel ####\n'
-        if self.has_kernel:
-            for dn in self.data.keys():
-                if 'kernel_name' in self.data[dn]:
-                    kernel_name = self.data[dn]['kernel_name']
-                    s+=f'kernel {dn} : {kernel_name}\n'
-            s+='\n'
+
+        if long:
+            if len(self.data)>1:
+                assays = list(self.data.keys())
+                s+= f"\nAssays : "
+                for assay in assays[:-1]:
+                    s+= "{self.data_name}, "
+                s=s[:-2]
+                s+=" and {assays[-1]}"
+
+            if self.center_by is not None:
+                s+=f"\nEmbeddings centered by {self.center_by}"
+            if self.marked_obs_to_ignore is not None:
+                s+=f"\nIgnoring cells in {self.marked_obs_to_ignore}"
+        return(s)
+
+    def str_add_multivariate_stat_and_pval(self,s,t):
+        pval = self.df_pval[self.get_pvalue_name()][t]
+        kfda = self.df_kfdat[self.get_kfdat_name()][t]
+        if pval>.01:
+            s+=f"\n\tp-value({t}) = {pval:.2f}"
         else:
-            s+=f'This Tester object has no kernel.\n'
-            s+=f"You can initiate the kernel function with the class function 'kernel()'. \n\n"
+            s+=f"\n\tp-value({t}) = {pval:1.1e}"
+        if kfda<1000:
+            s+=f" (kfda={kfda:.2f})"
+        else :
+            s+=f" (kfda={kfda:.2e})"
+        return(s)
+
+    def str_add_multivariate_test_results(self,s,long=False,t=10,ts=[1,5,10],stat=None,permutation=None):
+        
+        stat = self.stat if stat is None else stat 
+        permutation = self.permutation if permutation is None else permutation
+        
+        if long:
+            s+='\n'        
+        nystr = ' with nystrom' if self.nystrom else ''
+
+        s+=f'\n___Multivariate {stat}{nystr} test results___'
+
+        if self.get_pvalue_name() not in self.df_pval:
+            s+="\nMultivariate test not performed yet, run ktest.multivariate_test()"
+        else:
+            sasymp = f"Permutation ({self.npermutation} permutations)" if permutation else f"Asymptotic"
+            strunc = "(truncation)" if stat == 'kfda' else ""
+            s+= f"\n{sasymp} p-value{strunc} for multivariate testing : " 
+
+            if long:
+                for t in ts:
+                    s = self.str_add_multivariate_stat_and_pval(s,t)
+            else:
+                s = self.str_add_multivariate_stat_and_pval(s,t)
+        return(s)
+
+    def str_add_univariate_test_results(self,s,long=False,t=10,name=None,ntop=5,threshold=.05,log2fc=False):
+        if long:
+            s+='\n'
+        if log2fc :
+            if self.log2fc_data is None :
+                if self.it_is_possible_to_compute_log2fc():
+                    self.add_log2fc_to_var()
+                else:
+                    log2fc=False
+
+        s+='\n___Univariate tests results___'
+        ntested = self.get_ntested_variables()
+        nvar = self.get_nvariables()
+        if ntested == 0:
+            s+=f'\nUnivariate test not performed yet, run ktest.univariate_test()'
+        else:
+            if ntested!=nvar:
+                s+=f'\n{ntested} tested variables out of {nvar} variables'
+            DEgenes = self.get_DE_genes(t=t,name=name,threshold=threshold)
+            s+=f"\n{len(DEgenes)} DE genes for t={t} and threshold={threshold} (with BH correction)"
             
+            if len(DEgenes)>0:
+                topn = DEgenes.sort_values()[:ntop]
+                s+= f'\nTop {ntop} DE genes (with BH correction): \n'
+                for g in topn.index:
+                    pval = topn[g]
+                    log2fc_str = f"log2fc = {self.get_log2fc_of_variable(g):.2f}" if log2fc else '' 
+                    if long:
+                        pval_str = f"\tpval={pval:1.1e}" if pval <.01 else f"\tpval={pval:.2f}"
+                        s+=f"\t{g} \t{pval_str} \t{log2fc_str}\n"
+                    else:
+                        log2fc_str=f' ({log2fc_str})' if log2fc else ''
+                        s+=f'{g}{log2fc_str}, '
+                        
+                s= s[:-2]
+        return(s)
 
+    def print_test_info(self,long=False):
+        s = ''
+        s = self.str_add_test_info(s,long)
+        print(s)
 
-        s += '##### Results ##### \n'
-        s += '--- Statistics --- \n'
-        s += f"df_kfdat ({self.df_kfdat.columns})\n"
-        s += f"df_kfdat_contributions ({self.df_kfdat_contributions.columns})\n"
-        s += f"df_pval ({self.df_pval.columns})\n"
-        s += f"df_pval_contributions ({self.df_pval_contributions.columns})\n"
-        s += f"dict_mmd ({len(self.dict_mmd)})\n\n"
+    def print_data_info(self,long=False):
+        s = ''
+        s = self.str_add_data_info(s,long)
+        print(s)
 
+    def print_multivariate_test_results(self,long=False,t=10,ts=[1,5,10]):
+        """
+        Print a summary of the multivariate test results. 
 
-        s += '--- Projections --- \n'
-        s += f"df_proj_kfda ({self.df_proj_kfda.keys()})\n"
-        s += f"df_proj_kpca ({self.df_proj_kpca.keys()})\n"
-        s += f"df_proj_mmd ({self.df_proj_mmd.keys()})\n"
-        s += f"df_proj_residuals ({self.df_proj_residuals.keys()})\n\n"
+        Parameters 
+        ----------
+
+        long (default = False) : bool
+            if True, the print is more detailled. 
+
+        t (default = 10) : int
+            considered if long == False
+            truncation parameter of interest
         
-        s += '--- Correlations --- \n'
-        s += f"corr ({len(self.corr)})\n"
-        s += f"corr ({len(self.corr)})\n\n"
-        
-        s += '--- Eigenvectors --- \n'
-        s += 'A completer'
-        # kx = self.spev['x'].keys()
-        # ky = self.spev['y'].keys()
-        # kxy = self.spev['xy'].keys()
-        # kr = self.spev['residuals'].keys()
-        # s+=f"spev['x']:({kx})\n"
-        # s+=f"spev['y']:({ky})\n"
-        # s+=f"spev['xy']:({kxy})\n"
-        # s+=f"spev['residuals']:({kr})\n"
+        ts (default = [1,5,10]) : int
+            considered if long == True
+            truncation parameters of interest
+            
+        """
 
-        return(s) 
+
+        s = ''
+        s = self.str_add_multivariate_test_results(s,long,t,ts)
+        print(s)
+
+    def print_univariate_test_results(self,long=False,t=10,name=None,ntop=5,threshold=.05,log2fc=False):
+        """
+        Print a summary of the univariate test results. 
+
+        Parameters 
+        ----------
+
+        long (default = False) : bool
+            if True, the print is more detailled. 
+
+        t (default = 10) : int
+            truncation parameter of interest
+        
+        name (default = ktest.univariate_name): str
+            Name of the set of univariate tests. 
+            See ktest.univariate_test() for details.
+
+        ntop (default = 5): int
+            Number of top DE genes desplayed
+
+        threshold (default = .05) : float in [0,1]
+            test rejection threshold.
+
+        log2fc (default = False) : bool
+            print the log2fc of the displayed DE variables if possible.
+
+        """
+        s = ''
+        s = self.str_add_univariate_test_results(s,long,t=t,name=name,ntop=ntop,threshold=threshold,log2fc=log2fc)
+        print(s)
+
+
+    def __str__(self,long=False):
+        
+        s="An object of class Ktest"
+        
+        
+        s = self.str_add_data_info(s,long=long)  
+        s = self.str_add_test_info(s,long=long)
+        s = self.str_add_multivariate_test_results(s,long=long)
+        s = self.str_add_univariate_test_results(s,long=long)
+        return(s)
+
+    def long_str(self):
+        return(self.__str__(long=True))  
 
     def __repr__(self):
         return(self.__str__())
@@ -173,78 +403,48 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
                 'correlations':[name for name in self.corr.keys()]}
         return(names)
 
-    # def load_data(self,data_dict,):
-    # def save_data():
-    # def save_a_dataframe(self,path,which)
-    # def get_dataframe_of_data(self):
-    #     " a mettre à jour"
-    #     x,y = self.get_xy()
-    #     xindex = self.get_xy_index(sample='x')
-    #     yindex = self.get_xy_index(sample='y')
-    #     var = self.variables
-        
-    #     dfx = pd.DataFrame(x,index=xindex,columns=var)
-    #     dfy = pd.DataFrame(y,index=yindex,columns=var)
-    #     return(dfx,dfy)
-
-
-    def kfdat(self,t=None,verbose=0):
+    def kfdat_statistic(self,verbose=0):
         """"
-        This functions computes the truncated kfda statistic from scratch, if needed, it computes landmarks and 
-        anchors for the nystrom approach and diagonalize the matrix of interest for the computation fo the statistic. 
-        It also computes the asymptotic pvalues for each truncation and determine automatically a truncation of interest. 
+        Compute the kfda statistic from scratch. 
+        Compute every needed intermediate quantity. 
+        Return the name of the column containing the statistics in dataframe `ktest.df_kfdat`.
 
         Parameters
         ----------
-            self : tester,
-            the model parameter attributes `approximation_cov`, `approximation_mmd` must be defined.
-            if the nystrom method is used, the attribute `anchor_basis` should be defined and the anchors must have been computed. 
-
-            t (default = None) : None or int,
-            valeur maximale de troncature calculée. 
-            Si None, t prend la plus grande valeur possible, soit n (nombre d'observations) pour la 
-            version standard et r (nombre d'ancres) pour la version nystrom  
-
-            name (default = None) : None or str, 
-            nom de la colonne des dataframe df_kfdat et df_kfdat_contributions dans lesquelles seront stockés 
-            les valeurs de la statistique pour les différentes troncatures calculées de 1 à t 
-
-            verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
-
+            verbose (default = 0) : int 
+                The greater, the more verbose. 
         """
 
+        kn = self.get_kfdat_name()
 
-        kfdat_name = self.get_kfdat_name()
-        if kfdat_name in self.df_kfdat : # avoid computing twice the same stat 
-            if verbose : 
-                print(f'kfdat {kfdat_name} already computed')
+        if kn in self.df_kfdat : 
+            if verbose >0: 
+                print(f'Statistic {kn} already computed')
 
         else:
+            self.initialize_kfdat(verbose=verbose) # nystrom and eigenvectors. 
+            self.compute_kfdat(verbose=verbose) # stat 
+            
+            # j'ai enlevé cette condition pour verifier que j'en ai plus besoin. 
+            # if (self.nystrom and self.has_anchors) or not self.nystrom:
+            #    self.compute_kfdat(verbose=verbose) # stat 
+        return(kn)
 
-            self.initialize_kfdat(verbose=verbose) # landmarks, ancres et diagonalisation           
-            self.compute_kfdat(t=t,verbose=verbose) # caclul de la stat 
-            self.select_trunc() # selection automatique de la troncature 
-            self.compute_pval() # calcul des troncatures asymptotiques 
-            kfdat_name = self.get_kfdat_name()
-            self.kfda_stat = self.df_kfdat[kfdat_name][self.t] # stockage de la valeur de la stat pour la troncature selectionnées 
-        
-        # les valeurs de la statistique ont été stockées dans une colonne de la dataframe df_kfdat. 
-        # pour ne pas avoir à chercher le nom de cette colonne difficilement, il est renvoyé ici
-        return(kfdat_name)
-
-    def mmd(self,shared_anchors=True,name=None,unbiaised=False,verbose=0):
+    def mmd_statistic(self,shared_anchors=True,unbiaised=False,verbose=0):
         """
-        appelle la fonction initialize mmd puis la fonction compute_mmd si le mmd n'a pas deja ete calcule. 
+        Compute the MMD statistic from scratch. 
+        Compute every needed intermediate quantity. 
+        Return the name of the key containing the statistic in dict `ktest.dict_mmd`. 
         """
-        approx = self.approximation_mmd
-        mmd_name = self.get_mmd_name()
 
-        if mmd_name in self.dict_mmd :
+        mn = self.get_mmd_name()
+        if mn in self.dict_mmd :
             if verbose : 
-                print(f'mmd {mmd_name} already computed')
+                print(f'Statistic {mn} already computed')
         else:
             self.initialize_mmd(shared_anchors=shared_anchors,verbose=verbose)
             self.compute_mmd(shared_anchors=shared_anchors,unbiaised=unbiaised,verbose=0)
+        return(mn)
 
     def kpca(self,t=None,verbose=0):
         
@@ -256,88 +456,135 @@ class Tester(Plot_Univariate,SaveData,Pvalues,Correlations):
             self.initialize_kfda(verbose=verbose)            
             self.compute_proj_kpca(t=t,verbose=verbose)
 
-
-def ktest_multivariate(
-    data,
-    metadata,
-    data_name,
-    condition,
-    samples='all',
-    var_metadata=None,
-    nystrom=False,
-    test_params=init_test_params(),
-    center_by=None,
-    marked_obs_to_ignore=None,
-    kernel=init_kernel_params(),
-            # df:data,meta:metadata,data_name,condition:test_condition,df_var:var_metadata,
-            # test:test_params,viz:removed
-    ):
-    """
-    Generate a tester object and compute specified comparison
-
-    Parameters
-    ----------
-        data : Pandas.DataFrame 
-            the data dataframe
-            
-        metadata : Pandas.DataFrame 
-            the metadata dataframe
-
-        data_name : str 
-            Name of the data (examples : counts, normalized)
-
-        condition : str
-            column of the metadata dataframe containing the labels to test
-
-        samples (default = 'all') : str or iterable of str
-            'all' : test the two categories contained in column condition (does not work for more than two yet)
-            str : category of condition to compare to others as one vs all
-            iterable of str : iterable of the two categories to compare to each other
-            
-        var_metadata (default = None): Pandas.DataFrame 
-            the metainformation about the variables, index must correspond to data columns
+    def compute_test_statistic(self,
+                            stat=None,
+                            verbose=0):
         
-        nystrom (default = False) : boolean
-            if True, the test_params nystrom is set to True with default parameters
+        stat = self.stat if stat is None else stat 
+        
+        if stat == 'kfda':
+            self.kfdat_statistic(verbose=verbose)
+        elif stat == 'mmd':
+            self.mmd_statistic(verbose=verbose)
+        else:
+            if verbose >0:
+                print(f"Statistic '{stat}' not recognized. Possible values : 'kfda','mmd'")
 
-        test_params : object specifying the test to execute
-            output of the function get_test_params()
+    def multivariate_test(self,
+                        stat=None,
+                        permutation=None,
+                        npermutation=None,
+                        seed_permutation=None,                   
+                        n_jobs=1,
+                        keep_permutation_statistics=False,
+                        verbose=0,
+                        t_verbose=10):
+        
+        
+        self.compute_test_statistic(stat=stat,verbose=verbose)
+        self.compute_pvalue(stat=stat,
+                            permutation=permutation,
+                            npermutation=npermutation,
+                            seed_permutation=seed_permutation,
+                            n_jobs=n_jobs,
+                            keep_permutation_statistics=keep_permutation_statistics,
+                            verbose=verbose)
 
-        kernel : obkect specifying the kernel function to use
-            output of the function init_kernel_params()
-
-        center_by (default = None) : str
-            column of the metadata containing a categorial variable to regress 
-
-        marked_obs_to_ignore (default = None) : str
-            column of the metadata containing booleans that are 
-            True if the observation should be ignored from the analysis 
-            and False otherwise.    
-    """
-    t = Tester()
-    t.add_data_to_Tester_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata)
-    t.set_test_data_info(data_name=data_name,condition=condition,samples=samples)
-    t.kernel(**kernel)
-    t.kernel_specification = kernel
-
-    if nystrom:
-        test_params['nystrom']=True
-    t.init_test_params(**test_params)
-    t.test_params=test_params
-    t.set_center_by(center_by=center_by)
-    t.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore)
-    t.kfdat()
-    t.compute_pval(t=len(data))
-
-    return(t)
+        if verbose>0:
+            self.print_multivariate_test_results(t=t_verbose,long=False)
 
 
-def ktest_multivariate_from_xy(x,y,names='xy',kernel=init_kernel_params()):
+    def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
+        sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
+        spp = (sp/sum(sp)) if part_of_inertia else sp
+        spp = spp.cumsum(0) if cumul else spp
+        spp = 1-spp if decreasing else spp
+        spp = torch.log(spp) if log else spp
+
+        return(spp)
+
+    def get_pvalue_name(self,permutation=None):
+        if permutation is None:
+            permutation = self.permutation
+
+        if self.permutation:
+            return(self.permutation_name)
+        else:
+            return(self.get_kfdat_name())
+
+
+    def get_pvalue_kfda(self,
+                        permutation=None,
+                        contrib=False,
+                        log=False,
+                        verbose=0):
+        
+
+        pn = self.get_pvalue_name(permutation=permutation)
+        df_pval = self.df_pval_contributions if contrib else self.df_pval
+
+        if pn not in df_pval:
+            if verbose>0:
+                print(f'p-values associated to {pn} not computed yet, run ktest.multivariate_test().')
+            return(None)
+        else:
+            return(np.log(df_pval[pn]) if log else df_pval[pn])
+
+
+
+    def get_pvalue_mmd(self,):
+        return(self.dict_pval_mmd[self.permutation_name])
+
+    def get_pvalue(self,
+                    stat=None,
+                    permutation=None,
+                    contrib=False,
+                    log=False,
+                    verbose=0):
+
+        if stat is None:
+            stat = self.stat
+
+        if stat == 'kfda':
+            pval = self.get_pvalue_kfda(
+                                permutation=permutation,
+                                contrib=contrib,
+                                log=log,
+                                verbose=verbose)
+        elif stat =='mmd':
+            pval = self.get_pvalue_mmd()
+
+        return(pval) 
+
+    def get_kfda(self,contrib=False,log=False,name=None):
+        name = self.get_kfdat_name() if name is None else name
+        df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
+        kfda = np.log(df_kfda[name]) if log else df_kfda[name]
+        kfda = kfda[~kfda.isna()]
+        return(kfda) 
+
+    def get_mmd(self):
+        mn = self.get_mmd_name()
+        return(self.dict_mmd[mn])
+
+    def get_statistic(self,stat=None):
+        if stat is None:
+            stat = self.stat
+
+        if stat == 'kfda':
+            return(self.get_kfda())
+        elif stat == 'mmd':
+            return(self.get_mmd())
+
+
+
+
+def ktest_from_xy(x,y,names='xy',kernel=init_kernel_params()):
     x = pd.DataFrame(x,columns = [str(i) for i in range(x.shape[1])])
     y = pd.DataFrame(y,columns = [str(i) for i in range(x.shape[1])])
     data = pd.concat([x,y])
     metadata = pd.DataFrame([names[0]]*len(x)+[names[1]]*len(y),columns=['condition'])
-    t = ktest_multivariate(
+    t = Ktest(
             data,
             metadata,
             data_name='data',

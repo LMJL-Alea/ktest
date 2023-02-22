@@ -3,7 +3,7 @@ from .utils import ordered_eigsy
 
 from .correlation_operations import Correlations
 from .verbosity import Verbosity
-from .base import Data,Model
+from .base import Base
 from .centering_operations import CenteringOps
 from .gram_matrices import GramMatrices
 from .nystrom_operations import NystromOps

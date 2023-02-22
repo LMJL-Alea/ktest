@@ -37,14 +37,14 @@ class Statistics(ProjectionOps):
 
         Parameters
         ----------
-            self : tester,
+            self : Ktest,
             the model parameter attributes `approximation_cov`, `approximation_mmd` must be defined.
             if the nystrom method is used, the attribute `anchor_basis` should be defined and the anchors must have been computed. 
 
             t (default = None) : None or int,
             valeur maximale de troncature calculée. 
             Si None, t prend la plus grande valeur possible, soit n (nombre d'observations) pour la 
-            version standard et r (nombre d'ancres) pour la version nystrom  
+            version standard et nanchors (nombre d'ancres) pour la version nystrom  
 
             name (default = None) : None or str, 
             nom de la colonne des dataframe df_kfdat et df_kfdat_contributions dans lesquelles seront stockés 
@@ -110,6 +110,8 @@ class Statistics(ProjectionOps):
         
         """
         
+        if verbose >0: 
+            print('- Compute kfda statistic') 
         # récupération des paramètres du modèle dans les attributs 
         cov = self.approximation_cov # approximation de l'opérateur de covariance. 
         mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
@@ -134,20 +136,15 @@ class Statistics(ProjectionOps):
         kfdat_name = self.get_kfdat_name()
         
         if kfdat_name in self.df_kfdat:
-            print(f"écrasement de {kfdat_name} dans df_kfdat and df_kfdat_contributions")
+            if verbose >0:
+                print(f"écrasement de {kfdat_name} dans df_kfdat and df_kfdat_contributions")
 
 
         # détermination de la troncature maximale à calculer 
         t = len(sp) if t is None else len(sp) if len(sp)<t else t # troncature maximale
         
         # fonction qui gère la verbosité de la fonction si verbose >0 
-        self.verbosity(function_name='compute_kfdat',
-                dict_of_variables={
-                't':t,
-                'approximation_cov':cov,
-                'approximation_mmd':mmd,},
-                start=True,
-                verbose = verbose)
+
 
 
         # instancier le calcul GPU si possible, date du tout début et je pense que c'est la raison pour 
@@ -170,16 +167,10 @@ class Statistics(ProjectionOps):
         trunc = range(1,t+1) # liste des troncatures possibles de 1 à t 
         self.df_kfdat[kfdat_name] = pd.Series(kfda,index=trunc)
         self.df_kfdat_contributions[kfdat_name] = pd.Series(kfda_contributions,index=trunc)
-        
+
+        self.has_kfda_statistic = True        
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
-        self.verbosity(function_name='compute_kfdat',
-                                dict_of_variables={
-                't':t,
-                'approximation_cov':cov,
-                'approximation_mmd':mmd,
-                },
-                start=False,
-                verbose = verbose)
+
         
         # les valeurs de la statistique ont été stockées dans une colonne de la dataframe df_kfdat. 
         # pour ne pas avoir à chercher le nom de cette colonne difficilement, il est renvoyé ici
@@ -219,7 +210,8 @@ class Statistics(ProjectionOps):
         cov = self.approximation_cov # approximation de l'opérateur de covariance. 
         mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
         # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
-
+        if verbose>0:
+            print(f'- Initialize kfdat\n\tcov : {cov} \n\tmmd : {mmd}')
         # la quantisation était la troisième approche après nystrom et standard mais je ne l'utilise plus car 
         # son coût computationnel est faible mais ses performances le sont aussi. 
         # cette approche a besoin d'avoir un poids associé aux landmarks pour savoir combien ils représentent d'observations. 
@@ -233,7 +225,8 @@ class Statistics(ProjectionOps):
             self.compute_nystrom_anchors(verbose=verbose) 
 
         # diagonalisation de la matrice d'intérêt pour calculer la statistique 
-        self.diagonalize_within_covariance_centered_gram(approximation=cov,verbose=verbose)
+        if (self.nystrom and self.has_anchors) or (not self.nystrom) :
+            self.diagonalize_within_covariance_centered_gram(approximation=cov,verbose=verbose)
 
     def initialize_mmd(self,shared_anchors=True,verbose=0):
 
@@ -243,12 +236,12 @@ class Statistics(ProjectionOps):
                     full : aucun calcul en amont puisque la Gram et m seront calcules dans mmd
                     nystrom : 
                             si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmark_method
-                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille r pour les deux echantillons
-                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille r//2
-                                        attention : le parametre r est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
-                    quantization : m sont determines comme les centroides de l'algo kmeans 
+                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille nanchors pour les deux echantillons
+                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille nanchors//2
+                                        attention : le parametre nanchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
+                    quantization : nlandmarks sont determines comme les centroides de l'algo kmeans 
         shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
-        m : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
+        nlandmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
         verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
         """
@@ -270,7 +263,7 @@ class Statistics(ProjectionOps):
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
-                        assert(self.r is not None,"r not specified")
+                        assert(self.nanchors is not None,"nanchors not specified")
                         self.compute_nystrom_anchors(verbose=verbose)
  
     def compute_mmd(self,unbiaised=False,shared_anchors=True,verbose=0):
