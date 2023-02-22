@@ -254,10 +254,12 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         
         stat = self.stat if stat is None else stat 
         permutation = self.permutation if permutation is None else permutation
-
+        
         if long:
             s+='\n'        
-        s+=f'\n___Multivariate {stat} test results___'
+        nystr = ' with nystrom' if self.nystrom else ''
+
+        s+=f'\n___Multivariate {stat}{nystr} test results___'
 
         if self.get_pvalue_name() not in self.df_pval:
             s+="\nMultivariate test not performed yet, run ktest.multivariate_test()"
