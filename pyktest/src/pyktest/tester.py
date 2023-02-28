@@ -24,46 +24,10 @@ from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
 from .permutation import Permutation
 from .correlation_operations import Correlations
-from .base import init_kernel_params,init_test_params
+from .utils import init_kernel_params,init_test_params
  
-
-
-def pytorch_eigsy(matrix):
-    # j'ai codé cette fonction pour tester les approches de nystrom 
-    # avec la diag de pytorch mais ça semble marcher moins bien que la fonction eigsy
-    # cpdt je devrais comparer sur le meme graphique 
-    sp,ev = torch.symeig(matrix,eigenvectors=True)
-    order = sp.argsort()
-    ev = ev[:,order]
-    sp = sp[order]
-    return(sp,ev)
-
-
 
 # tracer l'evolution des corrélations par rapport aux gènes ordonnés
-# test par permutation 
-
-# plot proj :on a dfx et dfy pour tracer le result en fct d'un axe de la pca 
-# on peut aussi vouloir tracer en fonction de ll'expression d'un gène 
-
-# def des fonction type get pour les opérations d'initialisation redondantes
-# acces facile aux noms des dict de dataframes. 
-# faire en sorte de pouvoir calculer corr kfda et kpca 
-
-# mettre une limite globale a 100 pour les tmax des projections (éviter d'enregistrer des structures de données énormes)
-# mieux gérer la projection de gènes et le param color
- 
-# verbosity devient aussi un verificateur de code 
-
-# repenser les plots et df_init_proj
-
-    # trouver comment inserer un test sous H0 sans prendre trop de mémoire 
-    # def split_one_sample_to_simulate_H0(self,sample='x'):
-    #     z = self.x if sample =='x' else self.y
-    #     nH0 = self.n1 if sample == 'x' else self.n2
-    #     p = permutation(np.arange(nH0))
-    #     self.x0,self.y0 = z[p[:nH0//2]],z[p[nH0//2:]]
-
 
 class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
     """
@@ -170,7 +134,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         self.set_center_by(center_by=center_by,verbose=verbose)
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         
-
     def str_add_test_info(self,s,long=False):
 
         # if long:
@@ -259,27 +222,39 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
     def str_add_multivariate_test_results(self,s,long=False,t=None,ts=[1,5,10],stat=None,permutation=None):
         if t is None:
             t = self.truncation
-        stat = self.stat if stat is None else stat 
-        permutation = self.permutation if permutation is None else permutation
-        
         if long:
             s+='\n'        
+
+        stat = self.stat if stat is None else stat 
+        permutation = self.permutation if permutation is None else permutation
+        pval_name = self.get_pvalue_name()
         nystr = ' with nystrom' if self.nystrom else ''
+
 
         s+=f'\n___Multivariate {stat}{nystr} test results___'
 
-        if self.get_pvalue_name() not in self.df_pval:
+        if stat == 'mmd':
+            pval_computed = pval_name in self.dict_pval_mmd
+        elif stat == 'kfda':
+            pval_computed = pval_name in self.df_pval
+
+        if not pval_computed:
             s+="\nMultivariate test not performed yet, run ktest.multivariate_test()"
         else:
             sasymp = f"Permutation ({self.n_permutations} permutations)" if permutation else f"Asymptotic"
-            strunc = "(truncation)" if stat == 'kfda' else ""
-            s+= f"\n{sasymp} p-value{strunc} for multivariate testing : " 
-
-            if long:
-                for t in ts:
-                    s = self.str_add_multivariate_stat_and_pval(s,t)
+            
+            if stat=='mmd':
+                pval = self.dict_pval_mmd[pval_name]
+                s+=f"\n{sasymp} p-value for multivariate testing : {pval}"
             else:
-                s = self.str_add_multivariate_stat_and_pval(s,t)
+                strunc = "(truncation)" 
+                s+= f"\n{sasymp} p-value{strunc} for multivariate testing : " 
+
+                if long and stat == 'kfda':
+                    for t in ts:
+                        s = self.str_add_multivariate_stat_and_pval(s,t)
+                else:
+                    s = self.str_add_multivariate_stat_and_pval(s,t)
         return(s)
 
     def str_add_univariate_test_results(self,s,long=False,t=None,name=None,ntop=5,threshold=.05,log2fc=False):
@@ -386,7 +361,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         s = ''
         s = self.str_add_univariate_test_results(s,long,t=t,name=name,ntop=ntop,threshold=threshold,log2fc=log2fc)
         print(s)
-
 
     def __str__(self,long=False):
         
@@ -501,7 +475,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         if verbose>0:
             self.print_multivariate_test_results(long=False)
 
-
     def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):
         sp,_ = self.get_spev(slot='anchors' if anchors else 'covw')        
         spp = (sp/sum(sp)) if part_of_inertia else sp
@@ -520,7 +493,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         else:
             return(self.get_kfdat_name())
 
-
     def get_pvalue_kfda(self,
                         permutation=None,
                         contrib=False,
@@ -537,8 +509,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             return(None)
         else:
             return(np.log(df_pval[pn]) if log else df_pval[pn])
-
-
 
     def get_pvalue_mmd(self,):
         return(self.dict_pval_mmd[self.permutation_name])
