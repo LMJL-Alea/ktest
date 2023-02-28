@@ -47,15 +47,15 @@ class Permutation:
             else: 
                 return({'mmd':statistic})
 
-    def get_permutation_name(self,npermutation,seed):
+    def get_permutation_name(self,n_permutations,seed):
         self.get_kfdat_name()
         mn = self.get_model_str()
         dtn = self.get_data_to_test_str()
-        return(f'{mn}_perm{npermutation}_seed{seed}_{dtn}')
+        return(f'{mn}_perm{n_permutations}_seed{seed}_{dtn}')
 
-    def compute_nperm_permutation_statistics(self,stat,npermutation,seed,n_jobs=1,verbose=0):
-        seeds = range(seed,seed+npermutation)
-        pn = self.get_permutation_name(npermutation=npermutation,seed=seed)
+    def compute_nperm_permutation_statistics(self,stat,n_permutations,seed,n_jobs=1,verbose=0):
+        seeds = range(seed,seed+n_permutations)
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
         if n_jobs == 1:
             results=[]
             for s in seeds:
@@ -79,33 +79,33 @@ class Permutation:
         else:
             return(pd.concat(results,axis=1))
 
-    def compute_permutation_pvalue(self,stat,npermutation,seed,perm_stats):
+    def compute_permutation_pvalue(self,stat,n_permutations,seed,perm_stats):
         
         self.compute_test_statistic(stat=stat)
         true_stat = self.get_statistic(stat=stat)
-        pn = self.get_permutation_name(npermutation=npermutation,seed=seed)
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
         
         if stat == 'kfda':
-            perm_pval = perm_stats.ge(true_stat,axis=0).sum(axis=1)/npermutation
+            perm_pval = perm_stats.ge(true_stat,axis=0).sum(axis=1)/n_permutations
             self.df_pval[pn] = perm_pval
         elif stat == 'mmd' : 
-            perm_pval = perm_stats.ge(true_stat).sum(axis=0)/npermutation
+            perm_pval = perm_stats.ge(true_stat).sum(axis=0)/n_permutations
 
             self.dict_pval_mmd[pn] = perm_pval.values[0]
         
-    def store_permutation_statistics_in_ktest(self,stat,npermutation,seed,perm_stats):
-        pn = self.get_permutation_name(npermutation=npermutation,seed=seed)
+    def store_permutation_statistics_in_ktest(self,stat,n_permutations,seed,perm_stats):
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
         if stat == 'kfda':
             self.df_kfdat_perm[pn] = perm_stats
         elif stat == 'mmd' : 
             self.df_mmd_perm[pn] = perm_stats
             
-    def permutation_pvalue(self,stat,npermutation=None,seed=None,n_jobs=1,keep_permutation_statistics=False,verbose=0):
+    def permutation_pvalue(self,stat,n_permutations=None,seed=None,n_jobs=1,keep_permutation_statistics=False,verbose=0):
         
-        if npermutation is None: 
-            npermutation = self.npermutation
+        if n_permutations is None: 
+            n_permutations = self.n_permutations
         else:
-            self.npermutation = npermutation
+            self.n_permutations = n_permutations
 
         if seed is None : 
             seed = self.seed_permutation
@@ -113,10 +113,10 @@ class Permutation:
             self.seed_permutation = seed 
         
 
-        pn = self.get_permutation_name(npermutation=npermutation,seed=seed)
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
 
         if verbose>0:
-            print(f'- Permutation statistic npermutation={npermutation} seeds from {seed} to {seed+npermutation} with {n_jobs} jobs')
+            print(f'- Permutation statistic n_permutations={n_permutations} seeds from {seed} to {seed+n_permutations} with {n_jobs} jobs')
 
         if pn in self.df_pval:
             if verbose>0:
@@ -125,7 +125,7 @@ class Permutation:
 
             perm_stats = self.compute_nperm_permutation_statistics(
                                                 stat=stat,
-                                                 npermutation=npermutation,
+                                                 n_permutations=n_permutations,
                                                  seed=seed,
                                                  n_jobs=n_jobs,
                                                  verbose=verbose
@@ -133,7 +133,7 @@ class Permutation:
 
             self.compute_permutation_pvalue(
                                                 stat=stat,
-                                                npermutation=npermutation,
+                                                n_permutations=n_permutations,
                                                 seed=seed,
                                                 perm_stats=perm_stats
                                                 )
@@ -141,7 +141,7 @@ class Permutation:
             if keep_permutation_statistics:
                 self.store_permutation_statistics_in_ktest(
                                                 stat=stat,
-                                                npermutation=npermutation, 
+                                                n_permutations=n_permutations, 
                                                 seed=seed,
                                                 perm_stats=perm_stats)
             self.permutation_name = pn

@@ -192,9 +192,9 @@ class GramMatrices(CenteringOps):
 
         # récupération des paramètres du modèle spécifique à l'approximation de nystrom (infos sur les ancres)    
         if 'nystrom' in approximation:
-            dict_nlandmarks = self.get_nobs(landmarks=True)
+            dict_n_landmarks = self.get_nobs(landmarks=True)
 
-            nlandmarks = dict_nlandmarks['ntot']
+            n_landmarks = dict_n_landmarks['ntot']
             anchor_name = self.get_anchors_name()
             
         # plus utilisé 
@@ -218,7 +218,7 @@ class GramMatrices(CenteringOps):
                 Lp_inv = torch.diag(Lp**(-1))
                 
                 Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
-                Kw = 1/(n*nlandmarks*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
+                Kw = 1/(n*n_landmarks*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 
             else:
                 print("nystrom impossible, you need compute landmarks and/or anchors")
@@ -246,7 +246,7 @@ class GramMatrices(CenteringOps):
                 # Calcul de la matrice à diagonaliser avec Nystrom. 
                 # Comme tu le disais, cette formule est symétrique et on pourrait utiliser une SVD en l'écrivant BB^T
                 # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)         
-                Kw = 1/(n*nlandmarks**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])  
+                Kw = 1/(n*n_landmarks**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])  
             else:
                 print("nystrom new version impossible, you need compute landmarks and/or anchors")
                     

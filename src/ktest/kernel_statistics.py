@@ -44,7 +44,7 @@ class Statistics(ProjectionOps):
             t (default = None) : None or int,
             valeur maximale de troncature calculée. 
             Si None, t prend la plus grande valeur possible, soit n (nombre d'observations) pour la 
-            version standard et nanchors (nombre d'ancres) pour la version nystrom  
+            version standard et n_anchors (nombre d'ancres) pour la version nystrom  
 
             name (default = None) : None or str, 
             nom de la colonne des dataframe df_kfdat et df_kfdat_contributions dans lesquelles seront stockés 
@@ -236,12 +236,12 @@ class Statistics(ProjectionOps):
                     full : aucun calcul en amont puisque la Gram et m seront calcules dans mmd
                     nystrom : 
                             si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmark_method
-                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille nanchors pour les deux echantillons
-                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille nanchors//2
-                                        attention : le parametre nanchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
-                    quantization : nlandmarks sont determines comme les centroides de l'algo kmeans 
+                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille n_anchors pour les deux echantillons
+                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille n_anchors//2
+                                        attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
+                    quantization : n_landmarks sont determines comme les centroides de l'algo kmeans 
         shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
-        nlandmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
+        n_landmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
         verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
         """
@@ -263,7 +263,7 @@ class Statistics(ProjectionOps):
             else:
                 for xy in 'xy':
                     if 'anchors' not in self.spev[xy]:
-                        assert(self.nanchors is not None,"nanchors not specified")
+                        assert(self.n_anchors is not None,"n_anchors not specified")
                         self.compute_nystrom_anchors(verbose=verbose)
  
     def compute_mmd(self,unbiaised=False,shared_anchors=True,verbose=0):

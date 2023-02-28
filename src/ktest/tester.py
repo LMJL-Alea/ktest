@@ -81,7 +81,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                 stat='kfda',
                 nystrom=False,
                 permutation=False,
-                npermutation=500,
+                n_permutations=500,
                 seed_permutation=0,
                 test_params=None,
                 center_by=None,
@@ -121,7 +121,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                 Whether to compute permutation or asymptotic p-values.
                 Set to `True` if `stat == mmd`
 
-            npermutation (default = 500) : int
+            n_permutations (default = 500) : int
                 Number of permutation needed to compute the permutation p-value.
                 Ignored if permutation is False. 
             
@@ -156,7 +156,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                                 stat=stat,
                                 nystrom=nystrom,
                                 permutation=permutation,
-                                npermutation=npermutation,
+                                n_permutations=n_permutations,
                                 seed_permutation=seed_permutation,
                                 )
 
@@ -182,10 +182,10 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         s+=f'\nTest statistic : {stat}'
         
         if ny: 
-            s+= f" with the nystrom approximation ({tp['nanchors']} anchors)"
+            s+= f" with the nystrom approximation ({tp['n_anchors']} anchors)"
 
             if long:
-                s += f"\n\t{tp['nlandmarks']} landmarks"
+                s += f"\n\t{tp['n_landmarks']} landmarks"
                 lm = tp['landmark_method']
                 ab = tp['anchor_basis']
                 if lm == 'random':
@@ -193,7 +193,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                 if lm == 'kmeans':
                     s += f" (determined as kmeans centroids of each group)"
                 
-                s += f"\n\t{tp['nanchors']} anchors"
+                s += f"\n\t{tp['n_anchors']} anchors"
                 if ab == 'w':
                     s += " (the eigenvectors of the within group covariance operator of the landmarks)"
                 elif ab == 'k':
@@ -238,20 +238,27 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         return(s)
 
     def str_add_multivariate_stat_and_pval(self,s,t):
-        pval = self.df_pval[self.get_pvalue_name()][t]
-        kfda = self.df_kfdat[self.get_kfdat_name()][t]
-        if pval>.01:
-            s+=f"\n\tp-value({t}) = {pval:.2f}"
+        pval = self.df_pval[self.get_pvalue_name()]
+        kfda = self.df_kfdat[self.get_kfdat_name()]
+        if t not in pval:
+            s+= f"\n\t p-value and statistic not computed for t={t}"
         else:
-            s+=f"\n\tp-value({t}) = {pval:1.1e}"
-        if kfda<1000:
-            s+=f" (kfda={kfda:.2f})"
-        else :
-            s+=f" (kfda={kfda:.2e})"
+            pval=pval[t]
+            kfda=kfda[t]
+            if pval>.01:
+                s+=f"\n\tp-value({t}) = {pval:.2f}"
+            else:
+                s+=f"\n\tp-value({t}) = {pval:1.1e}"
+            if kfda<1000:
+                s+=f" (kfda={kfda:.2f})"
+            else :
+                s+=f" (kfda={kfda:.2e})"
+        
         return(s)
 
-    def str_add_multivariate_test_results(self,s,long=False,t=10,ts=[1,5,10],stat=None,permutation=None):
-        
+    def str_add_multivariate_test_results(self,s,long=False,t=None,ts=[1,5,10],stat=None,permutation=None):
+        if t is None:
+            t = self.truncation
         stat = self.stat if stat is None else stat 
         permutation = self.permutation if permutation is None else permutation
         
@@ -264,7 +271,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         if self.get_pvalue_name() not in self.df_pval:
             s+="\nMultivariate test not performed yet, run ktest.multivariate_test()"
         else:
-            sasymp = f"Permutation ({self.npermutation} permutations)" if permutation else f"Asymptotic"
+            sasymp = f"Permutation ({self.n_permutations} permutations)" if permutation else f"Asymptotic"
             strunc = "(truncation)" if stat == 'kfda' else ""
             s+= f"\n{sasymp} p-value{strunc} for multivariate testing : " 
 
@@ -275,7 +282,9 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                 s = self.str_add_multivariate_stat_and_pval(s,t)
         return(s)
 
-    def str_add_univariate_test_results(self,s,long=False,t=10,name=None,ntop=5,threshold=.05,log2fc=False):
+    def str_add_univariate_test_results(self,s,long=False,t=None,name=None,ntop=5,threshold=.05,log2fc=False):
+        if t is None:
+            t = self.truncation
         if long:
             s+='\n'
         if log2fc :
@@ -322,7 +331,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         s = self.str_add_data_info(s,long)
         print(s)
 
-    def print_multivariate_test_results(self,long=False,t=10,ts=[1,5,10]):
+    def print_multivariate_test_results(self,long=False,t=None,ts=[1,5,10]):
         """
         Print a summary of the multivariate test results. 
 
@@ -347,7 +356,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         s = self.str_add_multivariate_test_results(s,long,t,ts)
         print(s)
 
-    def print_univariate_test_results(self,long=False,t=10,name=None,ntop=5,threshold=.05,log2fc=False):
+    def print_univariate_test_results(self,long=False,t=None,name=None,ntop=5,threshold=.05,log2fc=False):
         """
         Print a summary of the univariate test results. 
 
@@ -473,25 +482,24 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
     def multivariate_test(self,
                         stat=None,
                         permutation=None,
-                        npermutation=None,
+                        n_permutations=None,
                         seed_permutation=None,                   
-                        n_jobs=1,
+                        n_jobs_permutation=1,
                         keep_permutation_statistics=False,
-                        verbose=0,
-                        t_verbose=10):
+                        verbose=0,):
         
         
         self.compute_test_statistic(stat=stat,verbose=verbose)
         self.compute_pvalue(stat=stat,
                             permutation=permutation,
-                            npermutation=npermutation,
+                            n_permutations=n_permutations,
                             seed_permutation=seed_permutation,
-                            n_jobs=n_jobs,
+                            n_jobs_permutation=n_jobs_permutation,
                             keep_permutation_statistics=keep_permutation_statistics,
                             verbose=verbose)
 
         if verbose>0:
-            self.print_multivariate_test_results(t=t_verbose,long=False)
+            self.print_multivariate_test_results(long=False)
 
 
     def get_spectrum(self,anchors=False,cumul=False,part_of_inertia=False,log=False,decreasing=False):

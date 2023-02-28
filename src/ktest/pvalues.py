@@ -90,9 +90,9 @@ class Pvalues:
     def compute_pvalue(self,
                     stat=None,
                     permutation=None,
-                    npermutation=None,
+                    n_permutations=None,
                     seed_permutation=None,
-                    n_jobs=1,
+                    n_jobs_permutation=1,
                     keep_permutation_statistics=False,
                     verbose=0
                     ):
@@ -116,9 +116,9 @@ class Pvalues:
             self.compute_kfda_asymptotic_pvalue()
         else:
             self.permutation_pvalue(stat=stat, 
-                                    npermutation=npermutation,
+                                    n_permutations=n_permutations,
                                     seed=seed_permutation,
-                                    n_jobs=n_jobs,
+                                    n_jobs=n_jobs_permutation,
                                     keep_permutation_statistics=keep_permutation_statistics,
                                     verbose=verbose)
 
