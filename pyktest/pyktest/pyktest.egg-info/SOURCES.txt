@@ -1,0 +1,10 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+pyktest/pyktest.egg-info/PKG-INFO
+pyktest/pyktest.egg-info/SOURCES.txt
+pyktest/pyktest.egg-info/dependency_links.txt
+pyktest/pyktest.egg-info/requires.txt
+pyktest/pyktest.egg-info/top_level.txt
