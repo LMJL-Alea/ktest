@@ -196,8 +196,8 @@ def add_Ktest_to_dict_tests_from_name_and_dict_data(name,dict_data,dict_tests,di
             'approximation_cov' in 'standard','nystrom1', 'nystrom2','nystrom3'
             'approximation_mmd' in 'standard','nystrom1', 'nystrom2','nystrom3'
             if nystrom is used in one of the two approximations : 
-                'nlandmarks' (int): the number of landmarks
-                'nanchors' (int): the number of anchors
+                'n_landmarks' (int): the number of landmarks
+                'n_anchors' (int): the number of anchors
                 'landmark_method' in 'random', 'kmeans'
                 'anchor_basis' in 'W','S','K'
         

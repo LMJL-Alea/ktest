@@ -248,33 +248,83 @@ class Univariate:
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
 
-    def ktest_for_one_variable(self,variable,kernel=None,inform_var=True,verbose=0):
+
+    def has_non_zero_obs_in_both_conditions(self,variable,verbose=0):
+        data = self.init_df_proj(variable)
+        meta = self.obs.copy()
+        samples_list = self.get_samples_list()
+        mask =  data[variable]!=0
+        
+        meta = meta[mask]
+
+        return(all([s in meta[self.condition].unique() for s in samples_list]))        
+
+    def get_data_and_metadata_with_ignored_zeros(self,variable,verbose=0):
+
+        assert(self.has_non_zero_obs_in_both_conditions(variable))
+        data = self.init_df_proj(variable)
+        meta = self.obs.copy()
+        mask =  data[variable]!=0
+        
+        data = data[mask]
+        meta = meta[mask]
+
+        if verbose >0:
+            s=''
+            n_nz = len(data)
+            ntot = self.get_ntot()
+            s+=f'\t{len(data)}/{self.get_ntot()} non-zero observations considered\n\t'
+            for sample in self.get_samples_list():
+                n_sample = len(meta[meta[self.condition]==sample])
+                s += f'{sample}:{n_sample}, '
+            s = s[:-2]
+            print(s)
+
+        return(data,meta)
+       
+
+
+    def ktest_for_one_variable(self,variable,kernel=None,inform_var=True,ignore_zeros=False,verbose=0):
         # Get testing info from global object 
         from .tester import Ktest
 
-        # Initialize univariate Ktest with common covariance 
-        # var_metadata = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
-        kernel = self.get_kernel_params() if kernel is None else kernel
         if verbose >0:
             print(f'- Defining ktest for variable {variable}')
-
         if verbose >1:
             print(f'\tdata_name : {self.data_name}')
             print(f'\tcondition : {self.condition}')
             print(f'\tsamples : {self.samples}')
             print(f'\ttest_params : {self.get_test_params()}')
             print(f'\tcenter_by : {self.center_by}')
-            print(f'\tkernel : {self.get_kernel_params}')
+            print(f'\tkernel : {self.get_kernel_params()}')
+            print(f'\tignore_zeros : {ignore_zeros}')
 
+        # Initialize univariate Ktest with common covariance 
+        # var_metadata = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
+        kernel = self.get_kernel_params() if kernel is None else kernel
+        data = self.init_df_proj(variable)
+        meta = self.obs.copy()
+        test_params=self.test_params_initial.copy()
+        
+        if ignore_zeros:
+            data,meta = self.get_data_and_metadata_with_ignored_zeros(variable,verbose=verbose)
+            n_nz = len(data)
+            if n_nz < 300 and test_params['nystrom'] == True: 
+                test_params['nystrom'] = False
+                if verbose >0:
+                    print(f'\tNot using nystrom because <300 non-zero observations')
+
+            
+        
 
         t = Ktest(
-                    data =self.init_df_proj(variable),
-                    metadata =self.obs.copy(),
+                    data =data,
+                    metadata =meta,
                     data_name=  self.data_name,
                     condition= self.condition,
                     samples=self.samples,
                     var_metadata=pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None,
-                    test_params=self.get_test_params(),
+                    test_params=test_params,
                     center_by=self.center_by,
                     marked_obs_to_ignore=self.marked_obs_to_ignore,
                     kernel=kernel,
@@ -282,11 +332,10 @@ class Univariate:
                     )
         return(t)
 
-    def compute_univariate_kfda(self,variable,kernel=None,verbose=0):
+    def compute_univariate_kfda(self,variable,kernel=None,ignore_zeros=False,verbose=0):
         # récupérer la donnée
-        
 
-        t = self.ktest_for_one_variable(variable=variable,kernel=kernel,verbose=verbose)
+        t = self.ktest_for_one_variable(variable=variable,kernel=kernel,ignore_zeros=ignore_zeros,verbose=verbose)
         t.multivariate_test(verbose=verbose)
 
         # ccovw = 'ccovw' if common_covariance else ''
@@ -311,13 +360,18 @@ class Univariate:
         tmax = np.min((np.max(truncations_of_interest),len(vtest.get_explained_difference())))
 
         for t in truncations_of_interest:
-            if t<tmax:            
+            if t<tmax:
+                pvals = vtest.df_pval[variable]   
+                stats = vtest.df_kfdat[variable]
+                if t not in pvals and not_tested == False:
+                    not_tested = True
+                    
                 colpval = self.get_column_name_in_var(t=t,corrected=False,name=name,output='pval')
                 colkfda = self.get_column_name_in_var(t=t,corrected=False,name=name,output='kfda')
                 
                 
-                pval = np.NaN if not_tested else vtest.df_pval[variable][t]
-                kfda = np.NaN if not_tested else vtest.df_kfdat[variable][t]
+                pval = np.NaN if not_tested else pvals[t]
+                kfda = np.NaN if not_tested else stats[t]
                 
                 vard[variable][colpval]=pval
                 vard[variable][colkfda]=kfda
@@ -418,6 +472,7 @@ class Univariate:
                                     kernel_bandwidths_col_in_var=None,
                                     parallel=False,
                                     truncations_of_interest=list(range(1,31)),
+                                    ignore_zeros=False,
                                     diagnostic=False,
                                     t_diagnostic=31,
                                     verbose=0):
@@ -433,7 +488,7 @@ class Univariate:
             kernel = self.get_kernel_params()
             if kernel_bandwidths_col_in_var is not None:
                 kernel['bandwidth'] = var[kernel_bandwidths_col_in_var].loc[variable]
-            t=self.compute_univariate_kfda(variable,kernel=kernel,verbose=verbose)
+            t=self.compute_univariate_kfda(variable,kernel=kernel,ignore_zeros=ignore_zeros,verbose=verbose)
 
         self.add_results_univariate_kfda_in_vard(t,variable,name=name,
                     truncations_of_interest=truncations_of_interest,diagnostic=diagnostic,t_diagnostic=t_diagnostic,verbose=verbose)
@@ -451,6 +506,7 @@ class Univariate:
                         truncations_of_interest=list(range(1,31)),
                         n_jobs=1,
                         lots=100,
+                        ignore_zeros=False,
                         diagnostic=False,
                         t_diagnostic=31,
                         kernel_bandwidths_col_in_var=None,
@@ -502,6 +558,9 @@ class Univariate:
             lots (default = 100) : int
                 Number of tested variables between each save of intermediate results.
 
+            ignore_zeros (default = False) : bool
+                Whether or not considers null observations for univariate testing. 
+
             diagnostic (default = False) : bool
                 if True, the diagnostic quantities (explained variabilities and explained differences)
                 are added to the results. 
@@ -527,7 +586,7 @@ class Univariate:
             self.load_univariate_test_results_in_var_if_possible(save_path,name=name,verbose=verbose) # load data if necessary
         self.update_var_from_vard(verbose=verbose)
         voi = self.determine_variables_to_test(fromto=fromto,variables_to_test=variables_to_test,
-                                                name=name,verbose=verbose) # determine variables to test
+                                                name=name,ignore_zeros=ignore_zeros,verbose=verbose) # determine variables to test
         t00 = time()
         if len(voi)==0:
             if verbose>0:
@@ -558,6 +617,7 @@ class Univariate:
                                                 kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
                                                 parallel=True,
                                                 truncations_of_interest=truncations_of_interest,
+                                                ignore_zeros=ignore_zeros,
                                                 diagnostic=diagnostic,
                                                 t_diagnostic=t_diagnostic,
                                                 verbose=verbose-1
@@ -571,6 +631,7 @@ class Univariate:
                                     kernel_bandwidths_col_in_var=kernel_bandwidths_col_in_var,
                                     truncations_of_interest=truncations_of_interest,
                                     diagnostic=diagnostic,
+                                    ignore_zeros=ignore_zeros,
                                     t_diagnostic=t_diagnostic,
                                     parallel=True,
                                     verbose=verbose-1
@@ -638,7 +699,7 @@ class Univariate:
                 self.load_univariate_test_results_in_var_if_possible(save_path,name,verbose=verbose)
             self.save_univariate_test_results_in_var(save_path,name=name,verbose=verbose)
 
-    def determine_variables_to_test(self,fromto,name,variables_to_test=None,verbose=0): 
+    def determine_variables_to_test(self,fromto,name,variables_to_test=None,ignore_zeros=False,verbose=0): 
         """
         Selects the variable to perform an univariate test on 
 
@@ -648,11 +709,15 @@ class Univariate:
             Ignored if variables_to_test is not None
             First and last index of the variables to test in the variable list. 
         
+        name : str
+            This name will be present in each column of the `var` dataframe containing the outputs of these tests. 
+
         variables_to_test : iterable of variables to test 
             Has priority on `fromto`
 
-        name : str
-            This name will be present in each column of the `var` dataframe containing the outputs of these tests. 
+        ignore_zeros (default = False) : bool
+            Whether or not considers null observations for univariate testing. 
+
 
         
         """
@@ -671,6 +736,8 @@ class Univariate:
             tested = var[var[col]==1].index
             voi = voi[~voi.isin(tested)]
         
+        if ignore_zeros:
+            voi = pd.Index([v for v in voi if self.has_non_zero_obs_in_both_conditions(v)])
 
         # verbose stuff
         if verbose >0:
@@ -789,7 +856,7 @@ class Univariate:
     def get_ntested_variables(self,name=None,verbose=0):
         return(len(self.get_tested_variables(name=name,verbose=verbose)))
 
-    def get_pvals_univariate(self,t=10,name=None,corrected=True,verbose=0):
+    def get_pvals_univariate(self,t=None,name=None,corrected=True,verbose=0):
         """
         Returns the pandas.Series of pvalues.
 
@@ -809,6 +876,10 @@ class Univariate:
         verbose (default = 0) ; int 
             The greater, the more verbose is the output.
         """
+        
+        if t is None:
+            t = self.truncation
+
         tested = self.get_tested_variables(name,verbose=verbose)
         ntested = len(tested)
         
@@ -823,7 +894,7 @@ class Univariate:
             
             return(var[col][var.index.isin(tested)].sort_values())
         
-    def get_DE_genes(self,t=10,name=None,corrected=True,threshold=.05,verbose=0):
+    def get_DE_genes(self,t=None,name=None,corrected=True,threshold=.05,verbose=0):
         """
         Returns the pandas.Series of pvalues lower than 'threshold'.
 

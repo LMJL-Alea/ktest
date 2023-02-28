@@ -47,22 +47,22 @@ def get_kernel_name(function,bandwidth,median_coef):
 
 def init_test_params(stat='kfda',
                     nystrom=False,
-                    nlandmarks=None,
-                    nanchors=None,
+                    n_landmarks=None,
+                    n_anchors=None,
                     landmark_method='random',
                     anchor_basis='w',
                     permutation=False,
-                    npermutation=500,
+                    n_permutations=500,
                     seed_permutation=0):
 
     return({'stat':stat,
             'nystrom':nystrom,
-            'nlandmarks':nlandmarks,
-            'nanchors':nanchors,
+            'n_landmarks':n_landmarks,
+            'n_anchors':n_anchors,
             'landmark_method':landmark_method,
             'anchor_basis':anchor_basis,
             'permutation':permutation,
-            'npermutation':npermutation,
+            'n_permutations':n_permutations,
             'seed_permutation':seed_permutation
             })
 
@@ -83,6 +83,7 @@ class Base:
 
     def __init__(self,verbose=0):        
         super(Base, self).__init__()
+        self.truncation = 10
         self.center_by = None        
         self.has_data = False 
         self.has_model = False  
@@ -142,12 +143,12 @@ class Base:
     def set_test_params(self,
                     stat='kfda',
                     nystrom=False,
-                    nlandmarks=None,
-                    nanchors=None,
+                    n_landmarks=None,
+                    n_anchors=None,
                     landmark_method='random',
                     anchor_basis='w',
                     permutation=False,
-                    npermutation=500,
+                    n_permutations=500,
                     seed_permutation=0,
                     verbose=0):
         '''
@@ -161,10 +162,10 @@ class Base:
             nystrom (default = False) : bool
                 Whether to use the nystrom approximation or not.
 
-            nlandmarks : int, 
+            n_landmarks : int, 
                 the total number of landmarks. 
 
-            nanchors : int, 
+            n_anchors : int, 
                 the total number of anchors. 
 
             landmark_method : str in 'random','kmeans', 
@@ -182,7 +183,7 @@ class Base:
                     Else : an asymptotic p-value is computed
                 If `stat == 'mmd'`, permutation is automatically set to True
 
-            npermutation (default = 500) : int
+            n_permutations (default = 500) : int
                 Number of permutation wanted to obtain a permutation p-value
             
             seed_permutation (default=0) : int
@@ -194,12 +195,12 @@ class Base:
         input_params = {
             'stat':stat,
             'nystrom':nystrom,
-            'nlandmarks':nlandmarks,
-            'nanchors':nanchors,
+            'n_landmarks':n_landmarks,
+            'n_anchors':n_anchors,
             'landmark_method':landmark_method,
             'anchor_basis':anchor_basis,
             'permutation':permutation,
-            'nperm':npermutation,
+            'nperm':n_permutations,
             'seed_permutation':seed_permutation,
             }
 
@@ -211,9 +212,8 @@ class Base:
                 
             if nystrom:
                 self.nystrom_initialized = False
-                self.nlandmarks_initial = nlandmarks 
-                self.nlandmarks = nlandmarks
-                self.nanchors = nanchors
+                self.n_landmarks_initial = n_landmarks 
+                self.n_anchors = n_anchors
                 self.landmark_method = landmark_method
                 self.anchor_basis = anchor_basis
                 self.approximation_cov = 'nystrom3'
@@ -226,7 +226,7 @@ class Base:
                 self.approximation_mmd = 'standard'
 
             if self.permutation:
-                self.npermutation = npermutation
+                self.n_permutations = n_permutations
                 self.seed_permutation = seed_permutation
                 
             self.has_model = True
@@ -242,8 +242,8 @@ class Base:
 
         if self.nystrom:
             test_params = {
-                'nlandmarks':self.nlandmarks_initial,
-                'nanchors':self.nanchors,
+                'n_landmarks':self.n_landmarks_initial,
+                'n_anchors':self.n_anchors,
                 'landmark_method':self.landmark_method,
                 'anchor_basis':self.anchor_basis,
                 **test_params
@@ -251,13 +251,14 @@ class Base:
         
         if self.permutation:
             test_params = {
-                'npermutation':self.npermutation,
+                'n_permutations':self.n_permutations,
                 'seed_permutation':self.seed_permutation,
                 **test_params
             }
         return(test_params)
                 
-
+    def set_truncation(self,t):
+        self.truncation=t
 
     def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None,verbose=0):
         '''
@@ -286,7 +287,7 @@ class Base:
             if verbose ==1:
                 s+=f' ({function})'
             else:
-                s+='\n\tfunction : {function}'
+                s+=f'\n\tfunction : {function}'
                 if function == 'gauss':
                     s+=f'\n\tbandwidth : {bandwidth}'
                 if bandwidth == 'median' and median_coef != 1:
@@ -722,7 +723,7 @@ class Base:
 
         data = self.get_data(landmarks=landmarks)
         if len(data)>2:
-            print('more than 2 groups',[f'{k}{len(v)}' for k,v in data.items()])
+            print('more than 2 groups',[f'{k} ({len(v)})' for k,v in data.items()])
         return(list(data.values()))
 
     # L sample 
@@ -965,7 +966,7 @@ class Base:
         ny = self.nystrom
         nys = 'ny' if self.nystrom else 'standard'
         ab = f'_basis{self.anchor_basis}' if ny else ''
-        lm = f'_lm{self.landmark_method}_m{self.nlandmarks}' if ny else ''
+        lm = f'_lm{self.landmark_method}_m{self.get_n_landmarks()}' if ny else ''
         return(f'{nys}{lm}{ab}')
 
     def get_landmarks_name(self):
@@ -973,9 +974,9 @@ class Base:
 
 
         lm = self.landmark_method
-        nlandmarks = f'_m{self.nlandmarks}'
+        n_landmarks = f'_m{self.get_n_landmarks()}'
         
-        return(f'lm{lm}{nlandmarks}_{dtn}')
+        return(f'lm{lm}{n_landmarks}_{dtn}')
 
     def get_kmeans_landmarks_name_for_sample(self,sample):
         landmarks_name = self.get_landmarks_name()
@@ -987,9 +988,9 @@ class Base:
 
         lm = self.landmark_method
         ab = self.anchor_basis
-        nlandmarks = f'_m{self.nlandmarks}'
+        n_landmarks = f'_m{self.get_n_landmarks()}'
         # r = f'_r{self.r}' # je ne le mets pas car il change en fonction des abérations du spectre
-        return(f'lm{lm}{nlandmarks}_basis{ab}_{dtn}')
+        return(f'lm{lm}{n_landmarks}_basis{ab}_{dtn}')
 
     def get_covw_spev_name(self):
         dtn = self.get_data_to_test_str()

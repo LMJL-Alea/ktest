@@ -116,15 +116,15 @@ def figures_outliers_of_reversion_from_tq2(ktest,t,q_,df,focus=None,color=None,m
         marker=marker,
         contrib=contrib)
     
-    fig,axes = figures_outliers_of_reversion2(
-        ktest=ktest,
-        t=t,
-        df=df,
-        outliers_list=remaining,
-        outliers_name=outliers_name,
-        color=color,
-        marker=marker,
-        contrib=contrib)
+    # fig,axes = figures_outliers_of_reversion2(
+    #     ktest=ktest,
+    #     t=t,
+    #     df=df,
+    #     outliers_list=remaining,
+    #     outliers_name=outliers_name,
+    #     color=color,
+    #     marker=marker,
+    #     contrib=contrib)
 
     ax = axes[1]
     ax.axvline(q,color='crimson',ls='--')
@@ -134,15 +134,15 @@ def figures_outliers_of_reversion_from_tq2(ktest,t,q_,df,focus=None,color=None,m
     ax.axvline(q,color='crimson',ls='--')
 
  
-    fig,axes = figures_outliers_of_reversion2(
-        ktest=ktest,
-        t=t,
-        df=df,
-        outliers_list=remaining,
-        outliers_name=outliers_name,
-        color=color,
-        marker=marker,
-        contrib=contrib)
+    # fig,axes = figures_outliers_of_reversion2(
+    #     ktest=ktest,
+    #     t=t,
+    #     df=df,
+    #     outliers_list=remaining,
+    #     outliers_name=outliers_name,
+    #     color=color,
+    #     marker=marker,
+    #     contrib=contrib)
 
 
 
