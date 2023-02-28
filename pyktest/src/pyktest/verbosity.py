@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from ktest.kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel
+from .kernels import gauss_kernel_mediane,mediane,gauss_kernel,linear_kernel
 # from ktest._testdata import TestData
 from time import time
 
