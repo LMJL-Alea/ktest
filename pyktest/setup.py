@@ -4,8 +4,8 @@ import setuptools
 #     long_description = fh.read()
 
 setuptools.setup(
-    # name="ktest-AnthoOzier", # Replace with your own username
-    # version="0.0.1",
+    # name="pyktest", # Replace with your own username
+    # version="0.0.4",
     # author="Anthony Ozier-Lafontaine",
     # author_email="anthony.ozier-lafontaine@ec-nantes.fr",
     # description="Package implementing efficient kernel tests such as MMD or mKFDR",
