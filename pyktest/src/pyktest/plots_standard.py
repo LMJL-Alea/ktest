@@ -146,14 +146,8 @@ class Plot_Standard(Statistics):
         if columns is None:
             columns = self.df_kfdat.columns
         for c in columns:
-            pval = self.get_pvalue(contrib=contrib,log=log,name=c).loc[:t]
+            pval = self.get_pvalue(name=c,contrib=contrib,log=log).loc[:t]
             ax.plot(pval,label=c)
-        # pvals = self.df_pval[columns].copy()
-        # if log :
-        #     pvals = -np.log(pvals+1)
-        # # t_ = (~pvals.isna()).sum().min()
-        # pvals.plot(ax=ax)
-        # ax.set_xlim(0,t)
         
         if legend:
             ax.legend()
@@ -209,8 +203,7 @@ class Plot_Standard(Statistics):
                     samples_colors=None,
                     marked_obs_to_ignore=None):
 
-
-        labels = list(self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore).keys())
+        labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
 
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
@@ -272,13 +265,15 @@ class Plot_Standard(Statistics):
                     condition=None,
                     samples=None,
                     marked_obs_to_ignore=None,
-                    marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
+                    marker_list = None,
                     big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                    color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
+                    color_list = None
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
         if color_list is None:
             color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
+        if marker_list is None:
+            marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
         properties = {}
         # cx_ = color_list[0] # 'xkcd:cerulean'
         # cy_ = color_list[1] #'xkcd:light orange'
@@ -545,10 +540,30 @@ class Plot_Standard(Statistics):
 
         return(properties)
 
-    def scatter_proj(self,projection,xproj='proj_kpca',yproj=None,xname=None,yname=None,
-                    highlight=None,color=None,marker=None,show_conditions=True,text=False,fig=None,ax=None,
-                    alpha=.8,legend=True,legend_fontsize=15):
-        labels = list(self.get_index().keys())
+    def scatter_proj(self,
+                     projection,
+                     xproj='proj_kpca',
+                     yproj=None,
+                     xname=None,
+                     yname=None,
+                    highlight=None,
+                    color=None,
+                    marker=None,
+                    show_conditions=True,
+                    text=False,
+                    fig=None,
+                    ax=None,
+                    alpha=.8,
+                    legend=True,
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    samples_markers=None,
+                    marked_obs_to_ignore=None,):
+
+
+        labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
@@ -560,7 +575,18 @@ class Plot_Standard(Statistics):
         # print(f'xproj={xproj} xname={xname}  yproj={yproj} yname={yname}')
         df_abscisse = self.init_df_proj(xproj,xname,)
         df_ordonnee = self.init_df_proj(yproj,yname,)
-        properties = self.get_plot_properties(marker=marker,color=color,labels=labels,show_conditions=show_conditions,legend=legend)
+        properties = self.get_plot_properties(
+                marker=marker,
+                color=color,
+                labels=labels,
+                show_conditions=show_conditions,
+                condition=condition,
+                samples=samples,
+                color_list=samples_colors,
+                marker_list=samples_markers,
+                marked_obs_to_ignore=marked_obs_to_ignore,
+                legend=legend)
+        
         texts = []
         
         for kprop,vprop in properties.items():
@@ -721,71 +747,259 @@ class Plot_Standard(Statistics):
         return(fig,ax)
 
 
-    def hist_mmd_discriminant(self,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical',legend_fontsize=15):
+    def hist_mmd_discriminant(self,
+                              color=None,
+                              fig=None,
+                              ax=None,
+                              show_conditions=True,
+                              orientation='vertical',
+                              legend_fontsize=15):
         mmd_name = self.get_mmd_name()
         fig,ax = self.density_proj(t='mmd',proj='proj_mmd',name=mmd_name,orientation=orientation,color=color,
                         fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
         return(fig,ax)
         
-    def hist_tmmd_discriminant(self,t,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical',legend_fontsize=15):
+    def hist_tmmd_discriminant(self,
+                               t,
+                               color=None,
+                               fig=None,
+                               ax=None,
+                               show_conditions=True,
+                               orientation='vertical',
+                               legend_fontsize=15):
         mmd_name = self.get_mmd_name()
         fig,ax = self.density_proj(t=t,proj='proj_tmmd',name=mmd_name,orientation=orientation,color=color,
                         fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
         return(fig,ax)
 
-    def hist_pc(self,t,color=None,fig=None,ax=None,show_conditions=True,orientation='vertical',legend_fontsize=15):
-        kfdat_name = self.get_kfdat_name()
-        fig,ax = self.density_proj(t,proj='proj_kpca',name=kfdat_name,orientation=orientation,color=color,
-                        fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
+    def hist_pc(self,
+                t,
+                color=None,
+                fig=None,
+                ax=None,
+                show_conditions=True,
+                orientation='vertical',
+                legend_fontsize=15,
+                condition=None,
+                samples=None,
+                samples_colors=None,
+                marked_obs_to_ignore=None,
+                verbose=0):
+
+        self.projections(t=t,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
+
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
+        fig,ax = self.density_proj(
+                        t,
+                        proj='proj_kpca',
+                        name=kfdat_name,
+                        orientation=orientation,
+                        color=color,
+                        fig=fig,
+                        ax=ax,
+                        show_conditions=show_conditions,
+                        legend_fontsize=legend_fontsize,
+                        condition=condition,
+                        samples=samples,
+                        samples_colors=samples_colors,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
+        
         return(fig,ax)
 
-    def plot_nextPC(self,t,fig=None,ax=None,color=None,marker=None,highlight=None,show_conditions=True,legend_fontsize=15):
+
+
+    def plot_nextPC(self,
+                    t,
+                    fig=None,
+                    ax=None,
+                    color=None,
+                    marker=None,
+                    highlight=None,
+                    show_conditions=True,
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    samples_markers=None,
+                    marked_obs_to_ignore=None,
+                    verbose=0):
+
+        self.projections(t=t+1,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
+
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
         fig,ax = self.scatter_proj(projection=[t,t+1],
                                xproj='proj_kfda',
                                yproj='proj_kpca',
-                               xname=self.get_kfdat_name(),
-                               yname=self.get_kfdat_name(),
+                               xname=kfdat_name,
+                               yname=kfdat_name,
                                color=color,
                                marker=marker,
                                highlight=highlight,
                                show_conditions=show_conditions,
                                fig=fig,
                                ax=ax,
-                               legend_fontsize=legend_fontsize)
+                               legend_fontsize=legend_fontsize,
+                               condition=condition,
+                               samples=samples,
+                               samples_colors=samples_colors,
+                               samples_markers=samples_markers,
+                               marked_obs_to_ignore=marked_obs_to_ignore)
+        
         ax.set_title(f'D={t} PC={t+1}',fontsize=30)
         return(fig,ax)
 
-    def plot_nextDA(self,t,fig=None,ax=None,color=None,marker=None,highlight=None,show_conditions=True,legend_fontsize=15):
+    def plot_nextDA(self,
+                    t,
+                    fig=None,
+                    ax=None,
+                    color=None,
+                    marker=None,
+                    highlight=None,
+                    show_conditions=True,
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    samples_markers=None,
+                    marked_obs_to_ignore=None,
+                    verbose=0):
+
+
+        self.projections(t=t+1,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
+
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+
         fig,ax = self.scatter_proj(projection=[t,t+1],
                                xproj='proj_kfda',
                                yproj='proj_kfda',
-                               xname=self.get_kfdat_name(),
-                               yname=self.get_kfdat_name(),
+                               xname=kfdat_name,
+                               yname=kfdat_name,
                                color=color,
                                marker=marker,
                                highlight=highlight,
                                show_conditions=show_conditions,
                                fig=fig,
                                ax=ax,
-                               legend_fontsize=legend_fontsize)
+                               legend_fontsize=legend_fontsize,
+                               condition=condition,
+                               samples=samples,
+                               samples_colors=samples_colors,
+                               samples_markers=samples_markers,
+                               marked_obs_to_ignore=marked_obs_to_ignore)
+
         ax.set_title(f'D={t} D={t+1}',fontsize=30)
         return(fig,ax)
 
 
-    def plot_residuals(self,t=1,center='w',fig=None,ax=None,color=None,marker=None,highlight=None,legend_fontsize=15):
+    def plot_residuals(self,
+                        t=1,
+                        center='w',
+                        fig=None,
+                        ax=None,
+                        color=None,
+                        marker=None,
+                        highlight=None,
+                        show_conditions=True,
+                        legend_fontsize=15,
+                        condition=None,
+                        samples=None,
+                        samples_colors=None,
+                        samples_markers=None,
+                        marked_obs_to_ignore=None,
+                        verbose=0):
+
+        self.projections(t=t,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         self.residuals(t=t,center=center)
+
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
         residuals_name = self.get_residuals_name(t=t,center=center)
-        kfdat_name = self.get_kfdat_name()
-        fig,ax=self.scatter_proj([t,1],xproj='proj_kfda',yproj='proj_residuals',
-                                xname=kfdat_name,yname=residuals_name,
-                          fig=fig,ax=ax,color=color,marker=marker,highlight=highlight,legend_fontsize=legend_fontsize)
+        
+
+        fig,ax = self.scatter_proj(projection=[t,1],
+                        xproj='proj_kfda',
+                        yproj='proj_residuals',
+                        xname=kfdat_name,
+                        yname=residuals_name,
+                        color=color,
+                        marker=marker,
+                        highlight=highlight,
+                        show_conditions=show_conditions,
+                        fig=fig,
+                        ax=ax,
+                        legend_fontsize=legend_fontsize,
+                        condition=condition,
+                        samples=samples,
+                        samples_colors=samples_colors,
+                        samples_markers=samples_markers,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+        
         ax.set_title(f'discriminant and orthogonal axis t={t}',fontsize=30)
         return(fig,ax)
 
-    def plot_kpca(self,t=1,fig=None,ax=None,color=None,marker=None,highlight=None,legend_fontsize=15):
-        kfdat_name = self.get_kfdat_name()
-        fig,ax=self.scatter_proj([t,t+1],xproj='proj_kpca',xname=kfdat_name,
-                            fig=fig,ax=ax,color=color,marker=marker,highlight=highlight,legend_fontsize=legend_fontsize)
+    def plot_kpca(self,
+                    t=1,
+                    fig=None,
+                    ax=None,
+                    color=None,
+                    marker=None,
+                    highlight=None,
+                    show_conditions=True,
+                    legend_fontsize=15,
+                    condition=None,
+                    samples=None,
+                    samples_colors=None,
+                    samples_markers=None,
+                    marked_obs_to_ignore=None,
+                    verbose=0):
+        
+
+
+        self.projections(t=t+1,condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
+        
+        kfdat_name = self.get_kfdat_name(
+                        condition=condition,
+                        samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+        
+
+        fig,ax = self.scatter_proj(projection=[t,t+1],
+                        xproj='proj_kpca',
+                        yproj='proj_kpca',
+                        xname=kfdat_name,
+                        yname=kfdat_name,
+                        color=color,
+                        marker=marker,
+                        highlight=highlight,
+                        show_conditions=show_conditions,
+                        fig=fig,
+                        ax=ax,
+                        legend_fontsize=legend_fontsize,
+                        condition=condition,
+                        samples=samples,
+                        samples_colors=samples_colors,
+                        samples_markers=samples_markers,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
+        
         ax.set_title('KPCA',fontsize=30)      
         return(fig,ax)
 

@@ -126,7 +126,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
 
         self.add_data_to_Ktest_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata,verbose=verbose)
-        self.set_test_data_info(data_name=data_name,condition=condition,samples=samples,verbose=verbose)
+        self.set_test_data_info(data_name=data_name,condition=condition,samples=samples,change_kernel=False,verbose=verbose)
         self.kernel(verbose=verbose,**kernel)
         self.kernel_specification = kernel
         self.set_test_params(verbose=verbose,**test_params)
@@ -227,7 +227,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
         stat = self.stat if stat is None else stat 
         permutation = self.permutation if permutation is None else permutation
-        pval_name = self.get_pvalue_name()
+        pval_name = self.get_pvalue_name(stat=stat,permutation=permutation)
         nystr = ' with nystrom' if self.nystrom else ''
 
 
@@ -484,53 +484,66 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
         return(spp)
 
-    def get_pvalue_name(self,permutation=None):
+    def get_pvalue_name(self,stat=None,permutation=None):
         if permutation is None:
             permutation = self.permutation
-
-        if self.permutation:
-            return(self.permutation_name)
-        else:
-            return(self.get_kfdat_name())
+        if stat is None:
+            stat = self.stat 
+        if stat == 'mmd':
+            return(self.permutation_mmd_name)
+        elif stat == 'kfda':
+            if self.permutation:
+                return(self.permutation_kfda_name)
+            else:
+                return(self.get_kfdat_name())
 
     def get_pvalue_kfda(self,
+                        name=None,
                         permutation=None,
                         contrib=False,
                         log=False,
                         verbose=0):
         
+        name = self.get_pvalue_name(stat='kfda',permutation=permutation) if name is None else name 
 
-        pn = self.get_pvalue_name(permutation=permutation)
         df_pval = self.df_pval_contributions if contrib else self.df_pval
 
-        if pn not in df_pval:
+        if name not in df_pval:
             if verbose>0:
-                print(f'p-values associated to {pn} not computed yet, run ktest.multivariate_test().')
+                print(f'p-values associated to {name} not computed yet, run ktest.multivariate_test().')
             return(None)
         else:
-            return(np.log(df_pval[pn]) if log else df_pval[pn])
+            return(np.log(df_pval[name]) if log else df_pval[name])
 
-    def get_pvalue_mmd(self,):
-        return(self.dict_pval_mmd[self.permutation_name])
+    def get_pvalue_mmd(self,name=None):
+        name = self.permutation_mmd_name if name is None else name 
+            
+        try:
+            return(self.dict_pval_mmd[name])
+        except KeyError:
+            print(f"mmd name '{name}' not in dict_pval_mmd keys {self.dict_pval_mmd}")
 
+            
     def get_pvalue(self,
                     stat=None,
+                    name=None,
                     permutation=None,
                     contrib=False,
                     log=False,
                     verbose=0):
-
+            
         if stat is None:
             stat = self.stat
 
         if stat == 'kfda':
             pval = self.get_pvalue_kfda(
+                                name = name,
                                 permutation=permutation,
                                 contrib=contrib,
                                 log=log,
                                 verbose=verbose)
         elif stat =='mmd':
-            pval = self.get_pvalue_mmd()
+            pval = self.get_pvalue_mmd(name=name)
 
         return(pval) 
 

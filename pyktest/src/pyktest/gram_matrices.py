@@ -5,7 +5,7 @@ from .utils import ordered_eigsy
 
 
 
-from ktest.centering_operations import CenteringOps
+from .centering_operations import CenteringOps
 
 """
 Les fonctions de ce fichier gèrent tout ce qui est évaluation de matrices de gram, centrage et 
