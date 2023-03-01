@@ -1,3 +1,3 @@
-# pyktest
+# ktest
 
 This package implements kernel tests 
