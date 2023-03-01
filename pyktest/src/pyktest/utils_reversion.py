@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from .tester import Ktest
-from .base import init_kernel_params,init_test_params
+from .utils import init_kernel_params
 import numpy as np
 
 

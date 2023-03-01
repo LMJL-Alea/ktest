@@ -1,5 +1,5 @@
 import pandas as pd
-# from ktest.tester import Ktest
+# from .tester import Ktest
 from joblib import Parallel, delayed, parallel_backend
 import numpy as np
 
@@ -144,8 +144,10 @@ class Permutation:
                                                 n_permutations=n_permutations, 
                                                 seed=seed,
                                                 perm_stats=perm_stats)
-            self.permutation_name = pn
-
+            if stat == 'mmd':
+                self.permutation_mmd_name = pn
+            elif stat == 'kfda':
+                self.permutation_kfda_name = pn
         return(pn)
 
 

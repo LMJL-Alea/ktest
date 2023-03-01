@@ -6,9 +6,9 @@ import pandas as pd
 from kmeans_pytorch import kmeans
 
 
-from ktest.base import Base
-from ktest.outliers_operations import OutliersOps
-from ktest.verbosity import Verbosity
+from .base import Base
+from .outliers_operations import OutliersOps
+from .verbosity import Verbosity
 
 
 """

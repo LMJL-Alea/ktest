@@ -1,4 +1,4 @@
-from ktest.residuals import Residuals
+from .residuals import Residuals
 from torch import cat,tensor,float64
 import numpy as np
 from numpy import where

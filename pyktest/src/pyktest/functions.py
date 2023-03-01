@@ -1,6 +1,6 @@
 from scipy.stats import chi2
 import pandas as pd
-from ktest.tester import Ktest
+from .tester import Ktest
 import numpy as np
 from joblib import parallel_backend
 from joblib import Parallel, delayed

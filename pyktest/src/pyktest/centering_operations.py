@@ -4,7 +4,7 @@ from torch import mv,ones,cat,eye,zeros,ger
 from .utils import ordered_eigsy
 
 from .base import Base
-from ktest.nystrom_operations import NystromOps
+from .nystrom_operations import NystromOps
 
 """
 La plupart des quantités d'intérêt à calculer numériquement s'écrivent Ka ou PKP grace au kernel trick, avec 

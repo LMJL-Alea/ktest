@@ -5,7 +5,7 @@ from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
 from .kernels import mediane,gauss_kernel,linear_kernel
 from torch import cat
-from .utils import *
+from .utils import get_kernel_name,init_kernel_params,convert_to_torch_tensor,convert_to_pandas_index
     
 
 class Base:
@@ -21,6 +21,8 @@ class Base:
         self.has_kernel = False
         self.has_kfda_statistic = False
         self.univariate_name=None
+        self.permutation_mmd_name=None
+        self.permutation_kfda_name=None
         self.quantization_with_landmarks_possible = False
 
         # attributs initialisés 
@@ -489,10 +491,14 @@ class Base:
         self.add_data_to_Ktest(x,data_name,index,variables,metadata,var_metadata,
                            update_current_data_name = update_current_data_name,verbose=verbose)
 
-    def get_samples_list(self,condition=None,samples=None):
+    def get_samples_list(self,condition=None,samples=None,marked_obs_to_ignore=None):
         condition = self.condition if condition is None else condition
         samples = self.samples if samples is None else samples    
-        return(self.obs[condition].cat.categories.to_list() if samples == 'all' else samples)    
+
+        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+        marked_obs = self.obs[self.obs[marked_obs_to_ignore]].index if marked_obs_to_ignore is not None else []             
+        
+        return(self.obs[~self.obs.index.isin(marked_obs)][condition].cat.categories.to_list() if samples == 'all' else samples)    
 
     def get_index(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,in_dict=True):
 
@@ -840,7 +846,12 @@ class Base:
                 print(f"- Using '{center_by}' to center the embeddings in the feature space.")
         self.center_by = center_by      
            
-    def set_test_data_info(self,data_name,condition,samples='all',verbose=0):
+    def set_test_data_info(self,samples='all',condition=None,data_name=None,change_kernel=True,verbose=0):
+        
+        condition = self.condition if condition is None else condition
+        data_name = self.data_name if data_name is None else data_name
+
+
         if verbose>0:
             s=f"- Set test data info"
             if verbose == 1:
@@ -851,11 +862,17 @@ class Base:
             if verbose >1:
                 s+=f"\n\tdata : {data_name}\n\tcondition : {condition}\n\tsamples : {samples}"
             print(s)
+
         self.data_name = data_name
         self.condition = condition
-        if condition in self.obs:
+        try:
             self.obs[condition] = self.obs[condition].astype('category')
+        except KeyError:
+            print(f"KeyError : condition {condition} not in obs")
         self.samples = samples
+        if change_kernel:
+            kernel = self.kernel_specification 
+            self.kernel(verbose=verbose,**kernel)
         
     def get_data_name_condition_samples_marked_obs(self):
         return(self.data_name,self.condition,self.samples,self.marked_obs_to_ignore)
