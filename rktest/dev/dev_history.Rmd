@@ -14,6 +14,22 @@ usethis::proj_set(file.path(path, "rktest"), force = TRUE)
 usethis::proj_sitrep()
 ```
 
+## Reticulate config
+
+```{r dev-reticulate}
+# create virtualenv
+reticulate::virtualenv_create("ktest")
+# activate python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# install Python package (to do once)
+reticulate::virtualenv_install(
+    envname = "ktest",
+    packages = "pyktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyktest"
+)
+# check Python config
+reticulate::py_discover_config()
+```
+
 ## Package development
 
 ### Initialization (to be run once)
@@ -50,11 +66,11 @@ usethis::use_description(
         ),
         URL = "https://github.com/AnthoOzier/ktest",
         Version = "1.0.0",
-        "Date/Publication" = format(Sys.time(), "%Y/%m/%d")
+        "Date/Publication" = format(Sys.time(), "%Y/%m/%d"),
+        SystemRequirements = "Python (>= 3.5.0)"
     ),
     check_name = TRUE, 
-    roxygen = TRUE,
-    
+    roxygen = TRUE
 )
 # License
 usethis::use_mit_license()
@@ -65,16 +81,22 @@ usethis::use_roxygen_md()
 ```{r dev-req}
 # requirements
 usethis::use_package("reticulate", type = "Imports")
+usethis::use_package("checkmate", type = "Suggests")
+usethis::use_package("covr", type = "Suggests")
+usethis::use_package("stringi", type = "Suggests")
+usethis::use_package("stringr", type = "Suggests")
+usethis::use_package("withr", type = "Suggests")
+usethis::use_testthat()
 ```
 
 ### Documentation
 
 ```{r dev-doc}
 # Simulate package installation
-pkgload::load_all()
+pkgload::load_all("rktest")
 
 # Generate documentation and deal with dependencies
-attachment::att_amend_desc()
+attachment::att_amend_desc(path = file.path(path, "rktest"))
 
 # README file
 devtools::build_readme("rktest")
@@ -84,8 +106,12 @@ devtools::build_readme("rktest")
 
 ```{r development-check}
 # Run the test
-devtools::test()
+devtools::test("rktest")
+
+# test coverage
+covr::package_coverage(
+    "rktest", line_exclusions = list("R/init.R", "R/python.R"))
 
 # Check the package
-devtools::check()
+devtools::check("rktest")
 ```
