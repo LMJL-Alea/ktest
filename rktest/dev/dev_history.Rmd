@@ -35,7 +35,7 @@ usethis::use_build_ignore("dev")
 # description
 usethis::use_description(
     fields = list(
-        Title = "Kernal based statistical testing",
+        Title = stringr::str_to_title("Kernel based statistical testing"),
         Description = "Write Me",
         `Authors@R` = c(
             person(
@@ -75,6 +75,9 @@ pkgload::load_all()
 
 # Generate documentation and deal with dependencies
 attachment::att_amend_desc()
+
+# README file
+devtools::build_readme("rktest")
 ```
 
 ### Test and check
