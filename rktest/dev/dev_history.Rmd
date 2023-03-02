@@ -1,0 +1,91 @@
+---
+title: "Development actions history"
+author: "Ghislain DURIF"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Usethis setup
+
+```{r dev-setup}
+path <- rprojroot::find_root(".git/index")
+usethis::proj_set(file.path(path, "rktest"), force = TRUE)
+usethis::proj_sitrep()
+```
+
+## Package development
+
+### Initialization (to be run once)
+
+```{r dev-init}
+# create package template
+usethis::create_package("rktest", rstudio = FALSE, open = FALSE)
+# use Rmd for README generation
+usethis::use_readme_rmd()
+# package-level documentation
+usethis::use_package_doc()
+# additional files/folders to ignore during build
+usethis::use_build_ignore("dev")
+```
+
+### Metadata
+
+```{r dev-metadata}
+# description
+usethis::use_description(
+    fields = list(
+        Title = stringr::str_to_title("Kernel based statistical testing"),
+        Description = "Write Me",
+        `Authors@R` = c(
+            person(
+                "Anthony", "Ozier-Lafontaine", 
+                email = "anthony.ozier-lafontaine@ec-nantes.fr", 
+                role = c("aut"), 
+                comment = c(ORCID = "0000-0003-3232-0503")),
+            person(
+                "Ghislain", "Durif", email = "gd.dev@libertymail.net", 
+                role = c("aut", "cre"), 
+                comment = c(ORCID = "0000-0003-2567-1401"))
+        ),
+        URL = "https://github.com/AnthoOzier/ktest",
+        Version = "1.0.0",
+        "Date/Publication" = format(Sys.time(), "%Y/%m/%d")
+    ),
+    check_name = TRUE, 
+    roxygen = TRUE,
+    
+)
+# License
+usethis::use_mit_license()
+# Roxygen markdown
+usethis::use_roxygen_md()
+```
+
+```{r dev-req}
+# requirements
+usethis::use_package("reticulate", type = "Imports")
+```
+
+### Documentation
+
+```{r dev-doc}
+# Simulate package installation
+pkgload::load_all()
+
+# Generate documentation and deal with dependencies
+attachment::att_amend_desc()
+
+# README file
+devtools::build_readme("rktest")
+```
+
+### Test and check
+
+```{r development-check}
+# Run the test
+devtools::test()
+
+# Check the package
+devtools::check()
+```
