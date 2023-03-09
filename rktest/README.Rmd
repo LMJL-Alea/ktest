@@ -32,9 +32,50 @@ remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest
 
 More to come
 
-```{r example, eval=FALSE}
+```{r load-0, eval=FALSE}
 library(rktest)
-## basic example code
-# WRITE ME
 ```
 
+```{r load-1, echo=FALSE}
+devtools::load_all(".")
+```
+
+### Multivariate testing
+
+Load data:
+```{r multi-data}
+sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
+str(sc_df)
+rownames(sc_df)
+
+meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
+str(meta_sc_df)
+rownames(meta_sc_df)
+```
+
+Init test:
+```{r multi-init}
+kt <- ktest(
+    sc_df, meta_sc_df,
+    condition='condition',
+    samples=c('0H','48HREV'),
+    verbose=1)
+```
+
+Perform multivariate testing
+```{r multi-test}
+kt$multivariate_test(verbose=1)
+multivariate_test(kt, verbose=1)
+```
+
+Multivariate testing result:
+```{r multi-test-res}
+kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
+print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
+```
+
+Get p-values:
+```{r}
+kt$get_pvalue(contrib = TRUE, log = FALSE)
+get_pvalue(kt, contrib = TRUE, log = FALSE)
+```
