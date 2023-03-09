@@ -1,3 +1,4 @@
+# FIXME
 # test_that("install_pyktest", {
 #     skip_if_no_python()
 #     # work in dedicated environment

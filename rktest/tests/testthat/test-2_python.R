@@ -1,3 +1,4 @@
+# FIXME
 # test_that("check_python", {
 #     skip_if_no_python()
 #     skip_if_not_interactive()
