@@ -43,6 +43,8 @@ usethis::use_readme_rmd()
 usethis::use_package_doc()
 # additional files/folders to ignore during build
 usethis::use_build_ignore("dev")
+# vignette dir
+usethis::use_vignette("intro_rktest", "Introduction to rktest")
 ```
 
 ### Metadata
