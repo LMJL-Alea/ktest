@@ -12,7 +12,7 @@ pip install pyktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=
 
 ## R package
 
-See [`rktest`](./rktest)
+See [`rktest`](./rktest) directory.
 
 ```r
 remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest")
