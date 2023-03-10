@@ -7,7 +7,7 @@ This package implements kernel tests
 See [`pyktest`](./pyktest) directory.
 
 ```python
-pip install pyktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyktest
+pip install pyktest@git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyktest
 ```
 
 ## R package
