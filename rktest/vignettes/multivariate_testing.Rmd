@@ -1,0 +1,235 @@
+---
+title: "Multivariate testing"
+author: "Ghislain DURIF"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+Install `rktest`
+
+```{r install, eval=FALSE}
+remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest")
+```
+
+Use Python virtual env
+```{r setup-python}
+library(reticulate)
+# create virtualenv
+virtualenv_create("ktest")
+# activate python environment
+use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+Load `rktest` and install python dependency
+```{r setup-rktest, eval=FALSE}
+library(rktest)
+install_pyktest(method = "virtualenv", envname = "ktest")
+```
+
+```{r setup-dev, include=FALSE}
+proj_root_dir <- rprojroot::find_root(".git/index")
+devtools::load_all(file.path(proj_root_dir, "rktest"))
+```
+
+Import Python package
+```{r import}
+pyktest <- reticulate::import("pyktest")
+```
+
+## Load data
+
+```{r data}
+sc_df <- read.table(
+    "data/data2.csv", row.names = 1, sep = ",", header = TRUE)
+
+meta_sc_df <- read.table(
+    "data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
+```
+
+## Ktest definition 
+
+Load data and metadata, and initialize ktest object 
+- `data` is the dataframe of data.
+- `metadata` is the dataframe of metadata.
+- `condition` is the column of `metadata` containing the labels to test. 
+- `samples` is the couple of samples to test in the column `condition` of `metadata`
+- Set `nystrom` to `True` to use the nystrom approximation. 
+- Set `verbose >0` to follow the steps of the initialization of the ktest object.  
+
+```{r ktest-init}
+kt <- pyktest$tester$Ktest(
+    sc_df, meta_sc_df,
+    condition='condition',
+    samples=c('0H','48HREV'),
+    verbose=1)
+```
+
+
+## Multivariate testing 
+
+Perform a multivariate test on the data.
+
+```{r multi}
+head(kt$multivariate_test(verbose=1))
+# OR
+head(multivariate_test(kt, verbose=1))
+```
+
+### Print test results 
+- `long` : if True, the results are printed for several truncations
+- `t` : truncation associated to the printed p-value if `long` is `FALSE`.
+- `ts` : list of truncations associated to the printed p-values if `long` is `TRUE`.
+
+```{r multi-result}
+kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
+# OR
+print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
+```
+
+
+### Get p-values table with respect to the truncation parameter. 
+
+- `contrib`: if true, returns the p-value associated to each principal component individually. Returns the p-value associated to the `kfda` statistic otherwise. 
+- `log`: if `TRUE`, returns the log p-values. 
+
+```{r multi-pval}
+kt$get_pvalue(contrib = TRUE, log = FALSE)
+# OR
+get_pvalue(kt, contrib = TRUE, log = FALSE)
+```
+
+### Plot p-values with respect to truncation
+
+FIX ME!
+    
+
+
+### Other tests
+
+The default p-value is the asymptotic p-value of the `kfda` statistic associated to the truncation parameter `t=10`. To change the default truncation parameter, use the class function `set_truncation`. 
+
+
+```{r multi-change-trunc}
+kt$set_truncation(5L)
+kt$multivariate_test(verbose=1)
+```
+
+The asymptotic p-value is available for the `kfda` statistic only. 
+The permutation p-value is available for the `kfda` statistic and the `mmd` statistic.
+
+Compute the permutation p-value associated to the chosen statistic : 
+- `stat` : chosen statistic among (`kfda`,`mmd`)
+- `permutation`: if True, compute the permutation p-value (automatically True if `stat` is `mmd`)
+- `n_permutations` : set the number of permutations.
+- `seed_permutation` : define the number of random seeds. 
+- `n_jobs_permutation` : number of CPU to use for parallelized computation
+
+
+
+```{r mmd}
+kt$multivariate_test(
+    stat='mmd',
+    permutation=TRUE,
+    n_permutations=2000L,
+    seed_permutation=123L,
+    n_jobs_permutation=3L,
+    verbose=1L)
+```
+
+```{r mmd-res}
+kt$stat
+kt$get_pvalue_name()
+kt$dict_pval_mmd[kt$get_pvalue_name()]
+kt$get_pvalue()
+```
+
+### Nystrom approximation
+Use the Nystrom approximation to reduce the computational cost
+
+```{r nystrom}
+kt$set_test_params(nystrom=TRUE)
+kt$multivariate_test(verbose=1)
+```
+
+Tune each parameter of the nystrom approximation with function `set_test_params` : 
+- `nystrom` : if True, use the Nystrom approximation
+- `n_landmarks` : number of landmarks to use (subsample used to compute the anchors).
+- `n_anchors` : number of anchors to use (eigenvectors associated to a matrix defined with the landmarks).
+- `landmark_method` : how to choose the landmarks among (`random`,`kmeans`)
+- `anchor_basis` : matrix used to define the anchors among 
+    - `k` : second moment of the landmarks.
+    - `s` : total covariance of the landmarks.
+    - `w` : within group covariance of the landmarks.
+
+
+```{r tune-nystrom}
+kt$set_test_params(
+    nystrom=TRUE,
+    n_landmarks=50L,
+    n_anchors=50L,
+    landmark_method='random',
+    anchor_basis='s'
+)
+kt$multivariate_test(verbose=1)
+
+```
+
+### Kernel function choice
+
+**TODO**
+
+The default kernel is the RBF kernel with median bandwidth. Use `init_kernel_params()` to specify the kernel function with a `dict` of specifications.
+- `function` is either a string among [`gauss`,`linear`] or a user specified kernel function.
+  + if `function` is `gauss`:
+    - `bandwidth` is either the string `median` or a float. 
+    - if `bandwidth` is `median`: 
+      + `median_coef` is the coefficient such that `bandwidth=median_coef x median` (default is `1`)
+- `kernel_name` is the name of the kernel used.  
+
+
+```python
+import torch
+from pyktest.base import init_kernel_params
+
+# gauss kernel with median/2 bandwidth
+kernel1 = init_kernel_params(function = 'gauss', bandwidth = 'median', median_coef = 1/2)
+
+# linear kernel 
+kernel2 = init_kernel_params(function='linear')
+
+# user specified kernel
+kernel3 = init_kernel_params(function=lambda x,y: torch.cdist(x,y).exp()+1,kernel_name='useless_kernel')
+```
+
+
+```python
+kt = Ktest(data,
+           metadata,
+           condition='condition',
+           samples=['0H','48HREV'],
+#            kernel=kernel3,
+           verbose=1)
+
+kt.multivariate_test(verbose=1)
+```
+
+    - Add data 'data' to Ktest, dimensions=(685, 83)
+    - Set test data info (0H,48HREV from condition)
+    - Define kernel function (gauss)
+    - Initialize kfdat
+    	cov : standard 
+    	mmd : standard
+    - Diagonalize within covariance centered gram
+    - Compute within covariance centered gram
+    - Compute kfda statistic
+    
+    ___Multivariate kfda test results___
+    Asymptotic p-value(truncation) for multivariate testing : 
+    	p-value(10) = 3.9e-23 (kfda=130.41)
+
