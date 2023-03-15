@@ -25,7 +25,7 @@ Kernal based statistical testing
 You can install the development version of `rktest` with the following command:
 
 ```{r install-dev, eval=FALSE}
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest")
+remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
 ```
 
 ## Example
@@ -33,7 +33,7 @@ remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest
 More to come
 
 ```{r load-0, eval=FALSE}
-library(rktest)
+library(ktest)
 ```
 
 ```{r load-1, echo=FALSE}
