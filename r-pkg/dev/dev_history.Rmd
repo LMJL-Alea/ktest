@@ -9,8 +9,9 @@ editor_options:
 ## Usethis setup
 
 ```{r dev-setup}
-path <- rprojroot::find_root(".git/index")
-usethis::proj_set(file.path(path, "rktest"), force = TRUE)
+proj_dir <- rprojroot::find_root(".git/index")
+pkg_dir <- file.path(proj_dir, "r-pkg")
+usethis::proj_set(pkg_dir, force = TRUE)
 usethis::proj_sitrep()
 ```
 
@@ -24,7 +25,7 @@ reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
 # install Python package (to do once)
 reticulate::virtualenv_install(
     envname = "ktest",
-    packages = "pyktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyktest"
+    packages = "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python"
 )
 # check Python config
 reticulate::py_discover_config()
@@ -36,7 +37,7 @@ reticulate::py_discover_config()
 
 ```{r dev-init}
 # create package template
-usethis::create_package("rktest", rstudio = FALSE, open = FALSE)
+usethis::create_package("ktest", rstudio = FALSE, open = FALSE)
 # use Rmd for README generation
 usethis::use_readme_rmd()
 # package-level documentation
@@ -44,7 +45,7 @@ usethis::use_package_doc()
 # additional files/folders to ignore during build
 usethis::use_build_ignore("dev")
 # vignette dir
-usethis::use_vignette("intro_rktest", "Introduction to rktest")
+usethis::use_vignette("intro_ktest", "Introduction to ktest")
 ```
 
 ### Metadata
@@ -95,25 +96,25 @@ usethis::use_testthat()
 
 ```{r dev-doc}
 # Simulate package installation
-pkgload::load_all("rktest")
+pkgload::load_all(pkg_dir)
 
 # Generate documentation and deal with dependencies
-attachment::att_amend_desc(path = file.path(path, "rktest"))
+attachment::att_amend_desc(path = pkg_dir)
 
 # README file
-devtools::build_readme("rktest")
+devtools::build_readme(pkg_dir)
 ```
 
 ### Test and check
 
 ```{r development-check}
 # Run the test
-devtools::test("rktest")
+devtools::test(pkg_dir)
 
 # test coverage
 covr::package_coverage(
-    "rktest", line_exclusions = list("R/init.R", "R/python.R"))
+    pkg_dir, line_exclusions = list("R/init.R", "R/python.R"))
 
 # Check the package
-devtools::check("rktest")
+devtools::check(pkg_dir)
 ```
