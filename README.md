@@ -1,19 +1,19 @@
-# ktest
+# ktest
 
 This package implements kernel tests 
 
 ## Python package
 
-See [`pyktest`](./pyktest) directory.
+See [`python`](./python) directory.
 
 ```python
-pip install pyktest@git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyktest
+pip install ktest@git+https://github.com/AnthoOzier/ktest@main#subdirectory=python
 ```
 
 ## R package
 
-See [`rktest`](./rktest) directory.
+See [`r-pkg`](./r-pkg) directory.
 
 ```r
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest")
+remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
 ```
