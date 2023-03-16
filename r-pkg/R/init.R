@@ -36,7 +36,7 @@ install_pyktest <- function(method = "auto", conda = "auto", ...) {
     have_python <- check_python()
     # install pyktest
     reticulate::py_install(
-        "pyktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=python", 
+        "ktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=python", 
         method = method, conda = conda, ...
     )
 }
