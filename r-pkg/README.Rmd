@@ -13,69 +13,44 @@ knitr::opts_chunk$set(
 )
 ```
 
+<!-- Python configuration -->
+
+```{r, include = FALSE}
+library(reticulate)
+# create virtualenv
+virtualenv_create("ktest")
+# activate python environment
+use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+```{r, include=FALSE}
+proj_dir <- rprojroot::find_root(".git/index")
+pkg_dir <- file.path(proj_dir, "r-pkg")
+devtools::load_all(pkg_dir)
+# install_pyktest(method = "virtualenv", envname = "ktest")
+```
+
 # rktest
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-Kernal based statistical testing
+Kernel based statistical testing
 
-## Installation
+# Installation
 
-You can install the development version of `rktest` with the following command:
-
-```{r install-dev, eval=FALSE}
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
+```{r vignette-install}
+#| child: vignettes/install_ktest.Rmd
 ```
 
-## Example
+# Example: multivariate testing
 
-More to come
-
-```{r load-0, eval=FALSE}
-library(ktest)
+```{r vignette-install}
+#| child: vignettes/multivariate_testing.Rmd
 ```
 
-```{r load-1, echo=FALSE}
-devtools::load_all(".")
-```
+# Example: univariate testing
 
-### Multivariate testing
-
-Load data:
-```{r multi-data}
-sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
-str(sc_df)
-rownames(sc_df)
-
-meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
-str(meta_sc_df)
-rownames(meta_sc_df)
-```
-
-Init test:
-```{r multi-init}
-kt <- ktest(
-    sc_df, meta_sc_df,
-    condition='condition',
-    samples=c('0H','48HREV'),
-    verbose=1)
-```
-
-Perform multivariate testing
-```{r multi-test}
-kt$multivariate_test(verbose=1)
-multivariate_test(kt, verbose=1)
-```
-
-Multivariate testing result:
-```{r multi-test-res}
-kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
-print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
-```
-
-Get p-values:
-```{r}
-kt$get_pvalue(contrib = TRUE, log = FALSE)
-get_pvalue(kt, contrib = TRUE, log = FALSE)
+```{r vignette-install}
+#| child: vignettes/univariate_testing.Rmd
 ```
