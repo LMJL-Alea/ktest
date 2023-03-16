@@ -1,0 +1,95 @@
+---
+title: "Installing the ktest package"
+author: "Ghislain DURIF"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Installing the ktest package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Requirements
+
+- R version 4+
+- Python version 3+ 
+
+> **Note:** if you don't have Python on your system: when configuring the `ktest` R package (c.f. [below](#additional-setup)), the `reticulate` R package will offer to install Python on your system.
+
+The `ktest` R package is using the `ktest` python package under the hood thanks to the [`reticulate`](https://CRAN.R-project.org/package=reticulate) R package that provides an "R Interface to Python".
+
+### Install `ktest` R package
+
+You can install the development version of `ktest` with the following command:
+
+```{r setup-install-dev, eval=FALSE}
+remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
+```
+
+> **Note:** `ktest` is not available on CRAN at the moment but will be shortly.
+
+### Additional setup
+
+After installing the `ktest` R package, you need to run the following command (**once**) to complete the setup (and install the `ktest` Python package on your system):
+
+> :warning: to avoid messing with your Python system environment, we recommend to use a dedicated Python virtual environment (c.f. [next section](#using-python-virtual-environment)) :warning:
+
+```{r setup-ktest-simple, eval=FALSE}
+library(ktest)
+install_pyktest()
+```
+
+### Managing Python
+
+If you need more **details** about which **version of Python** you are using through `reticulate`, you can run:
+
+```{r py-config, eval=FALSE}
+reticulate::py_config()
+reticulate::py_discover_config()
+```
+
+> **Note:** To get more information about **managing** which **version of Python** you are using, you can refer to `reticulate` [documentation](https://rstudio.github.io/reticulate/articles/versions.html) about "Python Version Configuration".
+
+#### Using Python virtual environment
+
+1. To create a dedicated Python environment, run the following command (once):
+```{r setup-python-env, eval=FALSE}
+# create dedicated virtual environment
+reticulate::virtualenv_create("ktest")
+```
+
+2. To load the Python environment, you should run the following command:
+```{r load-python-env, eval=FALSE}
+# activate python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+3. Setup `ktest` Python dependency inside the dedicated environment (to be run once):
+```{r setup-ktest, eval=FALSE}
+library(ktest)
+install_pyktest(method = "virtualenv", envname = "ktest")
+```
+
+> **Note:** you can also use a Conda environment if you use a Miniconda/Anaconda Python distribution, c.f. `reticulate` [documentation](https://rstudio.github.io/reticulate/articles/versions.html) about "Python Version Configuration".
+
+### Usage
+
+Once the `ktest` package is installed and configured, to use it, you only need to load it like any other R package:
+```{r load-ktest, eval=FALSE}
+library(ktest)
+kt <- ktest(...) # see other vignettes
+```
+
+If you use a dedicated Python environment, you also need to load it before using `ktest`:
+```{r load-ktest-env, eval=FALSE}
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+library(ktest)
+kt <- ktest(...) # see other vignettes
+```

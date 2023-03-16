@@ -2,54 +2,37 @@
 title: "Multivariate testing"
 author: "Ghislain DURIF"
 date: "`r Sys.Date()`"
-output: html_document
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Multivariate testing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
 ```
 
-## Setup
-
-Install `rktest`
-
-```{r install, eval=FALSE}
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "rktest")
+```{r, eval=FALSE}
+library(ktest)
 ```
 
-Use Python virtual env
-```{r setup-python}
-library(reticulate)
-# create virtualenv
-virtualenv_create("ktest")
-# activate python environment
-use_virtualenv(virtualenv = "ktest", required = TRUE)
-```
-
-Load `rktest` and install python dependency
-```{r setup-rktest, eval=FALSE}
-library(rktest)
-install_pyktest(method = "virtualenv", envname = "ktest")
-```
-
-```{r setup-dev, include=FALSE}
-proj_root_dir <- rprojroot::find_root(".git/index")
-devtools::load_all(file.path(proj_root_dir, "rktest"))
-```
-
-Import Python package
-```{r import}
-pyktest <- reticulate::import("pyktest")
+```{r, include=FALSE}
+proj_dir <- rprojroot::find_root(".git/index")
+pkg_dir <- file.path(proj_dir, "r-pkg")
+devtools::load_all(pkg_dir)
 ```
 
 ## Load data
 
-```{r data}
-sc_df <- read.table(
-    "data/data2.csv", row.names = 1, sep = ",", header = TRUE)
-
-meta_sc_df <- read.table(
-    "data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
+```{r multi-data}
+# cell expression data
+sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
+# cell metadata
+meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
 ```
 
 ## Ktest definition 
@@ -59,37 +42,38 @@ Load data and metadata, and initialize ktest object
 - `metadata` is the dataframe of metadata.
 - `condition` is the column of `metadata` containing the labels to test. 
 - `samples` is the couple of samples to test in the column `condition` of `metadata`
-- Set `nystrom` to `True` to use the nystrom approximation. 
-- Set `verbose >0` to follow the steps of the initialization of the ktest object.  
+- Set `nystrom` to `TRUE` to use the Nystrom approximation. 
+- Set `verbose >0` to follow the steps of the initialization of the `ktest` object.  
 
-```{r ktest-init}
-kt <- pyktest$tester$Ktest(
+Init test:
+```{r multi-init}
+kt <- ktest(
     sc_df, meta_sc_df,
-    condition='condition',
-    samples=c('0H','48HREV'),
-    verbose=1)
+    condition='condition', samples=c('0H','48HREV'), verbose=1
+)
 ```
-
 
 ## Multivariate testing 
 
-Perform a multivariate test on the data.
-
-```{r multi}
-head(kt$multivariate_test(verbose=1))
-# OR
-head(multivariate_test(kt, verbose=1))
+Perform a multivariate test on the data:
+```{r multi-test}
+# R call
+multivariate_test(kt, verbose=1)
+# equivalent Python call through reticulate
+kt$multivariate_test(verbose=1)
 ```
 
 ### Print test results 
-- `long` : if True, the results are printed for several truncations
+
+- `long` : if `TRUE`, the results are printed for several truncations
 - `t` : truncation associated to the printed p-value if `long` is `FALSE`.
 - `ts` : list of truncations associated to the printed p-values if `long` is `TRUE`.
 
 ```{r multi-result}
-kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
-# OR
+# R call
 print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
+# equivalent Python call through reticulate
+kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
 ```
 
 
@@ -99,16 +83,17 @@ print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
 - `log`: if `TRUE`, returns the log p-values. 
 
 ```{r multi-pval}
-kt$get_pvalue(contrib = TRUE, log = FALSE)
-# OR
-get_pvalue(kt, contrib = TRUE, log = FALSE)
+# R call
+pval <- get_pvalue(kt, contrib = TRUE, log = FALSE)
+# equivalent Python call through reticulate
+pval <- kt$get_pvalue(contrib = TRUE, log = FALSE)
+
+head(pval)
 ```
 
 ### Plot p-values with respect to truncation
 
 FIX ME!
-    
-
 
 ### Other tests
 
@@ -116,6 +101,7 @@ The default p-value is the asymptotic p-value of the `kfda` statistic associated
 
 
 ```{r multi-change-trunc}
+# Python call through reticulate
 kt$set_truncation(5L)
 kt$multivariate_test(verbose=1)
 ```
@@ -130,9 +116,8 @@ Compute the permutation p-value associated to the chosen statistic :
 - `seed_permutation` : define the number of random seeds. 
 - `n_jobs_permutation` : number of CPU to use for parallelized computation
 
-
-
-```{r mmd}
+```{r multi-mmd}
+# Python call through reticulate
 kt$multivariate_test(
     stat='mmd',
     permutation=TRUE,
@@ -142,7 +127,9 @@ kt$multivariate_test(
     verbose=1L)
 ```
 
-```{r mmd-res}
+Results:
+```{r multi-mmd-result}
+# Python call through reticulate
 kt$stat
 kt$get_pvalue_name()
 kt$dict_pval_mmd[kt$get_pvalue_name()]
@@ -150,9 +137,11 @@ kt$get_pvalue()
 ```
 
 ### Nystrom approximation
+
 Use the Nystrom approximation to reduce the computational cost
 
-```{r nystrom}
+```{r multi-nystrom}
+# Python call through reticulate
 kt$set_test_params(nystrom=TRUE)
 kt$multivariate_test(verbose=1)
 ```
@@ -168,7 +157,8 @@ Tune each parameter of the nystrom approximation with function `set_test_params`
     - `w` : within group covariance of the landmarks.
 
 
-```{r tune-nystrom}
+```{r multi-tune-nystrom}
+# Python call through reticulate
 kt$set_test_params(
     nystrom=TRUE,
     n_landmarks=50L,
@@ -177,7 +167,6 @@ kt$set_test_params(
     anchor_basis='s'
 )
 kt$multivariate_test(verbose=1)
-
 ```
 
 ### Kernel function choice
