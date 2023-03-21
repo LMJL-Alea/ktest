@@ -1,4 +1,4 @@
-Package: rktest
+Package: ktest
 Title: Kernel Based Statistical Testing
 Version: 1.0.0
 Authors@R: c(
