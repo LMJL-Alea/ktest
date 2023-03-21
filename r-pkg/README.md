@@ -2,7 +2,7 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 <!-- Python configuration -->
 
-# rktest
+# ktest R package
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -25,7 +25,7 @@ thanks to the
 [`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
 that provides an “R Interface to Python”.
 
-### Installation
+### Install `ktest` R package
 
 You can install the development version of `ktest` with the following
 command:

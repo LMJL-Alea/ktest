@@ -122,7 +122,7 @@ ktest <- function(
 
 #' Compute multivariate testing
 #'
-#' @param kt output of [`rktest::ktest()`] function.
+#' @param kt output of [`ktest::ktest()`] function.
 #' @inheritParams ktest
 #' @return No return.
 #' @export
@@ -168,7 +168,7 @@ multivariate_test <- function(
 
 #' Print a summary of the multivariate test results.
 #' 
-#' @param kt output of [`rktest::ktest()`] function.
+#' @param kt output of [`ktest::ktest()`] function.
 #' @param long boolean (default = `FALSE`). If `TRUE`, the print is more 
 #' detailed. 
 #' @param t integer (default = `10`), if `long == FALSE`, value for truncation 
@@ -195,7 +195,7 @@ print_multivariate_test_results <- function(
 
 #' Get p-values table with respect to the preset truncation parameter.
 #' 
-#' @param kt output of [`rktest::ktest()`] function.
+#' @param kt output of [`ktest::ktest()`] function.
 #' @param contrib boolean, if `TRUE`, returns the p-value associated to 
 #' each principal component individually, otherwise returns the p-value 
 #' associated to the `kfda` statistic. 

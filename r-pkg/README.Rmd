@@ -30,7 +30,7 @@ devtools::load_all(pkg_dir)
 # install_pyktest(method = "virtualenv", envname = "ktest")
 ```
 
-# rktest
+# ktest R package
 
 <!-- badges: start -->
 <!-- badges: end -->
