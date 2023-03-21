@@ -1,14 +1,3 @@
-# helper function to generate random python environment name
-random_envname <- function(prefix = "", length = 10) {
-    checkmate::expect_character(prefix, len = 1)
-    checkmate::expect_count(length)
-    envname <- stringr::str_c(
-        prefix,
-        stringi::stri_rand_strings(1, length)
-    )
-    return(envname)
-}
-
 # helper function to run code in a dedicated python environment
 # (with a random name and that will be removed afterwards)
 run_py_env <- function(code, envname = NULL) {
