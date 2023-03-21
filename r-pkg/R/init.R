@@ -39,4 +39,6 @@ install_pyktest <- function(method = "auto", conda = "auto", ...) {
         "ktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=python", 
         method = method, conda = conda, ...
     )
+    # use superassignment to update global reference to pyktest
+    pyktest <<- reticulate::import("ktest", delay_load = TRUE)
 }
