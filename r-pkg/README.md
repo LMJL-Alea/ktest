@@ -9,56 +9,89 @@
 
 Kernel based statistical testing
 
-# Installation
+# Installation and configuration
 
 ## Requirements
 
 - R version 4+
 - Python version 3+
 
+**Important:** Python is a requirement as an intern machinery for the
+package to work but you will not need to create nor manipulate Python
+codes to use the `ktest` R package.
+
 > **Note:** if you don’t have Python on your system: when configuring
-> the `ktest` R package (c.f. [below](#additional-setup)), the
+> the `ktest` R package (c.f. [below](#first-time-configuration)), the
 > `reticulate` R package will offer to install Python on your system.
 
-The `ktest` R package is using the `ktest` python package under the hood
+The `ktest` R package is using the `ktest` Python package under the hood
 thanks to the
 [`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
 that provides an “R Interface to Python”.
 
-### Install `ktest` R package
+## Installation
 
 You can install the development version of `ktest` with the following
-command:
+commands:
 
 ``` r
+install.package("remotes")
 remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
 ```
 
 > **Note:** `ktest` is not available on CRAN at the moment but will be
 > shortly.
 
-### Additional setup
+## First-time configuration
 
 After installing the `ktest` R package, you need to run the following
-command (**once**) to complete the setup (and install the `ktest` Python
-package on your system):
+commands (**once**) to complete the setup (and install the `ktest`
+Python package on your system):
 
-> :warning: to avoid messing with your Python system environment, we
-> recommend to use a dedicated Python virtual environment (c.f. [next
-> section](#using-python-virtual-environment)) :warning:
+> :warning: To avoid messing with your Python system or user
+> environment, we recommend to use a dedicated Python environment for
+> `ktest` (c.f. [next section](#using-a-python-environment)) :warning:
 
 ``` r
+# load ktest R package
 library(ktest)
-install_pyktest()
+# install ktest package python requirements
+install_ktest()
+# check ktest configuration
+check_ktest()
 ```
 
-### Managing Python
+### Using a Python environment
 
-If you need more **details** about which **version of Python** you are
-using through `reticulate`, you can run:
+Here are the commands to be run (once) to configure the `ktest` package
+using a dedicated Python **virtual environment**:
 
 ``` r
-reticulate::py_config()
+# load ktest R package
+library(ktest)
+# create dedicated Python virtual environment
+reticulate::virtualenv_create("ktest")
+# activate the python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# install ktest package python requirements
+install_ktest(method = "virtualenv", envname = "ktest")
+# check ktest configuration
+check_ktest()
+```
+
+> **Note:** if you are a Miniconda/Anaconda Python distribution user,
+> you can either user a Python virtual environment (c.f. above) or a
+> **Conda environment** with the same results. Please refer to the
+> `reticulate`
+> [documentation](https://rstudio.github.io/reticulate/articles/versions.html#providing-hints)
+> in this case.
+
+## Managing Python
+
+To check which **version of Python** you are using through `reticulate`,
+you can run:
+
+``` r
 reticulate::py_discover_config()
 ```
 
@@ -67,38 +100,7 @@ reticulate::py_discover_config()
 > [documentation](https://rstudio.github.io/reticulate/articles/versions.html)
 > about “Python Version Configuration”.
 
-#### Using Python virtual environment
-
-1.  To create a dedicated Python environment, run the following command
-    (once):
-
-``` r
-# create dedicated virtual environment
-reticulate::virtualenv_create("ktest")
-```
-
-2.  To load the Python environment, you should run the following
-    command:
-
-``` r
-# activate python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-```
-
-3.  Setup `ktest` Python dependency inside the dedicated environment (to
-    be run once):
-
-``` r
-library(ktest)
-install_pyktest(method = "virtualenv", envname = "ktest")
-```
-
-> **Note:** you can also use a Conda environment if you use a
-> Miniconda/Anaconda Python distribution, c.f. `reticulate`
-> [documentation](https://rstudio.github.io/reticulate/articles/versions.html)
-> about “Python Version Configuration”.
-
-### Usage
+## Usage
 
 Once the `ktest` package is installed and configured, to use it, you
 only need to load it like any other R package:
@@ -108,8 +110,8 @@ library(ktest)
 kt <- ktest(...) # see other vignettes
 ```
 
-If you use a dedicated Python environment, you also need to load it
-before using `ktest`:
+:warning: If you are using a **dedicated Python environment**, you also
+need to load it every time before using `ktest`:
 
 ``` r
 reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
@@ -125,6 +127,8 @@ library(ktest)
 
 ## Load data
 
+Load data and metadata:
+
 ``` r
 # cell expression data
 sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
@@ -134,15 +138,16 @@ meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header 
 
 ## Ktest definition
 
-Load data and metadata, and initialize ktest object - `data` is the
-dataframe of data. - `metadata` is the dataframe of metadata. -
-`condition` is the column of `metadata` containing the labels to test. -
-`samples` is the couple of samples to test in the column `condition` of
-`metadata` - Set `nystrom` to `TRUE` to use the Nystrom approximation. -
-Set `verbose >0` to follow the steps of the initialization of the
-`ktest` object.
+Initialize the `ktest` object:
 
-Init test:
+- `data` is the dataframe of data.
+- `metadata` is the dataframe of metadata.
+- `condition` is the column of `metadata` containing the labels to test.
+- `samples` is the couple of samples to test in the column `condition`
+  of `metadata`
+- Set `nystrom` to `TRUE` to use the Nystrom approximation.
+- Set `verbose >0` to follow the steps of the initialization of the
+  `ktest` object.
 
 ``` r
 kt <- ktest(
@@ -215,12 +220,15 @@ The asymptotic p-value is available for the `kfda` statistic only. The
 permutation p-value is available for the `kfda` statistic and the `mmd`
 statistic.
 
-Compute the permutation p-value associated to the chosen statistic : -
-`stat` : chosen statistic among (`kfda`,`mmd`) - `permutation`: if True,
-compute the permutation p-value (automatically True if `stat` is
-`mmd`) - `n_permutations` : set the number of permutations. -
-`seed_permutation` : define the number of random seeds. -
-`n_jobs_permutation` : number of CPU to use for parallelized computation
+Compute the permutation p-value associated to the chosen statistic:
+
+- `stat` : chosen statistic among (`kfda`,`mmd`)
+- `permutation`: if True, compute the permutation p-value (automatically
+  True if `stat` is `mmd`)
+- `n_permutations` : set the number of permutations.
+- `seed_permutation` : define the number of random seeds.
+- `n_jobs_permutation` : number of CPU to use for parallelized
+  computation
 
 ``` r
 # Python call through reticulate
@@ -250,7 +258,7 @@ kt$get_pvalue()
 
 ### Nystrom approximation
 
-Use the Nystrom approximation to reduce the computational cost
+Use the Nystrom approximation to reduce the computational cost:
 
 ``` r
 # Python call through reticulate
@@ -258,15 +266,20 @@ kt$set_test_params(nystrom=TRUE)
 kt$multivariate_test(verbose=1)
 ```
 
-Tune each parameter of the nystrom approximation with function
-`set_test_params` : - `nystrom` : if True, use the Nystrom
-approximation - `n_landmarks` : number of landmarks to use (subsample
-used to compute the anchors). - `n_anchors` : number of anchors to use
-(eigenvectors associated to a matrix defined with the landmarks). -
-`landmark_method` : how to choose the landmarks among
-(`random`,`kmeans`) - `anchor_basis` : matrix used to define the anchors
-among - `k` : second moment of the landmarks. - `s` : total covariance
-of the landmarks. - `w` : within group covariance of the landmarks.
+Tune each parameter of the Nystrom approximation with the function
+`set_test_params()`:
+
+- `nystrom` : if True, use the Nystrom approximation
+- `n_landmarks` : number of landmarks to use (subsample used to compute
+  the anchors).
+- `n_anchors` : number of anchors to use (eigenvectors associated to a
+  matrix defined with the landmarks).
+- `landmark_method` : how to choose the landmarks among
+  (`random`,`kmeans`)
+- `anchor_basis` : matrix used to define the anchors among
+  - `k` : second moment of the landmarks.
+  - `s` : total covariance of the landmarks.
+  - `w` : within group covariance of the landmarks.
 
 ``` r
 # Python call through reticulate
@@ -286,12 +299,16 @@ kt$multivariate_test(verbose=1)
 
 The default kernel is the RBF kernel with median bandwidth. Use
 `init_kernel_params()` to specify the kernel function with a `dict` of
-specifications. - `function` is either a string among
-\[`gauss`,`linear`\] or a user specified kernel function. + if
-`function` is `gauss`: - `bandwidth` is either the string `median` or a
-float. - if `bandwidth` is `median`: + `median_coef` is the coefficient
-such that `bandwidth=median_coef x median` (default is `1`) -
-`kernel_name` is the name of the kernel used.
+specifications:
+
+- `function` is either a string among \[`gauss`,`linear`\] or a user
+  specified kernel function.
+  - if `function` is `gauss`:
+    - `bandwidth` is either the string `median` or a float.
+    - if `bandwidth` is `median`:
+      - `median_coef` is the coefficient such that
+        `bandwidth=median_coef x median` (default is `1`)
+- `kernel_name` is the name of the kernel used.
 
 ``` python
 import torch

@@ -37,7 +37,7 @@ devtools::load_all(pkg_dir)
 
 Kernel based statistical testing
 
-# Installation
+# Installation and configuration
 
 ```{r vignette-install}
 #| child: vignettes/install_ktest.Rmd
