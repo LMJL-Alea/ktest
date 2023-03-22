@@ -76,6 +76,8 @@ check_ktest <- function(warn = TRUE) {
         if(warn) warning(msg)
         return(FALSE)
     } else {
+        msg <- stringr::str_c("'ktest' is ready.")
+        if(warn) message(msg)
         return(TRUE)
     }
 }
