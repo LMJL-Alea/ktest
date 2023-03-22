@@ -1,6 +1,6 @@
 # requirement
-library(reticulate)
 install.packages("remotes")
+library(reticulate)
 
 # clean
 remove.packages("ktest")
@@ -11,6 +11,9 @@ py_discover_config()
 
 # install ktest R package
 remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
+
+# load ktest R package
+library(ktest)
 
 # configure python
 venv <- "ktest"
