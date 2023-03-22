@@ -28,6 +28,8 @@ devtools::load_all(pkg_dir)
 
 ## Load data
 
+Load data and metadata:
+
 ```{r multi-data}
 # cell expression data
 sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
@@ -37,7 +39,8 @@ meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header 
 
 ## Ktest definition 
 
-Load data and metadata, and initialize ktest object 
+Initialize the `ktest` object:
+
 - `data` is the dataframe of data.
 - `metadata` is the dataframe of metadata.
 - `condition` is the column of `metadata` containing the labels to test. 
@@ -45,7 +48,6 @@ Load data and metadata, and initialize ktest object
 - Set `nystrom` to `TRUE` to use the Nystrom approximation. 
 - Set `verbose >0` to follow the steps of the initialization of the `ktest` object.  
 
-Init test:
 ```{r multi-init}
 kt <- ktest(
     sc_df, meta_sc_df,
@@ -109,7 +111,8 @@ kt$multivariate_test(verbose=1)
 The asymptotic p-value is available for the `kfda` statistic only. 
 The permutation p-value is available for the `kfda` statistic and the `mmd` statistic.
 
-Compute the permutation p-value associated to the chosen statistic : 
+Compute the permutation p-value associated to the chosen statistic:
+
 - `stat` : chosen statistic among (`kfda`,`mmd`)
 - `permutation`: if True, compute the permutation p-value (automatically True if `stat` is `mmd`)
 - `n_permutations` : set the number of permutations.
@@ -138,23 +141,23 @@ kt$get_pvalue()
 
 ### Nystrom approximation
 
-Use the Nystrom approximation to reduce the computational cost
-
+Use the Nystrom approximation to reduce the computational cost:
 ```{r multi-nystrom}
 # Python call through reticulate
 kt$set_test_params(nystrom=TRUE)
 kt$multivariate_test(verbose=1)
 ```
 
-Tune each parameter of the nystrom approximation with function `set_test_params` : 
+Tune each parameter of the Nystrom approximation with the function `set_test_params()`:
+
 - `nystrom` : if True, use the Nystrom approximation
 - `n_landmarks` : number of landmarks to use (subsample used to compute the anchors).
 - `n_anchors` : number of anchors to use (eigenvectors associated to a matrix defined with the landmarks).
 - `landmark_method` : how to choose the landmarks among (`random`,`kmeans`)
 - `anchor_basis` : matrix used to define the anchors among 
-    - `k` : second moment of the landmarks.
-    - `s` : total covariance of the landmarks.
-    - `w` : within group covariance of the landmarks.
+  + `k` : second moment of the landmarks.
+  + `s` : total covariance of the landmarks.
+  + `w` : within group covariance of the landmarks.
 
 
 ```{r multi-tune-nystrom}
@@ -173,7 +176,8 @@ kt$multivariate_test(verbose=1)
 
 **TODO**
 
-The default kernel is the RBF kernel with median bandwidth. Use `init_kernel_params()` to specify the kernel function with a `dict` of specifications.
+The default kernel is the RBF kernel with median bandwidth. Use `init_kernel_params()` to specify the kernel function with a `dict` of specifications:
+
 - `function` is either a string among [`gauss`,`linear`] or a user specified kernel function.
   + if `function` is `gauss`:
     - `bandwidth` is either the string `median` or a float. 
