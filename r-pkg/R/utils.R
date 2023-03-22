@@ -1,4 +1,6 @@
 #' Helper function to generate random python environment name
+#' 
+#' @keywords internal
 #'
 #' @param prefix character string, prefix to add to the environment name.
 #' @param length integer, number of random character in the environment name.
@@ -10,8 +12,6 @@
 #'
 #' @examples
 #' random_envname(prefix = "test", length = 10)
-#' 
-#' @export
 random_envname <- function(prefix = "", length = 10) {
     checkmate::assert_string(prefix)
     checkmate::assert_count(length)
