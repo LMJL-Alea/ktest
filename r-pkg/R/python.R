@@ -40,29 +40,38 @@ check_python <- function(version = "3.5", warn = TRUE) {
     return(TRUE)
 }
 
-#' Check if `pyktest` Python package is available
+#' Check if `ktest` package is ready to run.
+#' 
+#' @description
+#' In practice, check if `ktest` Python package is installed (which is done 
+#' by the function [ktest::install_ktest()]).
 #' 
 #' @param warn boolean, if TRUE (default), warn user about check result.
 #'
-#' @return boolean value indicating if the `pyktest` Python package is available 
-#' on the system.
+#' @return boolean value indicating if the `ktest` package is ready.
 #' 
 #' @importFrom stringr str_c
-check_pyktest <- function(warn = TRUE) {
+#' 
+#' @seealso [ktest::install_ktest()]
+#' 
+#' @examples
+#' check_ktest()
+#' @export
+check_ktest <- function(warn = TRUE) {
     # init
     have_pyktest <- FALSE
     import_pyktest <- FALSE
     # check pyktest loading
-    have_pyktest <- reticulate::py_module_available("pyktest")
+    have_pyktest <- reticulate::py_module_available("ktest")
     if(have_pyktest) {
         import_pyktest <- tryCatch({
-            tmp_pyktest <- reticulate::import("pyktest")
+            tmp_pyktest <- reticulate::import("ktest")
             tmp_pyktest$READY
         }, error = function(e) return(FALSE))
     }
     if(!have_pyktest || !import_pyktest) {
         msg <- stringr::str_c(
-            "'pyktest' not available. Run `install_pyktest()`."
+            "'ktest' is not ready. Run `install_ktest()`."
         )
         if(warn) warning(msg)
         return(FALSE)
