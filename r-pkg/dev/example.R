@@ -2,7 +2,7 @@
 install.packages("remotes")
 library(reticulate)
 
-# clean
+# clean (to be run only if necessary and not the first time)
 remove.packages("ktest")
 virtualenv_remove("ktest")
 
