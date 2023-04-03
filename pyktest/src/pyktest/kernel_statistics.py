@@ -3,6 +3,8 @@ import pandas as pd
 from torch import mv,diag,dot,sum
 import numpy as np
 from .projection_operations import ProjectionOps
+import warnings
+
 """
 
 Ce fichier contient toutes les fonctions nécessaires au calcul des statistiques,
@@ -164,8 +166,11 @@ class Statistics(ProjectionOps):
 
         # stockage des vecteurs propres et valeurs propres dans l'attribut spev
         trunc = range(1,t+1) # liste des troncatures possibles de 1 à t 
-        self.df_kfdat[kfdat_name] = pd.Series(kfda,index=trunc)
-        self.df_kfdat_contributions[kfdat_name] = pd.Series(kfda_contributions,index=trunc)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.df_kfdat[kfdat_name] = pd.Series(kfda,index=trunc)
+            self.df_kfdat_contributions[kfdat_name] = pd.Series(kfda_contributions,index=trunc)
 
         self.has_kfda_statistic = True        
         # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
@@ -210,7 +215,8 @@ class Statistics(ProjectionOps):
         mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
         # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
         if verbose>0:
-            print(f'- Initialize kfdat\n\tcov : {cov} \n\tmmd : {mmd}')
+            nystr = 'with nystrom approximation' if self.nystrom else ''
+            print(f'- Initialize kfdat {nystr}')
         # la quantisation était la troisième approche après nystrom et standard mais je ne l'utilise plus car 
         # son coût computationnel est faible mais ses performances le sont aussi. 
         # cette approche a besoin d'avoir un poids associé aux landmarks pour savoir combien ils représentent d'observations. 
