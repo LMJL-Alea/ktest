@@ -4,7 +4,12 @@ import pandas as pd
 from .tester import Ktest
 from .utils import init_kernel_params
 import numpy as np
-
+from sklearn.cluster import KMeans
+from .utils_matplotlib import custom_boxplot,custom_histogram
+# pyktest 
+# get_mmd_name -> condition sample data_name
+# residuals -> condition sample data_name
+# modif les titres et noms d'axes dans les fonctions de plot 
 
 def get_meta_from_df(df):
     meta = pd.DataFrame()
@@ -14,9 +19,11 @@ def get_meta_from_df(df):
     meta['condition'] = meta['index'].apply(lambda x : x.split(sep='.')[1])
     return(meta)
 
-def get_Ktest_from_df_and_comparaison(df,comparaison,name,kernel=init_kernel_params(),nystrom=False,center_by=None,condition='condition',meta=None):
+def get_Ktest_from_df_and_comparaison(df,comparaison,name,kernel=None,nystrom=False,center_by=None,condition='condition',meta=None):
     if meta is None:
         meta = get_meta_from_df(df)
+    if kernel is None:
+        kernel = init_kernel_params()
     cstr = "_".join(comparaison)
     cells = meta[meta[condition].isin(comparaison)].index
     data = df[df.index.isin(cells)] 
@@ -415,3 +422,288 @@ def center_dataframe_by_effect(df,effect):
             dfc = pd.concat([dfc,dfec])
     return(dfc)
 
+def get_pop_from_discriminant(self,
+                              comparaison,
+                              t,
+                              threshold=None,
+                              orientation='>',
+                              sample='48HREV',
+                              colors = {'0H':'xkcd:bright blue',
+                                        '24H':'xkcd:leaf green',
+                                        '48HDIFF':'crimson',
+                                        '48HREV':'xkcd:pale purple',
+                                        '48HREV_1':'xkcd:aqua green',
+                                        '48HREV_2':'xkcd:light magenta'},
+                              nobs=None,
+                              kde=True,
+                              kde_bw=.2):
+    self.set_test_data_info(samples=comparaison)
+    self.projections(t)
+    pop = self.select_observations_from_condition(threshold=threshold,t=t,orientation=orientation,nobs=nobs,sample=sample)
+
+
+    fig,ax = plt.subplots(nrows=1,ncols=1,figsize=(22,7))
+    self.hist_discriminant(t=t,
+                           samples_colors=[colors[s] for s in comparaison],
+                           fig=fig,
+                           ax=ax,
+                           highlight=pop,
+                           kde=kde,
+                           kde_bw=kde_bw)
+    if threshold is not None:
+        ax.axvline(threshold,c='crimson',ls='--')
+    fig.tight_layout()
+    return(pop)
+
+def see_pop_on_other_comparisons(self,t,pop,
+                                 direction='kfda',
+                                 comparaisons=[['48HREV','24H'],['48HREV', '0H'],['48HREV', '48HDIFF']],
+                                 colors = {'0H':'xkcd:bright blue','24H':'xkcd:leaf green','48HDIFF':'crimson','48HREV':'xkcd:pale purple',
+         '48HREV_1':'xkcd:aqua green','48HREV_2':'xkcd:light magenta'},
+         hist=True,next_pc=False):
+    comp = self.samples
+    for comparaison in comparaisons:
+            self.set_test_data_info(samples=comparaison)
+            if hist and next_pc:
+                fig,axes = plt.subplots(nrows=1,ncols=2,figsize=(22,7))
+                ncols=2
+            else:
+                ncols=1
+                fig,ax = plt.subplots(nrows=1,ncols=1,figsize=(22,7))
+            if hist:
+                ax = axes[0] if ncols==2 else ax
+                if direction == 'kfda':
+                    self.hist_discriminant(t=t,samples_colors=[colors[s] for s in comparaison],fig=fig,ax=ax,highlight=pop)
+                if direction =='kpca':
+                    self.hist_pc(t=t,samples_colors=[colors[s] for s in comparaison],fig=fig,ax=ax,highlight=pop)
+            if next_pc:
+                ax = axes[1] if ncols==2 else ax
+                self.plot_nextPC(t=t,samples_colors=[colors[s] for s in comparaison],highlight=pop,fig=fig,ax=ax)
+
+    self.set_test_data_info(samples=comp)
+
+
+def cluster_genes_from_condition(self,condition,n_clusters,colors = {'0H':'xkcd:bright blue','24H':'xkcd:leaf green','48HDIFF':'crimson','48HREV':'xkcd:pale purple',
+         '48HREV_1':'xkcd:aqua green','48HREV_2':'xkcd:light magenta'},ylim=(-2,2),vert=True,
+         verbose=0):
+    
+    dfm = self.get_dataframe_of_means(condition=condition,samples='all',
+                                      )
+    kmeans = KMeans(
+         init="random",
+         n_clusters=n_clusters,
+         n_init=10,
+         max_iter=300,
+         random_state=4)
+    kmeans.fit(dfm)
+    
+    dfm = dfm.rename(columns={c:f'{c}_{condition}' for c in dfm.columns},inplace=False)
+    self.update_var_from_dataframe(dfm)
+    var = self.get_var()
+
+    col_cluster = f'kmeans_{condition}_nc{n_clusters}'
+    var[col_cluster]=kmeans.labels_
+    var[col_cluster] = var[col_cluster].astype('category')
+    
+    fig,axes = plt.subplots(ncols = n_clusters,figsize=(8*n_clusters,6))
+    for cat in range(n_clusters):
+        ax = axes[cat]
+        df = var[var[col_cluster]==cat].copy()
+        cols = [c for c in df.columns if condition in c ]
+        df = df.loc[:,cols]
+        df = df.rename(columns={c:c.replace(f'_{condition}','') for c in df.columns},inplace=False)
+        custom_boxplot(df,colors,fig=fig,ax=ax,vert=vert)
+        if verbose>0:
+            if verbose >1 or len(df) <200:
+                print(f'cluster {cat} ({len(df)}) :',",".join(df.index.tolist()))
+        ax.set_title(f'cluster {cat} ({len(df)} genes) ',fontsize=30)
+        if vert:
+            ax.set_ylim(ylim)
+        else:
+            ax.set_xlim(ylim)
+        # plt.show()
+    return(col_cluster)
+
+def plot_pvals_of_splitted(self,condition,pval=False,ylim1=(-5,1000),ylim2=(-5,1000)):
+    self.set_test_data_info(condition=condition,samples=['24H','0H'])
+    sl = self.get_samples_list(samples='all')
+    print(self.condition)
+    comparaisons = []
+    for i,ci in enumerate(sl):
+        for j,cj in enumerate(sl):
+            if i>j: 
+                comparaisons += [[ci,cj]]
+
+    for comparaison in comparaisons:
+        self.set_test_data_info(samples=comparaison,)
+        self.multivariate_test()
+
+    columns1 = [c for c in self.df_pval if condition in c and '48HREV_1' in c]
+    columns2 = [c for c in self.df_pval if condition in c and '48HREV_2' in c]
+    print(columns1)
+    fig,axes = plt.subplots(ncols=2,figsize=(24,7))
+    if pval : 
+        for columns,ax in zip([columns1,columns2],axes):    
+            fig,ax = self.plot_several_pvalues(t=50,columns=columns,log=True,fig=fig,ax=ax)    
+    else:
+        for columns,ylim,ax in zip([columns1,columns2],[ylim1,ylim2],axes):    
+            fig,ax = self.plot_several_kfdat(t=50,ylim=ylim,columns=columns,fig=fig,ax=ax)
+    return(fig,axes)
+
+def hist_of_every_reversion_discriminant(self,t,
+                                         condition=None,
+                                        comparaisons=[ ['48HREV','0H'],
+                                                    ['48HDIFF', '24H'],
+                                                    ['48HREV', '24H'],
+                                                    ['48HREV', '48HDIFF'],
+                                                    ['24H', '0H'],
+                                                    ['48HDIFF', '0H'],
+                                                    ],
+                                         colors = {'0H':'xkcd:bright blue',
+                                                   '24H':'xkcd:leaf green',
+                                                   '48HDIFF':'crimson',
+                                                   '48HREV':'xkcd:pale purple',
+                                                   '48HREV_1':'xkcd:aqua green',
+                                                   '48HREV_2':'xkcd:light magenta'},
+                                        highlight=None,
+                                        kde=True,
+                                        kde_bw=.2):
+
+    if condition is None:
+        condition = 'condition'
+    self.set_test_data_info(samples=['0H','24H'],condition=condition)
+    fig,axes= plt.subplots(nrows=1,ncols=len(comparaisons),figsize=(50,7))
+    for comparaison,ax in zip(comparaisons,axes):
+        self.set_test_data_info(samples=comparaison)
+        self.hist_discriminant(t=t,
+                             fig=fig,ax=ax,
+                             samples_colors=[colors[s] for s in comparaison],
+                             highlight=highlight,
+                             kde=kde,
+                             kde_bw=kde_bw)
+    return(fig,axes)
+                  
+
+def study_pop(self,
+              comparaison,
+              t,
+              threshold=None,
+              orientation='>',
+              nobs=None,
+              n_clusters=4,
+              ylim1=(-5,1000),
+              ylim2=(-5,1000),
+              t_repr=None,
+              kde=False,
+              kde_bw=.2,
+              ylim_clusters=[-2,2],
+              pval_splitted=True,
+              verbose=0):
+    assert(threshold is not None or nobs is not None)
+
+    if t_repr is None:
+        t_repr = t
+
+    self.set_test_data_info(samples =['48HREV','24H'], condition='condition')
+    
+    pop = get_pop_from_discriminant(self,
+                                    comparaison=comparaison,
+                                    t=t,
+                                    threshold=threshold,
+                                    orientation=orientation,
+                                    nobs=nobs,
+                                    kde=kde,
+                                    kde_bw=kde_bw,
+                                    )
+    
+
+    hist_of_every_reversion_discriminant(self,
+                                         t=t_repr,
+                                         highlight=pop,
+                                         comparaisons=[['48HREV', '0H'], ['48HREV', '24H'], ['48HREV', '48HDIFF']],
+                                         kde=kde,
+                                         kde_bw=kde_bw)
+    # see_pop_on_other_comparisons(self,t=t_repr,pop=pop)
+    # see_pop_on_other_comparisons(self,t=t_repr,pop=pop,hist=False,next_pc=True)
+
+    print(f'n_cells={len(pop)}')
+    ref_sample = comparaison[0] if comparaison[0] != '48HREV' else comparaison[1]
+    popstr = f'pop_{ref_sample}_t{t}_threshold{threshold}'
+    condition = f'condition_{popstr}_'
+
+    self.split_sample(pop,'48HREV',new_condition=condition,condition='condition',verbose=verbose)
+    self.set_test_data_info(samples=['48HREV_2','48HREV_1'],condition=condition)
+    plot_pvals_of_splitted(self,condition=condition,pval=pval_splitted,ylim1=ylim1,ylim2=ylim2)
+    plt.show()
+    cluster_genes_from_condition(self,condition=condition,n_clusters=n_clusters,ylim=ylim_clusters,verbose=verbose)
+    
+    return(pop,condition)
+
+def split_48HREV(self,comparaison,t,threshold=None,nobs=None,orientation='>',verbose=0):
+    assert(any([a is not None for a in [threshold,nobs]]))
+    
+    self.set_test_data_info(samples=comparaison,condition='condition')
+    self.projections(t)
+    pop = self.select_observations_from_condition(threshold=threshold,t=t,orientation=orientation,nobs=nobs,sample='48HREV')
+    ref_sample = comparaison[0] if comparaison[0] != '48HREV' else comparaison[1]
+    
+    criterium = f'threshold{threshold}' if threshold is not None else f'nobs{nobs}'
+    condition = f'pop_{ref_sample}_t{t}_{criterium}'
+
+    self.split_sample(pop,'48HREV',new_condition=condition,condition='condition',verbose=verbose)
+    self.set_test_data_info(samples=comparaison,condition='condition')
+    # self.set_test_data_info(samples=['48HREV_2','48HREV_1'],condition=condition)
+    
+    return(pop,condition)
+
+from sklearn.cluster import KMeans
+def custom_clustering(df,n_clusters,n_init=10,max_iter=300,random_state=4):
+    kmeans = KMeans(
+     init="random",
+     n_clusters=n_clusters,
+     n_init=n_init,
+     max_iter=max_iter,
+     random_state=random_state)
+    kmeans.fit(df)
+    return(pd.DataFrame(kmeans.labels_,index=df.index,columns=['clusters']))
+
+def density_of_pvalues(self,condition,samples,clusters,t=3,log=False,
+                      colors = {0:'b',1:'orange',2:'g',3:'r',4:'purple'},
+                       verbose=1,kde=True,kde_bw=.2,coef_bins=3,fig=None,ax=None
+    ):
+
+    if fig is None:
+        fig,ax = plt.subplots(figsize=(12,6))
+    
+    self.set_test_data_info(samples=samples,condition=condition)
+    self.univariate_test(verbose=1)
+    
+    pv = self.get_pvals_univariate(t=t,corrected=True)
+    cl = self.get_var()[clusters]
+    
+    df = pd.concat([pv,cl],axis=1)
+    df.columns=['pval','cluster']
+    dfs = {c:df[df['cluster']==c]['pval'] for c in cl.unique()}
+        
+    
+    for k,df in dfs.items():
+        df.name=k
+        if verbose>0:
+            print(k,len(df),len(df[df<.05]))
+    
+    
+    for k in dfs.keys():
+#             print(k,dfs[k])
+        if len(dfs[k])>2:
+            df = dfs[k]
+            x = np.log(dfs[k]) if log else dfs[k]
+            custom_histogram(x,
+                             color=colors[k],
+                             label=f'cluster {k} ({len(df[df<.05])}/{len(df)} DE))',
+                             fig=fig,ax=ax,
+                             kde=kde,kde_bw=kde_bw,
+                             coef_bins=coef_bins,
+                            means=False)
+        ax.legend()
+    return(fig,ax)
+    

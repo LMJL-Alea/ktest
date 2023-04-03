@@ -5,46 +5,50 @@ import numpy as np
 from .plots_wb_error import Plot_WBerrors
 from .plots_standard import Plot_Standard
 from .utils_plot import text_truncations_of_interest,replace_label,adjusted_xticks
+from .dendrogram import Dendrogram
 
-
-class Plot_Summarized(Plot_Standard,Plot_WBerrors):
+class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
         
     def __init__(self):        
         super(Plot_Summarized, self).__init__()
 
 
     # reconstructions error 
-    def plot_pval_and_errors(self,truncations_of_interest=[1,3,5],t=20,fig=None,ax=None,marked_obs_to_ignore=None,
+    def plot_pval_and_errors(self,t=20,fig=None,ax=None,truncations_of_interest=[1,3,5],marked_obs_to_ignore=None,
                             log=False,cumul=False,adjust=True,decreasing=False,
                             log_spectrum=False,
                             pval_aggregated=True,pval_contrib=False,
                             var_within=False,var_conditions=True,
-                            diff=True,grid=True):
-        
-        if decreasing:
-            cumul=True
+                            kfdr=False,
+                            diff=True,grid=True,
+                            alpha=.8):
+
+        if fig is None:
+            fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
         if marked_obs_to_ignore is not None:
             self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore)
 
-        if fig is None:
-            fig,ax = plt.subplots(ncols=1,figsize=(12,6))
-        
-        pval = any([pval_aggregated,pval_contrib])
-        if pval:
+        cumul = True if decreasing else cumul
+
+        if any([pval_aggregated,pval_contrib]):
             self.plot_pvalue(fig=fig,ax=ax,t=t,aggregated=pval_aggregated,contrib=pval_contrib,truncations_of_interest=truncations_of_interest,adjust=adjust,log=log)
+
         if log_spectrum:
             self.plot_part_log_spectrum(t=t,fig=fig,ax=ax)
-        elif any([var_within,var_conditions]):
-            self.plot_explained_variability(t=t,fig=fig,ax=ax,
-                within=var_within,conditions=var_conditions,cumul=cumul,log=log,decreasing=decreasing)
-        if diff:
-            self.plot_explained_difference(t=t,fig=fig,ax=ax,cumul=cumul,log=log,decreasing=decreasing)
+        
+        df = self.get_diagnostics(t=t,
+                                diff=diff,
+                            var_within=var_within,
+                            var_samples=var_conditions,
+                            kfdr=kfdr,
+                            cumul=cumul,log=log,decreasing=decreasing
+                            ) 
+        df.plot.bar(alpha=alpha,ax=ax)
 
         ax.legend(fontsize=20)
         ax.set_xlabel('t',fontsize=30)
         ax.set_xticks(adjusted_xticks(t))
-
         if grid:
             ax.grid(alpha=.2)
 
@@ -54,8 +58,9 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
 
         if marked_obs_to_ignore is not None:
             self.set_marked_obs_to_ignore()
-        
+
         return(fig,ax)
+
 
     def what_if_we_ignored_cells_by_condition(self,threshold,orientation,t='1',column_in_dataframe='kfda',proj='proj_kfda',marked_obs_already_ignored=None):
         oname = f"{proj}[{column_in_dataframe}][{t}]{orientation}{threshold}"
@@ -80,7 +85,11 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors):
         # a remplacer par self.compare_two_stats
         fig,axes = plt.subplots(ncols=4,figsize=(48,8))
         ax = axes[0]
-        self.density_proj(t=int(t),labels='MF',proj=proj,name=column_in_dataframe,fig=fig,ax=ax)
+        self.density_proj(t=int(t),
+                          labels='MF',
+                          proj=proj,
+                          name=column_in_dataframe,
+                          fig=fig,ax=ax)
         ax.axvline(threshold,ls='--',c='crimson')
         ax.set_title(column_in_dataframe,fontsize=20)
 

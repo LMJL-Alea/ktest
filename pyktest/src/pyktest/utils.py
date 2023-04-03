@@ -47,14 +47,12 @@ def convert_to_pandas_index(index):
 
 def get_kernel_name(function,bandwidth,median_coef):
     n = ''
-    if function == 'gauss':
+    if function in ['gauss','fisher_zero_inflated_gaussian']:
         n+=function
         if bandwidth == 'median':
             n+= f'_{median_coef}median' if median_coef != 1 else '_median' 
         else: 
             n+=f'_{bandwidth}'
-        
-        
     elif function == 'linear':
         n+=function
     else:
@@ -82,7 +80,7 @@ def init_test_params(stat='kfda',
             'seed_permutation':seed_permutation
             })
 
-def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None):
+def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None,pi1=None,pi2=None):
     """
     Returns an object that defines the kernel
     """
@@ -90,6 +88,8 @@ def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_
         {'function':function,
             'bandwidth':bandwidth,
             'median_coef':median_coef,
-            'kernel_name':kernel_name
+            'kernel_name':kernel_name,
+            'pi1':pi1,
+            'pi2':pi2
             }
     )

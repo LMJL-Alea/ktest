@@ -98,7 +98,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             test_params : object specifying the test to execute
                 output of the function get_test_params()
 
-            kernel : obkect specifying the kernel function to use
+            kernel : object specifying the kernel function to use
                 output of the function init_kernel_params()
 
             center_by (default = None) : str
@@ -547,9 +547,13 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
         return(pval) 
 
-    def get_kfda(self,contrib=False,log=False,name=None):
-        name = self.get_kfdat_name() if name is None else name
+    def get_kfda(self,contrib=False,log=False,name=None,condition=None,samples=None,marked_obs_to_ignore=None):
+        if name is None:
+            name = self.get_kfdat_name(condition=condition,
+                                   samples=samples,
+                                   marked_obs_to_ignore=marked_obs_to_ignore) 
         df_kfda = self.df_kfdat_contributions if contrib else self.df_kfdat
+
         kfda = np.log(df_kfda[name]) if log else df_kfda[name]
         kfda = kfda[~kfda.isna()]
         return(kfda) 
@@ -570,7 +574,9 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
 
 
-def ktest_from_xy(x,y,names='xy',kernel=init_kernel_params()):
+def ktest_from_xy(x,y,names='xy',kernel=None):
+    if kernel is None:
+        kernel = init_kernel_params()
     x = pd.DataFrame(x,columns = [str(i) for i in range(x.shape[1])])
     y = pd.DataFrame(y,columns = [str(i) for i in range(x.shape[1])])
     data = pd.concat([x,y])

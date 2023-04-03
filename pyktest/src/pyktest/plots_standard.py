@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from .kernel_statistics import Statistics
 from .utils_plot import init_plot_kfdat,init_plot_pvalue,text_truncations_of_interest
-
+from .utils_matplotlib import custom_histogram,highlight_on_histogram
 from .kernel_statistics import Statistics
 
 
@@ -144,7 +144,7 @@ class Plot_Standard(Statistics):
                                 title=title,title_fontsize=title_fontsize,log=log)
     
         if columns is None:
-            columns = self.df_kfdat.columns
+            columns = self.df_pval.columns
         for c in columns:
             pval = self.get_pvalue(name=c,contrib=contrib,log=log).loc[:t]
             ax.plot(pval,label=c)
@@ -200,11 +200,17 @@ class Plot_Standard(Statistics):
                     legend_fontsize=15,
                     condition=None,
                     samples=None,
+                    highlight=None,
+                    highlight_color=None,
+                    highlight_linewidth=3,
+                    highlight_label=None,
                     samples_colors=None,
-                    marked_obs_to_ignore=None):
+                    marked_obs_to_ignore=None,
+                    kde=True,
+                    kde_bw=.2,
+                    ):
 
         labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -218,33 +224,62 @@ class Plot_Standard(Statistics):
                         marked_obs_to_ignore=marked_obs_to_ignore)
 
         df_proj= self.init_df_proj(proj,name)
-        
+        df_proj = df_proj[proj] if proj in df_proj else df_proj[str(t)]
+        min,max = df_proj.min(),df_proj.max()
         # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
         
         for kprop,vprop in properties.items():
-    #         print(kprop,vprop['mean_plot_args'].keys())
+            # print(kprop,vprop)
             if len(vprop['index'])>0:
                 dfxy = df_proj.loc[df_proj.index.isin(vprop['index'])]
-                dfxy = dfxy[proj] if proj in dfxy else dfxy[str(t)]                        
+                # dfxy = dfxy[proj] if proj in dfxy else dfxy[str(t)]                        
                 
-                ax.hist(dfxy,density=True,histtype='bar',alpha=.5,orientation=orientation,**vprop['hist_args'])
-                if 'label' in vprop['hist_args']:
-                    del(vprop['hist_args']['label'])
-                if 'edgecolor' not in vprop['hist_args']:
-    #                 print(ax._children[-1].__dict__)
-                    vprop['hist_args']['edgecolor'] = ax._children[-1]._facecolor
-                if 'color' not in vprop['hist_args']:
-                    vprop['hist_args']['color'] = ax._children[-1]._facecolor
+                custom_histogram(dfxy,
+                                fig=fig,
+                                ax=ax,
+                                orientation=orientation,
+                                alpha=.5,
+                                label=vprop['hist_args']['label'],
+                                color=vprop['hist_args']['color'],
+                                kde=kde,
+                                kde_bw=kde_bw,
+                                minmax = [min,max]
+                                )
                 
-                ax.hist(dfxy,density=True,histtype='step',lw=3,orientation=orientation,**vprop['hist_args'])
-                
+
                 # si je voulais faire des mean qui correspondent à d'autre pop que celles des histogrammes,
                 # la solution la plus simple serait de faire une fonction spécifique 'plot_mean_hist' par ex
                 # dédiée au tracé des lignes verticales correspondant aux means que j'appelerais séparément. 
-                if orientation =='vertical':
-                    ax.axvline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
-                else:
-                    ax.axhline(dfxy.mean(),c=vprop['hist_args']['color'],lw=1.5)
+
+        
+        for kprop,vprop in properties.items():
+            if len(vprop['index'])>0:
+                if highlight is not None and type(highlight)==str:
+                    if highlight in self.obs and self.obs[highlight].dtype == bool:
+                        highlight = self.obs[self.obs[highlight]].index
+
+                if highlight is not None and vprop['index'].isin(highlight).sum()>0:
+                    
+                    c = highlight_color if highlight_color is not None else \
+                            vprop['plot_args']['color'] if 'color' in vprop['plot_args'] else \
+                            vprop['mean_plot_args']['color'] if 'mean_plot_args' in vprop and 'color' in vprop['mean_plot_args'] \
+                            else 'xkcd:cyan'
+                    dfxy = df_proj.loc[df_proj.index.isin(vprop['index'])]
+                    # dfxy = dfxy[proj] if proj in dfxy else dfxy[str(t)]                        
+                    ihighlight = vprop['index'][vprop['index'].isin(highlight)]
+                    data_highlight = dfxy.loc[dfxy.index.isin(ihighlight)] 
+                    
+                    highlight_on_histogram(data=data_highlight,
+                                            fig=fig,
+                                            ax=ax,
+                                            orientation=orientation,
+                                            label=highlight_label,
+                                            color=c,
+                                            marker='*',
+                                            coef_bins=3,
+                                            linewidths=highlight_linewidth,
+                                            means=True)
+
 
         if orientation == 'vertical':
             ax.set_xlabel(self.get_axis_label(proj,t),fontsize=25)
@@ -564,7 +599,6 @@ class Plot_Standard(Statistics):
 
 
         labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -598,18 +632,17 @@ class Plot_Standard(Statistics):
                 x_ = x_[p1] if p1 in x_ else x_[str(p1)]                        
                 y_ = y_[p2] if p2 in y_ else y_[str(p2)]                        
                 
-
-
-                # alpha = .2 if text else .8
-                # print(len(x_),len(y_)) 
                 ax.scatter(x_,y_,s=30,alpha=alpha,**vprop['plot_args'])
                 if 'mean_plot_args' in vprop and 'color' not in vprop['mean_plot_args']:
                     vprop['mean_plot_args']['color'] = ax._children[-1]._facecolors[0]
                     
         for kprop,vprop in properties.items():
             if len(vprop['index'])>0:
-                x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])][f'{p1}']
-                y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])][f'{p2}']
+                x_ = df_abscisse.loc[df_abscisse.index.isin(vprop['index'])]
+                y_ = df_ordonnee.loc[df_ordonnee.index.isin(vprop['index'])]
+                
+                x_ = x_[p1] if p1 in x_ else x_[str(p1)]                        
+                y_ = y_[p2] if p2 in y_ else y_[str(p2)]                        
                 
                 if highlight is not None and type(highlight)==str:
                     if highlight in self.obs and self.obs[highlight].dtype == bool:
@@ -625,11 +658,12 @@ class Plot_Standard(Statistics):
                         vprop['mean_plot_args']['color'] if 'mean_plot_args' in vprop and 'color' in vprop['mean_plot_args'] \
                         else 'xkcd:neon purple'
                     ax.scatter(xhighlight_,yhighlight_,color=c,s=100,marker='*',edgecolor='black',linewidths=1)    
+                    ax.scatter(xhighlight_.mean(),yhighlight_.mean(),color=c,s=200,marker='*',edgecolor='black',linewidths=3,label=f'({len(ihighlight)})')    
                     
                 if 'mean_plot_args' in vprop:
                     mx_ = x_.mean()
                     my_ = y_.mean()
-                    ax.scatter(mx_,my_,edgecolor='black',linewidths=1.5,s=200,**vprop['mean_plot_args'],alpha=1)
+                    ax.scatter(mx_,my_,edgecolor='black',linewidths=1.5,s=300,**vprop['mean_plot_args'],alpha=1)
 
                     if text :
                         texts += [ax.text(mx_,my_,kprop,fontsize=20)]
@@ -669,13 +703,13 @@ class Plot_Standard(Statistics):
         return(fig,axes)
 
 
-    def density_projs(self,fig=None,axes=None,proj='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True):
+    def density_projs(self,fig=None,axes=None,proj='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True,highlight=None):
         fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
                                         kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
         if not isinstance(axes,np.ndarray):
             axes = [axes]
         for ax,t in zip(axes,projections):
-            self.density_proj(t=t,proj=proj,name=name,fig=fig,ax=ax,show_conditions=show_conditions)
+            self.density_proj(t=t,proj=proj,name=name,fig=fig,ax=ax,show_conditions=show_conditions,highlight=highlight)
         fig.tight_layout()
         return(fig,axes)
 
@@ -719,8 +753,14 @@ class Plot_Standard(Statistics):
                     legend_fontsize=15,
                     condition=None,
                     samples=None,
+                    highlight=None,
+                    highlight_color=None,
+                    highlight_linewidth=3,
+                    highlight_label=None,
                     samples_colors=None,
                     marked_obs_to_ignore=None,
+                    kde=False,
+                    kde_bw=.2,
                     verbose=0):
 
         self.projections(t=t,condition=condition,samples=samples,
@@ -740,10 +780,17 @@ class Plot_Standard(Statistics):
                         fig=fig,ax=ax,
                         show_conditions=show_conditions,
                         legend_fontsize=legend_fontsize,
+                        highlight=highlight,
+                        highlight_color=highlight_color,
+                        highlight_linewidth=highlight_linewidth,
+                        highlight_label=highlight_label,
                         condition=condition,
                         samples=samples,
                         samples_colors=samples_colors,
-                        marked_obs_to_ignore=marked_obs_to_ignore)
+                        marked_obs_to_ignore=marked_obs_to_ignore,
+                        kde=kde,
+                        kde_bw=kde_bw,
+                        )
         return(fig,ax)
 
 
@@ -753,10 +800,21 @@ class Plot_Standard(Statistics):
                               ax=None,
                               show_conditions=True,
                               orientation='vertical',
+                              highlight=None,
+                    highlight_label=None,
                               legend_fontsize=15):
         mmd_name = self.get_mmd_name()
-        fig,ax = self.density_proj(t='mmd',proj='proj_mmd',name=mmd_name,orientation=orientation,color=color,
-                        fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
+        fig,ax = self.density_proj(t='mmd',proj='proj_mmd',
+                                   name=mmd_name,
+                                   orientation=orientation,
+                                   color=color,
+                                   fig=fig,
+                                   ax=ax,
+                                   show_conditions=show_conditions,
+                                   legend_fontsize=legend_fontsize,
+                                   highlight=highlight,
+                                    highlight_label=highlight_label,
+                                   )
         return(fig,ax)
         
     def hist_tmmd_discriminant(self,
@@ -766,10 +824,21 @@ class Plot_Standard(Statistics):
                                ax=None,
                                show_conditions=True,
                                orientation='vertical',
+                               highlight=None,
+                    highlight_label=None,
                                legend_fontsize=15):
         mmd_name = self.get_mmd_name()
-        fig,ax = self.density_proj(t=t,proj='proj_tmmd',name=mmd_name,orientation=orientation,color=color,
-                        fig=fig,ax=ax,show_conditions=show_conditions,legend_fontsize=legend_fontsize)
+        fig,ax = self.density_proj(t=t,
+                                   proj='proj_tmmd',
+                                   name=mmd_name,
+                                   orientation=orientation,
+                                   color=color,
+                                   fig=fig,
+                                   ax=ax,
+                                   show_conditions=show_conditions,
+                                   legend_fontsize=legend_fontsize,
+                                   highlight=highlight,
+                                   highlight_label=highlight_label)
         return(fig,ax)
 
     def hist_pc(self,
@@ -783,6 +852,8 @@ class Plot_Standard(Statistics):
                 condition=None,
                 samples=None,
                 samples_colors=None,
+                highlight=None,
+                highlight_label=None,
                 marked_obs_to_ignore=None,
                 verbose=0):
 
@@ -807,6 +878,8 @@ class Plot_Standard(Statistics):
                         condition=condition,
                         samples=samples,
                         samples_colors=samples_colors,
+                        highlight=highlight,
+                    highlight_label=highlight_label,
                         marked_obs_to_ignore=marked_obs_to_ignore)
 
         

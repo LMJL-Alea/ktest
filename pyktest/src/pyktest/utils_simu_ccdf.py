@@ -179,27 +179,27 @@ def post_traitement_ccdf_of_dataframes(dfpval,dfBH,t,dict_hyperparams={}):
 
     return(results)
     
-def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
-    """
-    Computes the performances of an univariate two sample test applied to a dataset corresponding to ccdf 
-    Attention il a peut-être un problème avec les calculs de DE,DM et DP 
-    """
-    results = []
-    truth = np.array([1]*1000 + [0]*9000)
-    truth_DE = np.array([1]*250 + [0]*9750)
-    truth_DM = np.array([0]*250 + [1]*250 + [0]*9500)
-    truth_DP = np.array([0]*500 + [1]*250 + [0]*9250)
-    truth_DB = np.array([0]*750 + [1]*250 + [0]*9000)
-    # les H0 sont en inversé pour pouvoir prendre 1- TDR per alternative 
-    truth_EE = np.array([0]*1000 + [1]*4500 + [0]*4500)
-    truth_EB = np.array([0]*1000 + [0]*4500 + [1]*4500)
+# def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
+#     """
+#     Computes the performances of an univariate two sample test applied to a dataset corresponding to ccdf 
+#     Attention il a peut-être un problème avec les calculs de DE,DM et DP 
+#     """
+#     results = []
+#     truth = np.array([1]*1000 + [0]*9000)
+#     truth_DE = np.array([1]*250 + [0]*9750)
+#     truth_DM = np.array([0]*250 + [1]*250 + [0]*9500)
+#     truth_DP = np.array([0]*500 + [1]*250 + [0]*9250)
+#     truth_DB = np.array([0]*750 + [1]*250 + [0]*9000)
+#     # les H0 sont en inversé pour pouvoir prendre 1- TDR per alternative 
+#     truth_EE = np.array([0]*1000 + [1]*4500 + [0]*4500)
+#     truth_EB = np.array([0]*1000 + [0]*4500 + [1]*4500)
     
-    perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
-         'DE':TDR_per_alternative(xBH,truth_DE),'DM':TDR_per_alternative(xBH,truth_DM),
-         'DP':TDR_per_alternative(xBH,truth_DP),'DB':TDR_per_alternative(xBH,truth_DB),
-         'EE':1-TDR_per_alternative(x,truth_EE),'EB':1-TDR_per_alternative(x,truth_EB)
-        } 
-    return([{**perfs,**dict_hyperparams}])
+#     perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
+#          'DE':TDR_per_alternative(xBH,truth_DE),'DM':TDR_per_alternative(xBH,truth_DM),
+#          'DP':TDR_per_alternative(xBH,truth_DP),'DB':TDR_per_alternative(xBH,truth_DB),
+#          'EE':1-TDR_per_alternative(x,truth_EE),'EB':1-TDR_per_alternative(x,truth_EB)
+#         } 
+#     return([{**perfs,**dict_hyperparams}])
 
 def parallel_post_traitement_ccdf(dict_of_dfs_pval,dict_of_dfs_BH,stat,t,fixed_dict_params,n_jobs=6):
     params = list(dict_of_dfs_pval.keys())
@@ -253,11 +253,14 @@ def post_traitement_ccdf_of_column(x,xBH,dict_hyperparams={}):
     truth_EE = np.array([0]*1000 + [1]*4500 + [0]*4500)
     truth_EB = np.array([0]*1000 + [0]*4500 + [1]*4500)
     
-    perfs = {'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),
-            'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
-         'DE':TDR_per_alternative(x,truth_DE),'DM':TDR_per_alternative(x,truth_DM),
-         'DP':TDR_per_alternative(x,truth_DP),'DB':TDR_per_alternative(x,truth_DB),
-         'EE':TDR_per_alternative(x,truth_EE),'EB':TDR_per_alternative(x,truth_EB)
+    perfs = {
+        # Je pense que c'est la bonne façon de faire mais 
+        # je suis curieux des résultats sur les pval corrigées
+        'fdr':FDR(xBH,truth),'tpr':TDR(xBH,truth),
+        'pwr':stat_power(x,truth),'ti_err':typeI_error(x,truth),
+        'DE':TDR_per_alternative(x,truth_DE),'DM':TDR_per_alternative(x,truth_DM),
+        'DP':TDR_per_alternative(x,truth_DP),'DB':TDR_per_alternative(x,truth_DB),
+        'EE':TDR_per_alternative(x,truth_EE),'EB':TDR_per_alternative(x,truth_EB)
         } 
     return([{**perfs,**dict_hyperparams}])
 

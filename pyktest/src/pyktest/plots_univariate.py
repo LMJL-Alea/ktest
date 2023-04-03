@@ -43,11 +43,32 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             ax.axvline(t,ls='--',alpha=.8)
         return(fig,axes)
 
-    def plot_density_of_variable(self,variable,fig=None,ax=None,color=None):
+    def plot_density_of_variable(self,
+                                 variable,
+                                 fig=None,
+                                 ax=None,
+                                 color=None,
+                                 highlight=None,
+                                 highlight_label=None,
+                                 kde=False,
+                                 kde_bw=.2,
+                                 samples_colors=None,
+                                 condition=None,
+                                 samples=None):
         if fig is None:
             fig,ax =plt.subplots(figsize=(10,6))
             
-        self.density_proj(t=0,proj=variable,fig=fig,ax=ax,color=color)
+        self.density_proj(t=0,
+                          proj=variable,
+                          fig=fig,
+                          ax=ax,
+                          color=color,
+                          highlight=highlight,
+                        highlight_label=highlight_label,
+                          kde=kde,kde_bw=kde_bw,
+                            condition=condition,
+                            samples=samples,
+                            samples_colors=samples_colors,)
         
         title = f'{variable}\n'
         zero_proportions = self.compute_zero_proportions_of_variable(variable)
@@ -134,12 +155,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         ax.set_xlim(-1,t+1)
         return(fig,ax)
 
-    def plot_pvalue_of_variable(self,variable,name=None,t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None):
+    def plot_pvalue_of_variable(self,variable,name=None,t=30,fig=None,ax=None,truncations_of_interest=[1,3,5],adjust=True,color=None,ls=None,label=None,corrected=True):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
 
-        pval = [self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='pval')][variable] \
+        pval = [self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='pval',corrected=corrected)][variable] \
             for trunc in range(1,t)]
         label = f'{variable} p-value' if label is None else label
         ax.plot(range(1,t),pval,label=label,color=color,ls=ls)
@@ -147,32 +168,69 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             text_truncations_of_interest(truncations_of_interest,ax,[0]+pval,adjust=adjust)
         ax.set_ylim(-.05,1.05)  
         ax.legend(fontsize=20)
-    def plot_discriminant_of_expression_univariate(self,variable,t,
+
+    def plot_discriminant_of_expression_univariate_with_surroundings(self,variable,t,
                                                 color=None,marker=None,highlight=None,
+                                                samples_colors=None,
                                                 previous_discriminant=False,
+                                                kde=False,kde_bw =.2,
+                                                condition=None,
+                                                samples=None,
+                                                pval_t=None,
+                                                figsize=(15,7.5),
+                                                height_ratios=[1,2],
+                                                width_ratios=[3,2]
                                                 ):
         
-        fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
-        axd = fig.subplot_mosaic("AB\nCD",gridspec_kw=dict(height_ratios=[1, 2],width_ratios=[3,2]),)
+        fig = plt.figure(figsize=figsize,constrained_layout=True)
+        axd = fig.subplot_mosaic("AB\nCD",
+                                 gridspec_kw=dict(height_ratios=height_ratios,
+                                                  width_ratios=width_ratios),)
         
         
         # Pval and errors 
-        self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[t],adjust=False)
-        
-        self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
-        self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
-                        color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        if previous_discriminant and t>1:
-            self.scatter_proj(projection=[variable,t-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
-                        color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'],
-                        alpha=.2,legend=False)
-        self.hist_discriminant(t=t,fig=fig,ax=axd['D'],orientation='horizontal')
+        if pval_t is not None: 
+            self.plot_pval_and_errors(t=pval_t,
+                                    fig=fig,
+                                    ax=axd['B'],
+                                    truncations_of_interest=[t],
+                                    pval_aggregated=True,pval_contrib=False,
+                                    var_within=False,var_conditions=False,
+                                    kfdr=True,
+                                    diff=False,grid=True,
+                                    alpha=.8)
+            axd['B'].legend(fontsize=15)
+
+        else:
+            axd['B'].set_axis_off()
+
+        self.plot_density_of_variable(variable=variable,
+                                      fig=fig,
+                                      ax=axd['A'],
+                                      color=color,
+                                      highlight=highlight,
+                                      kde=kde,
+                                      kde_bw=kde_bw,
+                                      samples_colors=samples_colors,
+                                      condition=condition,
+                                      samples=samples)
+
+        self.plot_discriminant_of_expression_univariate(variable=variable,
+                                                        t=t,
+                                                        color=color,
+                                                        marker=marker,
+                                                        highlight=highlight,
+                                                        previous_discriminant=previous_discriminant,
+                                                        fig=fig,
+                                                        ax=axd['C']
+                                                        )
+        self.hist_discriminant(t=t,fig=fig,ax=axd['D'],orientation='horizontal',kde=kde,kde_bw=kde_bw)
         
         axd['A'].legend([])
         axd['A'].set_xlabel('')
         axd['B'].set_xlabel('')
         axd['B'].set_ylabel('')
-        axd['B'].legend(fontsize=15)
+        axd['C'].set_ylabel('')
         axd['C'].set_title('')
         axd['D'].legend([])
         axd['D'].set_title(f'Discriminant t={t}',fontsize=30)
@@ -181,17 +239,49 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         #     axd['A'].set_title(f'{g} expression',fontsize=30)
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         #     axd['A'].legend(bbox_to_anchor=(.98,1.02),fontsize=30)
-        pval = self.df_pval[self.get_kfdat_name()].loc[t]
-        title = f'{variable} DA{t} pval='
-        title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
-        fig.suptitle(title,fontsize=30,y=1.02)
+        # title = f'{variable} t={t}'
+        # fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()
         
         return(fig,axd)
 
-    def plot_mmd_discriminant_of_expression_univariate(self,variable,t,
+    def plot_discriminant_of_expression_univariate(self,variable,t,
                                                 color=None,marker=None,highlight=None,
                                                 previous_discriminant=False,
+                                                fig=None,ax=None,
+                                                ):
+        if fig is None:
+            fig,ax = plt.subplots(figsize=(12,6))        
+
+        self.scatter_proj(projection=[variable,t],
+                          xproj=variable,
+                          yproj='proj_kfda',
+                          yname=self.get_kfdat_name(),
+                          color=color,
+                          marker=marker,
+                          highlight=highlight,
+                          fig=fig,ax=ax)
+        if previous_discriminant and t>1:
+            self.scatter_proj(projection=[variable,t-1],
+                              xproj=variable,
+                              yproj='proj_kfda',
+                              yname=self.get_kfdat_name(),
+                              color=color,
+                              marker=marker,
+                              highlight=highlight,
+                              fig=fig,ax=ax,
+                              alpha=.2,
+                              legend=False)
+        return(fig,ax)
+
+    def plot_mmd_discriminant_of_expression_univariate(self,
+                                                       variable,
+                                                       t,
+                                                       color=None,
+                                                       marker=None,
+                                                       highlight=None,
+                                                        highlight_label=None,
+                                                        previous_discriminant=False,
                                                 ):
 
         fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
@@ -201,7 +291,12 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         # Pval and errors 
     #     self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
 
-        self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
+        self.density_proj(t=variable,
+                          proj=variable,
+                          fig=fig,
+                          ax=axd['A'],
+                          highlight=highlight,
+                    highlight_label=highlight_label)
         
         self.scatter_proj(projection=[variable,t],xproj=variable,yproj=yproj,yname=self.get_mmd_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
@@ -235,8 +330,13 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         return(fig,axd)
 
-    def plot_pc_of_expression_univariate(self,variable,t,
-                                                color=None,marker=None,highlight=None,
+    def plot_pc_of_expression_univariate(self,
+                                         variable,
+                                         t,
+                                         color=None,
+                                         marker=None,
+                                         highlight=None,
+                                    highlight_label=None,
                                                 ):
         
         fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
@@ -246,8 +346,14 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         toi = [t] if t <=30 else []
         self.plot_pval_and_errors(t=30,fig=fig,ax=axd['B'],truncations_of_interest=toi,adjust=False)
         
-        self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
-        self.scatter_proj(projection=[variable,trutc],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
+        self.density_proj(t=variable,
+                          proj=variable,
+                          fig=fig,
+                          ax=axd['A'],
+                          highlight=highlight,
+                    highlight_label=highlight_label,
+                          )
+        self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
         self.hist_pc(t=t,fig=fig,ax=axd['D'],orientation='horizontal')
         axd['A'].legend([])
@@ -270,9 +376,14 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         
         return(fig,axd)
 
-    def plot_pc_and_discriminant_of_expression_univariate(self,variable,t,
-                                                color=None,marker=None,highlight=None,
-                                                previous_discriminant=False):
+    def plot_pc_and_discriminant_of_expression_univariate(self,  
+                                                        variable,
+                                                        t,
+                                                        color=None,
+                                                        marker=None,
+                                                        highlight=None,
+                                                        highlight_label=None,
+                                                        previous_discriminant=False):
         
         fig = plt.figure(figsize=(15,15),constrained_layout=True)
         axd = fig.subplot_mosaic("AB\nCD\nEF",gridspec_kw=dict(height_ratios=[1, 2,2],width_ratios=[3,2]),)
@@ -280,7 +391,13 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[t],adjust=False)
         
         # expression
-        self.density_proj(t=variable,proj=variable,fig=fig,ax=axd['A'])
+        self.density_proj(t=variable,
+                          proj=variable,
+                          fig=fig,
+                          ax=axd['A'],
+                          highlight=highlight,
+                        highlight_label=highlight_label,
+                          )
         
         # PC
         self.scatter_proj(projection=[variable,t],xproj=variable,yproj='proj_kpca',yname=self.get_kfdat_name(),
