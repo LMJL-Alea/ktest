@@ -160,7 +160,7 @@ class NystromOps(OutliersOps,Verbosity):
                         if verbose >2:
                             print(f'\tnon-zero {nz} < {n_landmarks} : forcing non-zero obs in landmarks')
                         index_nz = data[data[c]!=0].index
-                        index_z = data[data[c]==0].index[:n_landmarks-nz+1]
+                        index_z = data[data[c]==0].index[:n_landmarks-nz]
                         index_landmarks = index_nz.union(index_z)
                     else:
                         if verbose >2:
