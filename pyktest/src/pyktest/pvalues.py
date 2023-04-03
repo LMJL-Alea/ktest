@@ -4,7 +4,7 @@ from scipy.stats import chi2
 import pandas as pd
 from joblib import parallel_backend
 from joblib import Parallel, delayed
-
+import warnings
 """
 Ces fonctions gèrent tout ce qui est relatif aux pvaleurs. 
 Je n'ai jamais pris le temps d'ajouter des fonctions spécifiques à des pvaleurs obtenues par permutation.
@@ -82,8 +82,10 @@ class Pvalues:
         kfda = self.get_kfda(contrib=False).to_frame()
         kfda_contrib = self.get_kfda(contrib=True).to_frame()
         
-        self.df_pval[kn] = kfda.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
-        self.df_pval_contributions[kn] = kfda_contrib.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.df_pval[kn] = kfda.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
+            self.df_pval_contributions[kn] = kfda_contrib.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
 
 
 
