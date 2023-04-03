@@ -5,6 +5,7 @@
 import torch
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 
 """
 Ces fonctions déterminent la fonction noyau 
@@ -80,12 +81,50 @@ def gauss_kernel(x, y, sigma=1):
     K = torch.exp(-d / (2 * sigma**2))  # Gram matrix
     return K
 
-def gauss_kernel_mediane(x,y,return_mediane=False,verbose=0):
-    m = mediane(x, y,verbose=verbose)
+def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=False,verbose=0):
+    if bandwidth == 'median':
+        computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+    else:
+        computed_bandwidth = bandwidth * median_coef
+    kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
     if return_mediane:
-        return ( lambda x, y: gauss_kernel(x,y,m), m.item() )
+        return ( kernel, computed_bandwidth )
     else: 
-        return lambda x, y: gauss_kernel(x,y,m)
+        return kernel
+
+def gauss_kernel_mediane_zi(x,y,median_coef=1,return_mediane=False,verbose=0):
+    xnz=x[x[:,0]!=0]
+    ynz=y[y[:,0]!=0]
+    kernel,mediane= gauss_kernel_mediane(xnz,ynz,
+                                         median_coef=median_coef,
+                                         return_mediane=return_mediane,verbose=verbose)
+    if return_mediane:
+        return ( kernel, mediane )
+    else: 
+        return kernel
+
+
+
+def fisher_zero_inflated_gaussian_kernel(x,y,pi1,pi2,bandwidth='median',median_coef=1,return_mediane=False,verbose=0):
+    if bandwidth == 'median':
+        kernel,computed_bandwidth=gauss_kernel_mediane_zi(x,y,median_coef=median_coef,return_mediane=True,verbose=verbose)  
+    else:
+        computed_bandwidth = bandwidth * median_coef
+        kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
+    
+    def zi_kernel(x,y):
+        k = kernel(x,y)
+        n1,n2 = k.shape
+        z_z = torch.ones([n1,n2])*pi1*pi2
+        z_nz = pi1 * (1-pi2) * torch.tensor(norm.pdf(0,loc=y,scale=computed_bandwidth).repeat(len(x),1)).T
+        nz_z = (1-pi1) * pi2 * torch.tensor(norm.pdf(0,loc=x,scale=computed_bandwidth).repeat(len(y),1))
+        nz_nz = (1-pi1)*(1-pi2) * k
+        return(z_z+z_nz+nz_z+nz_nz)
+    
+    if return_mediane:
+        return ( zi_kernel, computed_bandwidth )
+    else: 
+        return zi_kernel
 
 def corrected_variance_mediane( x, y,variance_per_gene,verbose=0):
     variance_per_gene = torch_transformator(variance_per_gene)
