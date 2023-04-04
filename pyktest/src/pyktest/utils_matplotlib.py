@@ -166,7 +166,8 @@ def custom_histogram(data,
                      minmax=None,
                      yshift=0,
                      ):
-
+    if kde and len(data[data==0]) == len(data):
+        kde=False
     if kde:
         fig,ax,color=custom_rug(data=data,
                fig=fig,

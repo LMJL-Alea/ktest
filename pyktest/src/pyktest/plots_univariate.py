@@ -286,7 +286,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
         fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
         axd = fig.subplot_mosaic("AB\nCD",gridspec_kw=dict(height_ratios=[1, 2],width_ratios=[3,2]),)
-        yproj = 'proj_mmd' if t == 'mmd' else 'proj_tmmd'
+        yproj = 'proj_mmd' if t == 'mmd' else 'proj_unidirectional_mmd'
 
         # Pval and errors 
     #     self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
@@ -307,7 +307,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         if t == 'mmd':
             self.hist_mmd_discriminant(fig=fig,ax=axd['D'],orientation='horizontal')
         else:
-            self.hist_tmmd_discriminant(t,fig=fig,ax=axd['D'],orientation='horizontal')
+            self.hist_unidirectional_mmd_discriminant(t,fig=fig,ax=axd['D'],orientation='horizontal')
             
         axd['A'].legend([])
         axd['A'].set_xlabel('')

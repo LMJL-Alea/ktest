@@ -60,7 +60,7 @@ class Base:
         self.df_proj_kfda = {}
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
-        self.df_proj_tmmd = {}
+        self.df_proj_unidirectional_mmd = {}
         self.df_proj_residuals = {}
         
         # Eigenvectors
@@ -772,6 +772,18 @@ class Base:
 
 
     def init_df_proj(self,proj,name=None,data_name=None):
+        '''
+        Returns the desired projection dataframe  
+        
+        Parameters
+        ----------
+            proj : str 
+                if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_unidirectional_mmd','proj_residuals']
+
+
+        '''
+
+
         if data_name is None:
             data_name = self.current_data_name
         if proj == 'proj_kfda':
@@ -780,21 +792,19 @@ class Base:
             df_proj = self.get_proj_kpca(name=name)
         elif proj == 'proj_mmd':
             df_proj = self.get_proj_mmd(name=name)
-        elif proj == 'proj_tmmd':
-            df_proj = self.get_proj_tmmd(name=name)
+        elif proj == 'proj_unidirectional_mmd':
+            df_proj = self.get_proj_unidirectional_mmd(name=name)
         elif proj == 'proj_residuals':
             df_proj = self.get_proj_residuals(name=name)
 
         elif proj in self.var[data_name].index:
             df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
-        elif proj =='obs':
-            df_proj = self.obs
+        elif proj in self.obs:
+            df_proj = self.obs[proj]
         else:
             print(f'{proj} not recognized')
 
         return(df_proj)
-
-
 
 
     def get_proj_kfda(self,name=None):
@@ -821,13 +831,13 @@ class Base:
         else:
             print(f"proj mmd '{name}' has not been computed yet")
 
-    def get_proj_tmmd(self,name=None):
+    def get_proj_unidirectional_mmd(self,name=None):
         if name is None:
             name = self.get_mmd_name()
         if name in self.df_proj_mmd:
-            return(self.df_proj_tmmd[name])
+            return(self.df_proj_unidirectional_mmd[name])
         else:
-            print(f"proj tmmd '{name}' has not been computed yet")
+            print(f"proj unidirectional mmd '{name}' has not been computed yet")
 
     def get_proj_residuals(self,name=None):
         if name is None:
