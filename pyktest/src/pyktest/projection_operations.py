@@ -85,7 +85,7 @@ class ProjectionOps(KernelTrick):
         return(proj_name)
         
 
-    def compute_proj_on_tMMD(self,t=None,verbose=0):
+    def compute_proj_on_unidirectional_mmd(self,t=None,verbose=0):
         
         self.verbosity(function_name='compute_proj_on_eigenvectors',
                     dict_of_variables={
@@ -147,28 +147,28 @@ class ProjectionOps(KernelTrick):
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
         to the MMD statistic with a truncation parameter equal to t and with no truncation and stores 
-        the results as column of the attribute `df_proj_mmd` et df_proj_tmmd. 
+        the results as column of the attribute `df_proj_mmd` et df_proj_unidirectional_mmd. 
         
         """
 
         mmd_name = self.get_mmd_name()
         
-        if mmd_name in self.df_proj_mmd and (mmd_name in self.df_proj_tmmd and str(t) in self.df_proj_tmmd[mmd_name]):
+        if mmd_name in self.df_proj_mmd and (mmd_name in self.df_proj_unidirectional_mmd and str(t) in self.df_proj_unidirectional_mmd[mmd_name]):
             if verbose : 
                 print('Proj on MMD discriminant axis Already computed')
 
         else:
-            proj_tmmd,t = self.compute_proj_on_tMMD(t=t,verbose=verbose)
-            proj_tmmd = proj_tmmd.cumsum(axis=1)
+            proj_unidirectional_mmd,t = self.compute_proj_on_unidirectional_mmd(t=t,verbose=verbose)
+            proj_unidirectional_mmd = proj_unidirectional_mmd.cumsum(axis=1)
             proj_mmd = self.compute_proj_on_MMD(verbose=verbose)
             trunc = range(1,t+1) 
         
             if mmd_name in self.df_proj_mmd:
                 print(f"écrasement de {mmd_name} dans df_proj_mmd")
-            if mmd_name in self.df_proj_tmmd:
-                print(f"écrasement de {mmd_name} dans df_proj_tmmdkpca")
+            if mmd_name in self.df_proj_unidirectional_mmd:
+                print(f"écrasement de {mmd_name} dans df_proj_unidirectional_mmd")
             self.df_proj_mmd[mmd_name] = pd.DataFrame(proj_mmd,index= self.get_index(in_dict=False),columns=['mmd'])
-            self.df_proj_tmmd[mmd_name] = pd.DataFrame(proj_tmmd,index= self.get_index(in_dict=False),columns=[str(t) for t in trunc])
+            self.df_proj_unidirectional_mmd[mmd_name] = pd.DataFrame(proj_unidirectional_mmd,index= self.get_index(in_dict=False),columns=[str(t) for t in trunc])
         return(mmd_name)
 
 

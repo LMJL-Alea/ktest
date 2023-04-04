@@ -817,7 +817,7 @@ class Plot_Standard(Statistics):
                                    )
         return(fig,ax)
         
-    def hist_tmmd_discriminant(self,
+    def hist_unidirectional_mmd_discriminant(self,
                                t,
                                color=None,
                                fig=None,
@@ -829,7 +829,7 @@ class Plot_Standard(Statistics):
                                legend_fontsize=15):
         mmd_name = self.get_mmd_name()
         fig,ax = self.density_proj(t=t,
-                                   proj='proj_tmmd',
+                                   proj='proj_unidirectional_mmd',
                                    name=mmd_name,
                                    orientation=orientation,
                                    color=color,
