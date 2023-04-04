@@ -209,6 +209,29 @@ class Residuals(Statistics):
         return(residuals_name)
 
     def residuals(self,t=None,ndirections=10,center='w'):
+        """
+        Computes the residual projections, namely the projections of the observations 
+        on the principal components of a covariance structure computed on the space orthogonal 
+        to the discriminant axis.  
+
+        Parameters 
+        ----------
+            t : int 
+                Truncation from which the orthogonal space is defined
+
+            ndirections : int
+                Number of principal components to compute in the residual space 
+                (in practice we only focus on the first one)
+
+            center (default = 'w'): str in ['k','s','w']
+                Defines the covariance structure to determine the principal components of 
+                in the residual space.
+                k : second order moment of the embeddings in the residual space
+                s : total covariance structure of the embeddings in the residual space
+                w : within-group covariance operator
+                
+        """
+
         self.diagonalize_residual_covariance(t=t,center=center)
         self.proj_residus(t=t,ndirections=ndirections,center=center)
 

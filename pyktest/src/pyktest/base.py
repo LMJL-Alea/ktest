@@ -520,6 +520,21 @@ class Base:
                            update_current_data_name = update_current_data_name,verbose=verbose)
 
     def get_samples_list(self,condition=None,samples=None,marked_obs_to_ignore=None):
+        """
+        Returns a list containing the names of the samples of interest. 
+
+        Parameters
+        ----------
+            condition (default = None): str
+                Column of the metadata that specify the dataset    
+           
+            samples (default = None): str 
+                List of values to select in the column condition of the metadata
+            
+            marked_obs_to_ignore (default = None): str
+                Column of the metadata specifying the observations to ignore
+
+        """
         condition = self.condition if condition is None else condition
         samples = self.samples if samples is None else samples    
 
@@ -529,7 +544,29 @@ class Base:
         return(self.obs[~self.obs.index.isin(marked_obs)][condition].cat.categories.to_list() if samples == 'all' else samples)    
 
     def get_index(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,in_dict=True):
+        """
+        Returns the index of the observations of the Ktest object.
 
+        Parameters
+        ----------
+            landmarks (default = False) : bool
+                if True, focuses on the nystrom landmarks
+                else, focuses on the observations. 
+      
+            condition (default = None): str
+                Column of the metadata that specify the dataset  
+  
+            samples (default = None): str 
+                List of values to select in the column condition of the metadata
+            
+            marked_obs_to_ignore (default = None): str
+                Column of the metadata specifying the observations to ignore
+
+            in_dict (default = True) : bool
+                if True : returns a dictionary of the outputs associated to each sample
+                else : returns an unique object containing all the outputs     
+
+        """
         if landmarks:
             assert(self.has_landmarks)
 
@@ -659,6 +696,15 @@ class Base:
         return(pd.DataFrame(x,i,v))
 
     def get_variables(self,data_name=None):
+        """
+        Returns the list of variables of the data
+
+        Parameters
+        ----------
+            data_name (default = None): str
+                Refers to the array of interest if needed
+        
+        """
         if data_name is None:
             data_name = self.data_name
         return(self.data[data_name]['variables'])
@@ -773,13 +819,29 @@ class Base:
 
     def init_df_proj(self,proj,name=None,data_name=None):
         '''
-        Returns the desired projection dataframe  
+        Returns the desired dataframe  
         
         Parameters
         ----------
             proj : str 
                 if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_unidirectional_mmd','proj_residuals']
+                    returns a dataframe containing the position of each cell on the corresponding axis.
+                    - proj_kfda : discriminant axes 
+                    - proj_kpca : principal components of the within group covariance
+                    - proj_mmd : projection on the MMD-withess function (axis supported by the mean embeddings difference)
+                    - proj_unidirectional_mmd : similar to proj_kpca with a different normalization
+                    - proj_residuals : (`name` has to be specified) projection on the principal components of the within group covariance computed on the space orthogonal to the discriminant axis. 
+                if proj in variables list (self.get_variables()):
+                    returns the value of this variable for each observation
+                if proj in metadata (self.obs.columns)
+                    return the value of this metainformation for each observation
 
+            name (default = None) : str
+                specify the projection asked.
+                Set automatically to the last version of the projection computed.
+
+            data_name (default = None) : str
+                Refers to the considered data assay on which computations have been made. 
 
         '''
 
@@ -797,7 +859,7 @@ class Base:
         elif proj == 'proj_residuals':
             df_proj = self.get_proj_residuals(name=name)
 
-        elif proj in self.var[data_name].index:
+        elif proj in self.get_variables(data_name):
             df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
         elif proj in self.obs:
             df_proj = self.obs[proj]
