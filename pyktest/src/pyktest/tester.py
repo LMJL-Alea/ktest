@@ -660,7 +660,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                         condition=None,
                         samples=None,
                         marked_obs_to_ignore=None,
-                        in_dict = True 
+                        in_dict = False 
                        ):
         """
         Returns the desired cell positions on directions of interest in the feature space.
