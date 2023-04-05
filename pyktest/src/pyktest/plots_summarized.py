@@ -53,7 +53,7 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
             ax.grid(alpha=.2)
 
         n1,n2,n = self.get_n1n2n()
-        samples = list(self.get_index().keys())
+        samples = self.get_samples_list()
         ax.set_title(f'n{samples[0]}={n1} vs n{samples[1]}={n2}',fontsize=30)
 
         if marked_obs_to_ignore is not None:

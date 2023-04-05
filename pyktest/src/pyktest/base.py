@@ -535,14 +535,33 @@ class Base:
                 Column of the metadata specifying the observations to ignore
 
         """
-        condition = self.condition if condition is None else condition
-        samples = self.samples if samples is None else samples    
-
-        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+        condition,samples,marked_obs_to_ignore = self.init_samples_condition_marked(condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=marked_obs_to_ignore)
         marked_obs = self.obs[self.obs[marked_obs_to_ignore]].index if marked_obs_to_ignore is not None else []             
         
         return(self.obs[~self.obs.index.isin(marked_obs)][condition].cat.categories.to_list() if samples == 'all' else samples)    
 
+    def init_samples_condition_marked(self,
+                                      condition=None,
+                                      samples=None,
+                                      marked_obs_to_ignore=None):
+        
+
+        if condition is None:
+            condition = self.condition 
+            
+        if samples is None:
+            if condition == self.condition:
+                samples = self.samples 
+            else : 
+                samples = 'all'
+
+        if marked_obs_to_ignore is None:
+            marked_obs_to_ignore = self.marked_obs_to_ignore 
+            
+        return(condition,samples,marked_obs_to_ignore)
+    
     def get_index(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,in_dict=True):
         """
         Returns the index of the observations of the Ktest object.
@@ -570,9 +589,9 @@ class Base:
         if landmarks:
             assert(self.has_landmarks)
 
-        condition = self.condition if condition is None else condition
-        samples = self.samples if samples is None else samples
-        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
+        condition,samples,marked_obs_to_ignore = self.init_samples_condition_marked(condition=condition,
+                                           samples=samples,
+                                           marked_obs_to_ignore=marked_obs_to_ignore)
             
         samples_list = self.get_samples_list(condition,samples)
         
@@ -958,8 +977,33 @@ class Base:
         self.center_by = center_by      
            
     def set_test_data_info(self,samples='all',condition=None,data_name=None,change_kernel=True,verbose=0):
+        """
+        Set the necessary information to define which test to perform. 
+
+        Parameters
+        ----------
+            samples (default = 'all') : 'all' or list of str
+                List of samples to compare
+
+            condtion : 
+                Column of the metadata containing the samples labels
+
+            data_name : 
+                dataset assay 
+
+            change_kernel (default = True) : bool
+                Recompute the kernel parameters associated to the specific comparison being performed. 
+
+            verbose (default = 0): int
+                The higher, the more verbose.  
+        """
+
+
+        condition,samples,_ = self.init_samples_condition_marked(condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=None)
+
         
-        condition = self.condition if condition is None else condition
         data_name = self.data_name if data_name is None else data_name
 
 
@@ -1008,10 +1052,9 @@ class Base:
     def get_data_to_test_str(self,condition=None,samples=None,marked_obs_to_ignore=None):
 
         dn = self.data_name
-        c = self.condition if condition is None else condition
-        samples = self.samples if samples is None else samples
-        mark = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
-
+        c,samples,mark = self.init_samples_condition_marked(condition=condition,
+                                           samples=samples,
+                                           marked_obs_to_ignore=marked_obs_to_ignore)
 
         # si les conditions et samples peuvent être mis en entrées, cente_by aussi
         smpl = '' if samples == 'all' else "".join(samples)
