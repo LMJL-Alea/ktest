@@ -572,6 +572,210 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             return(self.get_mmd())
 
 
+    def get_diagnostics(self,
+                        t=None,
+                        diff=False,
+                        var_within=False,
+                        var_samples=False,
+                        kfdr=False,
+                        log=False,cumul=False,decreasing=False,):
+        """
+        Returns a dataframe containing information of the method with respect to the truncation parameters. 
+
+        Parameters
+        ----------
+            t (default = None), int 
+                Outputs are returned for truncations below `t`.
+                If None, `t` is set to the maximum possible value 
+                (order of the number of observations taking into account numerical errors)
+
+            diff (default = False) : bool
+                if True, adds the part of the difference between conditions 
+                explained by each principal component to the output.
+                
+            var_within (default = False) : bool
+                if True, adds the within group variability 
+                explained by each principal component to the output.
+            
+            var_samples (default = False) : bool
+                if True, adds the sample variabilities 
+                explained by each principal component to the output.
+                
+            kfdr (default = False) : bool
+                if True, adds the discrimination score 
+                of each principal component to the output.
+                (The score is returned as a ratio of the maximal discrimination
+                 score obtained for the considered truncations to be in [0,1] ) 
+                
+            log (default = False) : bool
+                if True, returns the log of the outputs. 
+            
+            cumul (default = False) : bool
+                if True, returns the cumulated outputs, 
+                i.e. for a truncation t, returns the outputs summed from 1 to t. 
+                
+            decreasing (default = False) : bool
+                if True, returns 1-outputs.            
+        """
+
+        df_diff = pd.DataFrame()
+        df_varw = pd.DataFrame()
+        df_vars = pd.DataFrame()
+        df_kfdr = pd.DataFrame()
+        
+        if diff: 
+            x_diff = self.get_explained_difference(cumul=cumul,log=log,decreasing=decreasing).numpy()
+            x_diff = np.concatenate([np.array([0]),x_diff])
+            df_diff = pd.DataFrame(x_diff,columns=['difference'])
+            df_diff.index = [int(i) for i in df_diff.index]
+        
+        if var_within:
+            x_varw = self.get_explained_variability(within=True,cumul=cumul,log=log,decreasing=decreasing).numpy()
+            x_varw = np.concatenate([np.array([0]),x_varw])
+            df_varw = pd.DataFrame(x_varw,columns=['w-variability'])
+            df_varw.index = [int(i) for i in df_varw.index]
+        if var_samples:
+            x_vars = self.get_explained_variability(within=False,cumul=cumul,log=log,decreasing=decreasing)
+            x_vars = {f'{k}-variability':np.concatenate([np.array([0]),v.to_numpy()]) for k,v in x_vars.items()}
+            df_vars = pd.DataFrame(x_vars)
+            df_vars.index = [int(i) for i in df_vars.index]
+            
+        if kfdr: 
+            x_kfdr = self.compute_directional_kfdr(t=t,cumul=cumul,log=log,decreasing=decreasing).numpy()
+            x_kfdr = np.concatenate([np.array([0]),x_kfdr])
+            df_kfdr = pd.DataFrame(x_kfdr,columns=['discrimination'])
+            df_kfdr.index = [int(i) for i in df_kfdr.index]    
+        df = pd.concat([df_diff,df_varw,df_vars,df_kfdr],axis=1)
+        t = len(df) if t is None else t
+        return(df[:t+1])
+
+
+    def get_projections(self,
+                        t,
+                        discriminant_axis=False,
+                        principal_components=False,
+                        residuals=False,
+                        mmd=False,
+                        unidirectional_mmd=False,
+                        condition=None,
+                        samples=None,
+                        marked_obs_to_ignore=None,
+                        in_dict = True 
+                       ):
+        """
+        Returns the desired cell positions on directions of interest in the feature space.
+
+        Parameters 
+        ----------
+            t : int or iterable of int
+                truncations of interest
+
+            discriminant_axis (default = False) : bool
+                if True, add the cell projections on the discriminant direction to the output
+
+            principal_components (default = False) : bool
+                if True, add the cell projections on the principal components of the within group covariance to the output
+
+            residuals (default = False): bool
+                if True, add the cell projections on the residuals direction (orthogonal to the discriminant axis) to the output
+
+            mmd (default = False) : bool
+                if True, add the cell projections on the  MMD-withess function (axis supported by the mean embeddings difference)
+
+            unidirectionall_mmd (default = None) : bool
+                if True, add a projection similar to proj_kpca with a different normalization to the output
+
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+
+            in_dict (default = True) : bool
+                if True : returns a dictionary of the outputs associated to each sample
+                else : returns an unique object containing all the outputs     
+
+        """
+
+
+        df = pd.DataFrame(index=self.get_index(samples='all',in_dict=False))
+
+
+        # truncation preprocessing, create two lists of int and str truncations.
+        ts = [str(t)] if isinstance(t,int) else [str(t_) for t_ in t]  
+        ts_int = [t] if isinstance(t,int) else [t_ for t_ in t] 
+
+
+        # computes the asked projections if necessary 
+        if any([discriminant_axis,principal_components]):
+            self.projections(np.max(t))
+        if any([mmd,unidirectional_mmd]):
+            self.projections_MMD(np.max(t))
+        if residuals:
+            [self.residuals(t=t) for t in ts_int]
+
+
+        for projection,proj_str,token in zip(
+                                            ['proj_kfda','proj_kpca','proj_unidirectional_mmd'],
+                                            ['discriminant_axis','kpca','unidirectional_mmd'],
+                                            [discriminant_axis,principal_components,unidirectional_mmd]):
+
+            if token:
+                df_proj = self.init_df_proj(projection)
+                if len(ts)==1:
+                    df[proj_str] = df_proj[ts]
+                else:
+                    for t in ts:
+                        df[f'{proj_str}_{t}'] = df_proj[t]
+
+        if residuals:
+            if len(ts_int)==1:
+                residuals_name=self.get_residuals_name(t=ts_int[0],center='w')
+                df_proj = self.init_df_proj('proj_residuals',name=residuals_name)
+                df['residuals'] = df_proj['1']
+            else:
+                for t in ts_int:
+                    residuals_name=self.get_residuals_name(t=t,center='w')
+                    df_proj = self.init_df_proj('proj_residuals',name=residuals_name)
+                    df[f'residuals_{t}'] = df_proj['1']
+
+        if mmd:
+            df = pd.concat([df,self.init_df_proj('proj_mmd')],axis=1)
+
+        return(self.stratify_output(df,samples=samples,
+                                    condition=condition,
+                                    marked_obs_to_ignore=marked_obs_to_ignore,
+                                    in_dict=in_dict))
+
+    def stratify_output(self,df,
+                        condition=None,
+                        samples=None,
+                        marked_obs_to_ignore=None,
+                        in_dict=False):
+        
+        index = self.get_index(samples=samples,
+                               condition=condition,
+                               marked_obs_to_ignore=marked_obs_to_ignore,
+                               in_dict=in_dict)
+        if in_dict:
+            return({k:df[df.index.isin(i)] for k,i in index.items()})
+        else:
+            return(df[df.index.isin(index)])
+
+    def get_metadata(self,
+                     condition=None,
+                     samples=None,
+                     marked_obs_to_ignore=None,
+                     in_dict=False):
+        return(self.stratify_output(self.obs,
+                                    condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=marked_obs_to_ignore,
+                                    in_dict=in_dict))
+
 
 
 def ktest_from_xy(x,y,names='xy',kernel=None):

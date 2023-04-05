@@ -112,46 +112,6 @@ class Plot_WBerrors(Residuals):
         kfdr = np.log(kfdr) if log else kfdr
         return(kfdr)
 
-    def get_diagnostics(self,
-                        t=None,
-                        diff=False,
-                        var_within=False,
-                        var_samples=False,
-                        kfdr=False,
-                        log=False,cumul=False,decreasing=False,):
-        
-        df_diff = pd.DataFrame()
-        df_varw = pd.DataFrame()
-        df_vars = pd.DataFrame()
-        df_kfdr = pd.DataFrame()
-        
-        if diff: 
-            x_diff = self.get_explained_difference(cumul=cumul,log=log,decreasing=decreasing).numpy()
-            x_diff = np.concatenate([np.array([0]),x_diff])
-            df_diff = pd.DataFrame(x_diff,columns=['difference'])
-            df_diff.index = [int(i) for i in df_diff.index]
-        
-        if var_within:
-            x_varw = self.get_explained_variability(within=True,cumul=cumul,log=log,decreasing=decreasing).numpy()
-            x_varw = np.concatenate([np.array([0]),x_varw])
-            df_varw = pd.DataFrame(x_varw,columns=['w-variability'])
-            df_varw.index = [int(i) for i in df_varw.index]
-        if var_samples:
-            x_vars = self.get_explained_variability(within=False,cumul=cumul,log=log,decreasing=decreasing)
-            x_vars = {f'{k}-variability':np.concatenate([np.array([0]),v.to_numpy()]) for k,v in x_vars.items()}
-            df_vars = pd.DataFrame(x_vars)
-            df_vars.index = [int(i) for i in df_vars.index]
-            
-        if kfdr: 
-            x_kfdr = self.compute_directional_kfdr(t=t,cumul=cumul,log=log,decreasing=decreasing).numpy()
-            x_kfdr = np.concatenate([np.array([0]),x_kfdr])
-            df_kfdr = pd.DataFrame(x_kfdr,columns=['discrimination'])
-            df_kfdr.index = [int(i) for i in df_kfdr.index]    
-        df = pd.concat([df_diff,df_varw,df_vars,df_kfdr],axis=1)
-        t = len(df) if t is None else t
-        return(df[:t+1])
-
-
     def plot_explained_difference(self,t=None,fig=None,ax=None,cumul=False,log=False,decreasing=False,color='xkcd:neon purple',label=None,legend=True,alpha=.3):
             if fig is None:
                 fig,ax = plt.subplots(figsize=(12,6))
