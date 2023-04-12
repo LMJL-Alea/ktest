@@ -28,7 +28,7 @@ reticulate::virtualenv_install(
     packages = "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python"
 )
 # check Python config
-reticulate::py_discover_config()
+reticulate::py_config()
 ```
 
 ## Package development
