@@ -36,13 +36,7 @@ install_ktest <- function(method = "auto", conda = "auto", ...) {
     have_python <- check_python()
     # install pyktest
     reticulate::py_install(
-        "ktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=python", 
+        "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python", 
         method = method, conda = conda, ...
     )
-    # # use superassignment to update global reference to pyktest
-    # unlock <- get("unlockBinding")
-    # lock <- get("lockBinding")
-    # unlock("pyktest",  as.environment("package:ktest"))
-    # on.exit(lock("pyktest",  as.environment("package:ktest")))
-    # pyktest <<- reticulate::import("ktest", delay_load = TRUE)
 }
