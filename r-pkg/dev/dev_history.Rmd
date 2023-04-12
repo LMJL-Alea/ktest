@@ -1,0 +1,120 @@
+---
+title: "Development actions history"
+author: "Ghislain DURIF"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Usethis setup
+
+```{r dev-setup}
+proj_dir <- rprojroot::find_root(".git/index")
+pkg_dir <- file.path(proj_dir, "r-pkg")
+usethis::proj_set(pkg_dir, force = TRUE)
+usethis::proj_sitrep()
+```
+
+## Reticulate config
+
+```{r dev-reticulate}
+# create virtualenv
+reticulate::virtualenv_create("ktest")
+# activate python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# install Python package (to do once)
+reticulate::virtualenv_install(
+    envname = "ktest",
+    packages = "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python"
+)
+# check Python config
+reticulate::py_discover_config()
+```
+
+## Package development
+
+### Initialization (to be run once)
+
+```{r dev-init}
+# create package template
+usethis::create_package("ktest", rstudio = FALSE, open = FALSE)
+# use Rmd for README generation
+usethis::use_readme_rmd()
+# package-level documentation
+usethis::use_package_doc()
+# additional files/folders to ignore during build
+usethis::use_build_ignore("dev")
+# vignette dir
+usethis::use_vignette("intro_ktest", "Introduction to ktest")
+```
+
+### Metadata
+
+```{r dev-metadata}
+# description
+usethis::use_description(
+    fields = list(
+        Title = stringr::str_to_title("Kernel based statistical testing"),
+        Description = "Write Me",
+        `Authors@R` = c(
+            person(
+                "Anthony", "Ozier-Lafontaine", 
+                email = "anthony.ozier-lafontaine@ec-nantes.fr", 
+                role = c("aut"), 
+                comment = c(ORCID = "0000-0003-3232-0503")),
+            person(
+                "Ghislain", "Durif", email = "gd.dev@libertymail.net", 
+                role = c("aut", "cre"), 
+                comment = c(ORCID = "0000-0003-2567-1401"))
+        ),
+        URL = "https://github.com/AnthoOzier/ktest",
+        Version = "1.0.0",
+        "Date/Publication" = format(Sys.time(), "%Y/%m/%d"),
+        SystemRequirements = "Python (>= 3.5.0)"
+    ),
+    check_name = TRUE, 
+    roxygen = TRUE
+)
+# License
+usethis::use_mit_license()
+# Roxygen markdown
+usethis::use_roxygen_md()
+```
+
+```{r dev-req}
+# requirements
+usethis::use_package("reticulate", type = "Imports")
+usethis::use_package("checkmate", type = "Suggests")
+usethis::use_package("covr", type = "Suggests")
+usethis::use_package("stringi", type = "Suggests")
+usethis::use_package("stringr", type = "Suggests")
+usethis::use_package("withr", type = "Suggests")
+usethis::use_testthat()
+```
+
+### Documentation
+
+```{r dev-doc}
+# Simulate package installation
+pkgload::load_all(pkg_dir)
+
+# Generate documentation and deal with dependencies
+attachment::att_amend_desc(path = pkg_dir)
+
+# README file
+devtools::build_readme(pkg_dir)
+```
+
+### Test and check
+
+```{r development-check}
+# Run the test
+devtools::test(pkg_dir)
+
+# test coverage
+covr::package_coverage(
+    pkg_dir, line_exclusions = list("R/init.R", "R/python.R"))
+
+# Check the package
+devtools::check(pkg_dir)
+```

@@ -1,0 +1,56 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+<!-- Python configuration -->
+
+```{r, include = FALSE}
+library(reticulate)
+# create virtualenv
+virtualenv_create("ktest")
+# activate python environment
+use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+```{r, include=FALSE}
+proj_dir <- rprojroot::find_root(".git/index")
+pkg_dir <- file.path(proj_dir, "r-pkg")
+devtools::load_all(pkg_dir)
+# install_pyktest(method = "virtualenv", envname = "ktest")
+```
+
+# ktest R package
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+Kernel based statistical testing
+
+# Installation and configuration
+
+```{r vignette-install}
+#| child: vignettes/install_ktest.Rmd
+```
+
+# Example: multivariate testing
+
+```{r vignette-install}
+#| child: vignettes/multivariate_testing.Rmd
+```
+
+# Example: univariate testing
+
+```{r vignette-install}
+#| child: vignettes/univariate_testing.Rmd
+```

@@ -1,0 +1,277 @@
+---
+title: "Univariate testing"
+author: "Ghislain DURIF"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r python}
+library(reticulate)
+# create virtualenv
+virtualenv_create("ktest")
+# activate python environment
+use_virtualenv(virtualenv = "ktest", required = TRUE)
+
+# install Python package
+virtualenv_install(
+    envname = "ktest",
+    packages = "pyktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=pyktest"
+)
+```
+
+Import
+
+```python
+import pandas as pd
+from ktest.tester import Ktest
+```
+
+```{r import}
+pyktest <- reticulate::import("pyktest")
+```
+
+### Perform univariate testing (differential expression analysis) on all the genes
+
+
+```python
+data = pd.read_csv('data.csv',index_col=0)
+metadata = pd.read_csv('metadata.csv',index_col=0)
+kt = Ktest(data,metadata,condition='condition',nystrom=True)
+```
+
+Perform univariate testing on all the genes.
+
+
+- `n_jobs` : Parallelize the jobs on `n_jobs` CPUs if possible
+- `save_path` : Save the results in the `save_path` directory 
+- `lots` : Divide the total set of variables to test in sets of size `lots` to save intermediate results.
+- `name` : Use `name` to refer to this set of tests if you aim at testing different groups of variables separately (See section **Perform multiple testing on different pathways** for more details).  
+- `truncations_of_interest` : the test results to keep (default =10 mais pour l'instant je vais garder défaut = 1:30) 
+- `diagnostics` : Set as `True` to compute the diagnostic metrics for each variables 
+- `t_diagnostics` : The diagnostic metrics are saved for truncations 1 to `t_diagnostic`  
+- `verbose` : Whatch the job in progress with `verbose > 0`
+
+
+
+```python
+kt.univariate_test(n_jobs=4,lots=20,verbose=1,name='all_variables',
+                  save_path='./')
+```
+
+    - Load univariate test results from 
+    	dir: ./
+    	file: all_variables_ny_lmrandom_m33_basisw_datacondition_univariate.csv
+    - Loaded univariate test results : (83, 25)
+    - Update var with 25 columns
+    - No variable to test
+    - Load univariate test results from 
+    	dir: ./
+    	file: all_variables_ny_lmrandom_m33_basisw_datacondition_univariate.csv
+    - Loaded univariate test results : (83, 25)
+    - Saving univariate test results of all_variables in 
+    	dir: ./
+    	file:all_variables_ny_lmrandom_m33_basisw_datacondition_univariate.csv ((83, 25))
+
+
+The function does not repeat the computation if not necessary 
+
+
+```python
+kt.univariate_test(verbose=1)
+```
+
+    - No variable to test
+
+
+---
+
+Print summarized results :
+- `t` is the truncation parameter of interest (default is 10).
+- Set `long` as `True` for detailled information.
+- set `corrected` as `False` to have the raw p-values not corrected with the Benjamini-Hochberg approach for multiple testing.
+- `ntop` number of top DE variables to print.
+- `threshold` : test rejection threshold. A variable is considered as DE if `p-value < threshold`.
+- Set `log2fc` as `True` to print the log2fc of the displayed DE variables if possible. 
+
+
+```python
+kt.print_univariate_test_results(ntop=3)
+```
+
+    
+    ___Univariate tests results___
+    5 DE genes for t=10 and threshold=0.05 (with BH correction)
+    Top 3 DE genes (with BH correction): 
+    PLS1, SLC6A9, STX12
+
+
+Get the resulting p-values in a Pandas.Series :
+- `t` is the truncation parameter of interest
+- set `corrected` as `False` to have the raw p-values not corrected with the Benjamini-Hochberg approach for multiple testing.
+
+
+```python
+kt.get_pvals_univariate(verbose=2)
+```
+
+    Warning : only 21 variables were corrected out of 83 tested variables
+
+
+
+
+
+    PLS1       2.841728e-07
+    SLC6A9     2.448390e-06
+    STX12      2.448390e-06
+    NCOA4      1.007764e-05
+    PIK3CG     1.633637e-02
+                   ...     
+    TPP1                NaN
+    TTYH2               NaN
+    UCK1                NaN
+    VDAC3               NaN
+    XPNPEP1             NaN
+    Name: all_variables_ny_lmrandom_m33_basisw_datacondition_t10_pvalBHc, Length: 83, dtype: float64
+
+
+
+Get the resulting p-values of DE genes only :
+- `t` is the truncation parameter of interest.
+- set `corrected` as `False` to have the raw p-values not corrected with the Benjamini-Hochberg approach for multiple testing.
+- `threshold` : test rejection threshold. A variable is considered as DE if `p-value < threshold`.
+
+
+```python
+kt.get_DE_genes(verbose=1)
+```
+
+    Warning : only 21 variables were corrected out of 83 tested variables
+
+
+
+
+
+    PLS1      2.841728e-07
+    SLC6A9    2.448390e-06
+    STX12     2.448390e-06
+    NCOA4     1.007764e-05
+    PIK3CG    1.633637e-02
+    Name: all_variables_ny_lmrandom_m33_basisw_datacondition_t10_pvalBHc, dtype: float64
+
+
+
+###  Perform multiple testing on different pathways
+
+Define the pathways of interest (the following pathways are random, they do not have biological meaning). 
+
+
+```python
+pathway1 = ['CTCF', 'CTSA', 'CYP51A1', 'DCP1A', 'DCTD', 'DHCR24', 'DHCR7', 'DPP7']
+pathway2 = ['MAPK12', 'MFSD2B', 'MID2', 'MKNK2', 'MTFR1', 'MVD', 'MYO1G', 'NCOA4']
+pathway3 = ['NSDHL', 'PDLIM7', 'PIK3CG', 'PLAG1', 'PLS1', 'PLS3', 'PPP1R15B']
+
+```
+
+Perform univariate testing on each pathway 
+
+
+```python
+kt.univariate_test(variables_to_test=pathway1,name='pathway1')
+kt.univariate_test(variables_to_test=pathway2,name='pathway2')
+kt.univariate_test(variables_to_test=pathway3,name='pathway3',save_path='./',verbose=1)
+```
+
+    
+    
+    - Load univariate test results from 
+    	dir: ./
+    	file: pathway3_ny_lmrandom_m33_basisw_datacondition_univariate.csv
+    - Loaded univariate test results : (7, 21)
+    - Update var with 21 columns
+    - No variable to test
+    - Load univariate test results from 
+    	dir: ./
+    	file: pathway3_ny_lmrandom_m33_basisw_datacondition_univariate.csv
+    - Loaded univariate test results : (7, 21)
+    - Saving univariate test results of pathway3 in 
+    	dir: ./
+    	file:pathway3_ny_lmrandom_m33_basisw_datacondition_univariate.csv ((7, 21))
+
+
+By default, the functions `print_univariate_test_results`, `get_pvals_univariate` and `get_DEgenes` refer to the last tested set of variables (here it is `pathway3`): 
+
+
+```python
+kt.print_univariate_test_results()
+```
+
+    
+    ___Univariate tests results___
+    7 tested variables out of 83 variables
+    0 DE genes for t=10 and threshold=0.05 (with BH correction)
+
+
+Print or get the results of `pathway1` using parameter `name` 
+
+
+```python
+kt.print_univariate_test_results(name='pathway1')
+kt.get_pvals_univariate(t=2,name='pathway1')
+
+```
+
+    
+    ___Univariate tests results___
+    7 tested variables out of 83 variables
+    2 DE genes for t=10 and threshold=0.05 (with BH correction)
+    Top 5 DE genes (with BH correction): 
+    CTSA, CYP51A1
+
+
+
+
+
+    CTSA       7.042543e-23
+    DCP1A      1.521817e-07
+    DCTD       9.936203e-06
+    CYP51A1    3.675143e-04
+    DPP7       6.105009e-02
+    DHCR7      3.168313e-01
+    CTCF       4.795130e-01
+    DHCR24     4.795130e-01
+    Name: pathway1_ny_lmrandom_m33_basisw_datacondition_t2_pvalBHc, dtype: float64
+
+
+
+Save univariate test results afterwards :
+- `save_path`: directory in which to save the result .csv file
+- `name` : name of the set of univariate test results to save. 
+- `overwrite` : overwrite an eventual existing result file if True, add new results in it if False.  
+
+
+```python
+kt.save_univariate_results(save_path = './',name='pathway1',verbose=1)
+```
+
+    - Load univariate test results from 
+    	dir: ./
+    	file: pathway1_ny_lmrandom_m33_basisw_datacondition_univariate.csv
+    - Loaded univariate test results : (8, 25)
+    - Saving univariate test results of pathway1 in 
+    	dir: ./
+    	file:pathway1_ny_lmrandom_m33_basisw_datacondition_univariate.csv ((8, 25))
+
+
+
+```python
+
+```
+
+
+```python
+
+```
