@@ -67,22 +67,15 @@ def custom_boxplot(df,colors=None,alpha=.5,lw=3,scatter=True,fig=None,ax=None,ve
         points_in_boxplot(df=df,colors=colors,ax=ax,vert=vert)
     return(fig,ax)
 
-def custom_rug(data,
-               fig=None,
-               ax=None,
-               orientation='vertical',
-               alpha=.5,
-               label=None,
-               color=None, 
-               edgecolor=None,
+
+def custom_kde(data,
+               normalize=True,
+               coef=1,
                minmax=None,
                bw_method=.2,
                yshift=0,
                xshift=0
-               ):
-    if fig is None:
-        fig,ax = plt.subplots(ncols=1,figsize=(12,6))
-
+            ):
     if minmax is not None:
         min,max = minmax
         min,max = min - .1*(max-min),max +.1*(max-min)
@@ -93,22 +86,93 @@ def custom_rug(data,
     
     x = np.linspace(min,max,200)
     density = gaussian_kde(data,bw_method=bw_method)
-    y = density(x)+yshift
+    y = density(x)
+    if normalize : 
+        y = y/np.max(y) 
+    y = coef*y+yshift
     x = x+xshift
+    return(x,y)
+
+
+def custom_violin(data,
+               fig=None,
+               ax=None,
+               orientation='vertical',
+               alpha=.5,
+               label=None,
+               color=None, 
+               lw=2,
+               minmax=None,
+               bw_method=.2,
+               yshift=0,
+               xshift=0
+               ):
+    if fig is None:
+        fig,ax = plt.subplots(figsize=(12,6))
+    
+    for coef in [-1,1]:
+        if coef == 1:
+            label = None
+        fig,ax,c = custom_rug(data,
+                   fig=fig,
+                   ax=ax,
+                   orientation=orientation,
+                   alpha=alpha,
+                   label=label,
+                   color=color, 
+                   lw=lw,
+                   normalize=True,
+                   coef=coef,
+                   minmax=minmax,
+                   bw_method=bw_method,
+                   yshift=yshift,
+                   xshift=xshift
+                   )
+        if color is None: 
+            color=c
+    return(fig,ax,color)
+
+def custom_rug(data,
+               fig=None,
+               ax=None,
+               orientation='vertical',
+               alpha=.5,
+               label=None,
+               color=None, 
+               lw=2,
+               normalize=True,
+               coef=1,
+               minmax=None,
+               bw_method=.2,
+               yshift=0,
+               xshift=0
+               ):
+    if fig is None:
+        fig,ax = plt.subplots(ncols=1,figsize=(12,6))
+
+    x,y = custom_kde(data=data,
+               normalize=normalize,
+               coef=coef,
+               minmax=minmax,
+               bw_method=bw_method,
+               yshift=yshift,
+               xshift=xshift)
+
+    if orientation == 'vertical':
+        ax.plot(x,y,color=color,lw=lw,)
+    else:
+        ax.plot(y,x,color=color,lw=lw)
+
+    if color is None:
+        color = ax._children[-1]._color
+
+
     if orientation == 'vertical':
         ax.fill_between(x,y,y2=yshift,color=color,label=label,alpha=alpha)
     else:
         ax.fill_betweenx(x,y,x2=yshift,color=color,label=label,alpha=alpha)
         
-    if edgecolor is None:
-        edgecolor=ax._children[-1]._facecolors[0]
-    if color is None:
-        color = ax._children[-1]._facecolors[0]
 
-    if orientation == 'vertical':
-        ax.plot(x,y,color=edgecolor,lw=3,)
-    else:
-        ax.plot(y,x,color=edgecolor,lw=3)
     return(fig,ax,color)
 
 
@@ -159,29 +223,57 @@ def custom_histogram(data,
                      label=None,
                      color=None,
                      edgecolor=None,
+                     lw=2,
                      coef_bins=3,
                      means=True,
-                     kde=True,
+                     hist_type='kde',
                      kde_bw=.2,
                      minmax=None,
+                     xshift=0,
                      yshift=0,
+                     normalize=True
                      ):
-    if kde and len(data[data==0]) == len(data):
-        kde=False
-    if kde:
-        fig,ax,color=custom_rug(data=data,
+    """
+    Parameters
+    ----------
+        type (default = 'kde') : in ['kde','violin','hist'] 
+    """
+
+    if hist_type=='kde':
+        if not len(data[data==0])==len(data):
+            fig,ax,color=custom_rug(data=data,
                fig=fig,
                ax=ax,
                orientation=orientation,
                alpha=alpha,
                label=label,
                color=color, 
-               edgecolor=edgecolor,
+               lw=lw,
                minmax=minmax,
                bw_method=kde_bw,
-               yshift=yshift
+               xshift=xshift,
+               yshift=yshift,
+               normalize=normalize
                )
-    else:
+
+    if hist_type == 'violin':
+        if not len(data[data==0])==len(data):
+            fig,ax,color=custom_violin(data=data,
+               fig=fig,
+               ax=ax,
+               orientation=orientation,
+               alpha=alpha,
+               label=label,
+               color=color, 
+               lw=lw,
+               minmax=minmax,
+               bw_method=kde_bw,
+               xshift=xshift,
+               yshift=yshift,
+               )
+
+
+    if hist_type == 'hist':
         fig,ax,color= double_histogram(data=data,
                      fig=fig,
                      ax=ax,
@@ -193,12 +285,16 @@ def custom_histogram(data,
                      coef_bins=coef_bins
                      )
 
-    if means : 
+    if means == 'line': 
         if orientation =='vertical':
             ax.axvline(data.mean(),c=color,lw=1.5)
         else:
             ax.axhline(data.mean(),c=color,lw=1.5)
-        
+    elif means:
+        if orientation == 'vertical':
+            ax.scatter(data.mean()+xshift,yshift,marker='+',s=100,c=color)
+        else:
+            ax.scatter(yshift,data.mean()+xshift,marker='+',s=100,color=color)            
     return(fig,ax)
 
 def highlight_on_histogram(data,

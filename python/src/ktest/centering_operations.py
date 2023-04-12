@@ -176,7 +176,8 @@ class CenteringOps(NystromOps):
         marked_obs_to_ignore = self.marked_obs_to_ignore
         n = self.get_ntot()
         Pw = eye(n,dtype = torch.float64)
-        obs = self.obs if marked_obs_to_ignore is None else self.obs[~self.obs[marked_obs_to_ignore]]
+        obs = self.get_metadata()
+        # self.obs if marked_obs_to_ignore is None else self.obs[~self.obs[marked_obs_to_ignore]]
 
         if center_by is None:
             pass

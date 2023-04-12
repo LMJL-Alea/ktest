@@ -195,9 +195,12 @@ class Plot_Standard(Statistics):
                     name=None,
                     orientation='vertical',
                     color=None,
+                    alpha=.5,
                     fig=None,ax=None,
                     show_conditions=True,
+                    legend=True,
                     legend_fontsize=15,
+                    lw=2,
                     condition=None,
                     samples=None,
                     highlight=None,
@@ -206,8 +209,12 @@ class Plot_Standard(Statistics):
                     highlight_label=None,
                     samples_colors=None,
                     marked_obs_to_ignore=None,
-                    kde=True,
+                    hist_type='kde',
                     kde_bw=.2,
+                    xshift=0,
+                    yshift=0,
+                    means=True,
+                    normalize=False,
                     ):
 
         labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
@@ -238,12 +245,17 @@ class Plot_Standard(Statistics):
                                 fig=fig,
                                 ax=ax,
                                 orientation=orientation,
-                                alpha=.5,
-                                label=vprop['hist_args']['label'],
+                                alpha=alpha,
+                                label=vprop['hist_args']['label'] if legend else None,
                                 color=vprop['hist_args']['color'],
-                                kde=kde,
+                                hist_type=hist_type,
+                                lw=lw,
                                 kde_bw=kde_bw,
-                                minmax = [min,max]
+                                minmax = [min,max],
+                                xshift=xshift,
+                                yshift=yshift,
+                                means=means,
+                                normalize=normalize
                                 )
                 
 
@@ -286,7 +298,8 @@ class Plot_Standard(Statistics):
         else:
             ax.set_ylabel(self.get_axis_label(proj,t),fontsize=25)
 
-        ax.legend(fontsize=legend_fontsize)
+        if legend:
+            ax.legend(fontsize=legend_fontsize)
 
         # fig.tight_layout()
         return(fig,ax)
@@ -306,24 +319,42 @@ class Plot_Standard(Statistics):
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
         if color_list is None:
-            color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
+            color_list = ['xkcd:cerulean',
+                          'xkcd:light orange',
+                          'xkcd:grass green',
+                          'xkcd:cerise',
+                          'xkcd:mocha',
+                          'xkcd:greeny blue',
+                          'xkcd:vibrant blue',
+                          'xkcd:candy pink',
+                          'xkcd:lavender',
+                          'xkcd:pale green',
+                          'xkcd:peach',
+                          'xkcd:goldenrod',
+                          'xkcd:mahogany',
+                          'xkcd:terra cotta',
+                          'xkcd:acid green',
+                          'xkcd:teal blue',
+                          'xkcd:dusty pink',
+                          'xkcd:pinky red'
+                          ]
         if marker_list is None:
             marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
         properties = {}
-        # cx_ = color_list[0] # 'xkcd:cerulean'
-        # cy_ = color_list[1] #'xkcd:light orange'
-        mx_ = 'o'
-        my_ = 's'
-        variables = self.data[self.data_name]['variables']
+        variables = self.get_variables()
         marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
         
         dict_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        dict_data = self.get_dataframes_of_data(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        dict_data = self.get_data(condition=condition,
+                                  samples=samples,
+                                  marked_obs_to_ignore=marked_obs_to_ignore,
+                                  in_dict=True,
+                                  dataframe=True)
         samples_list = self.get_samples_list(condition,samples) 
         
         color_list = color_list if len(color_list)>=len(samples_list) else [None]*len(samples_list)   
-        if not isinstance(color_list,dict): 
-            color_list = {k:c for k,c in zip(samples_list,color_list)}
+        if isinstance(color_list,dict): 
+            color_list = [color_list[k] for k in samples_list]
         coef_bins = 3
         if marker is None and color is None : 
             # print("plot properties marker is None and color is None")
@@ -333,7 +364,7 @@ class Plot_Standard(Statistics):
                 lab = f'{k}({len(ipop)})' if legend else None
                 bins = coef_bins*int(np.floor(np.sqrt(len(ipop))))
                 m = marker_list[i]
-                c = color_list[k]
+                c = color_list[i]
                 bm = big_marker_list[i]
 
                 properties[k] = {'index':ipop,
@@ -355,7 +386,7 @@ class Plot_Standard(Statistics):
                     n = len(ipop)
                     df = dict_data[k]
                     c = df[color]
-                    cm = color_list[k]
+                    cm = color_list[i]
                     lab = f'{k}({n})' if legend else None
                     m = marker_list[i]
                     bm = big_marker_list[i]
@@ -374,10 +405,10 @@ class Plot_Standard(Statistics):
                                 ipop = self.obs.loc[self.obs[color]==pop].index
                                 n = len(ipop)
                                 ipop = ipop[ipop.isin(dict_index[k])]
-                                
+
                                 m = marker_list[j%len(marker_list)]
                                 mean_m = big_marker_list[j%len(big_marker_list)]
-
+                                c = color_list[(j)%len(color_list)]
                                 if marked_obs_to_ignore is not None:
                                     obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
                                     ipop = ipop[~ipop.isin(obs_to_ignore)]
@@ -386,8 +417,9 @@ class Plot_Standard(Statistics):
                                 properties[f'{pop}{k}'] = {'index':ipop,
                                                     'plot_args':{'marker':m},
                                                     'mean_plot_args':{'marker':mean_m,'label':lab},
-                                                    'hist_args':{'bins':bins,'label':lab}}
+                                                    'hist_args':{'bins':bins,'label':lab,'color':c}}
 
+                            
         
                         else:
                             # print('not show conditions')
@@ -399,14 +431,12 @@ class Plot_Standard(Statistics):
 
                             lab = f'{pop} ({len(ipop)})' if legend else None
                             bins=coef_bins*int(np.floor(np.sqrt(len(ipop))))
-                            c = color_list[k]
-                            
+                            c = color_list[i]
                             properties[pop] = {'index':ipop,
-                                            'plot_args':{'marker':'.','c':c},
+                                            'plot_args':{'marker':'.','c':None},
                                             'mean_plot_args':{'marker':'o','label':lab,'color':c},
-                                            'hist_args':{'bins':bins,'label':lab}}
-                            if c is not None:
-                                properties[k]['hist_args']['color']=c
+                                            'hist_args':{'bins':bins,'label':lab,'color':c}}
+
                             
                 else: # pour une info numérique 
                     # print(f'{color} is not categorical in obs')
@@ -750,6 +780,7 @@ class Plot_Standard(Statistics):
                     ax=None,
                     show_conditions=True,
                     orientation='vertical',
+                    alpha=.5,
                     legend_fontsize=15,
                     condition=None,
                     samples=None,
@@ -759,7 +790,7 @@ class Plot_Standard(Statistics):
                     highlight_label=None,
                     samples_colors=None,
                     marked_obs_to_ignore=None,
-                    kde=False,
+                    hist_type='kde',
                     kde_bw=.2,
                     verbose=0):
 
@@ -777,6 +808,7 @@ class Plot_Standard(Statistics):
                         name=kfdat_name,
                         orientation=orientation,
                         color=color,
+                        alpha=alpha,
                         fig=fig,ax=ax,
                         show_conditions=show_conditions,
                         legend_fontsize=legend_fontsize,
@@ -788,7 +820,7 @@ class Plot_Standard(Statistics):
                         samples=samples,
                         samples_colors=samples_colors,
                         marked_obs_to_ignore=marked_obs_to_ignore,
-                        kde=kde,
+                        hist_type=hist_type,
                         kde_bw=kde_bw,
                         )
         return(fig,ax)
@@ -802,12 +834,15 @@ class Plot_Standard(Statistics):
                               orientation='vertical',
                               highlight=None,
                     highlight_label=None,
+                    alpha=.5,
                               legend_fontsize=15):
         mmd_name = self.get_mmd_name()
-        fig,ax = self.density_proj(t='mmd',proj='proj_mmd',
+        fig,ax = self.density_proj(t='mmd',
+                                   proj='proj_mmd',
                                    name=mmd_name,
                                    orientation=orientation,
                                    color=color,
+                                   alpha=alpha,
                                    fig=fig,
                                    ax=ax,
                                    show_conditions=show_conditions,
@@ -1124,3 +1159,103 @@ class Plot_Standard(Statistics):
             ax.legend()
         
         return(fig,ax)
+    
+
+    def get_indexes_to_plot(self,
+                        marker=None,
+                        color=None,
+                        show_conditions=True,
+                        condition=None,
+                        samples=None,
+                        marked_obs_to_ignore=None):
+
+                
+        index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        index_to_plot = {}
+        
+        if marker is None and color is None : 
+            index_to_plot = index
+        
+        elif isinstance(color,str) and marker is None:
+            if color in list(self.get_variables()):
+                index_to_plot = index
+
+            elif color in list(self.obs.columns):
+                if self.obs[color].dtype == 'category':
+                    for pop in self.obs[color].cat.categories:
+                        ipop = self.obs.loc[self.obs[color]==pop].index
+                        if show_conditions: 
+                            for k in index.keys():
+
+                                ipop = ipop[ipop.isin(index[k])]
+                                index_to_plot[f'{k} {pop}'] = ipop
+
+                        else:
+
+                            if marked_obs_to_ignore is not None:
+                                obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
+                                ipop = ipop[~ipop.isin(obs_to_ignore)]
+                            index_to_plot[pop] = ipop
+                            
+
+                else: # pour une info numérique 
+                    index_to_plot = index
+
+        elif color is None and isinstance(marker,str):
+            print('color is None and marker is specified : this case is not treated yet')
+
+        elif isinstance(color,str) and isinstance(marker,str):
+            if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
+                if color in list(self.get_variables()):                    
+                    for pop in self.obs[marker].cat.categories:  
+                        ipop = self.obs.loc[self.obs[marker]==pop].index
+                        if show_conditions: 
+                            for k in index.keys():
+                                ipop = ipop[ipop.isin(index[k])]
+                                index_to_plot[f'{k} {pop}'] = ipop
+                        else:
+                            if marked_obs_to_ignore is not None:
+                                obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
+                                ipop = ipop[~ipop.isin(obs_to_ignore)]
+                            index_to_plot[pop] = ipop
+
+                elif color in list(self.obs.columns):
+                    if self.obs[color].dtype == 'category':
+                        for popc in self.obs[color].cat.categories:
+                            for popm in self.obs[marker].cat.categories:
+                                obsm = self.obs.loc[self.obs[marker]==popm]
+                                ipop = obsm.loc[obsm[color]==popc].index
+                                if show_conditions: 
+                                    for k in index.keys():
+                                        ipop = ipop[ipop.isin(index[k])]
+                                        index_to_plot[f'{k} {popc} {popm}'] = ipop
+                                else:
+                                    if marked_obs_to_ignore is not None:
+                                        obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
+                                        ipop = ipop[~ipop.isin(obs_to_ignore)]
+                                    index_to_plot[f'{popc} {popm}'] = ipop
+
+                    else: # pour une info numérique 
+                        for popm in self.obs[marker].cat.categories:
+                            ipop = self.obs.loc[self.obs[marker]==popm].index
+                            if show_conditions: 
+                                for k in index.keys():
+                                    ipop = ipop[ipop.isin(index[k])]
+                                    index_to_plot[f'{k} {popm}'] = ipop
+                            else:
+                                if marked_obs_to_ignore is not None:
+                                    obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
+                                    ipop = ipop[~ipop.isin(obs_to_ignore)]
+                                index_to_plot[popm] = ipop
+
+            else:
+                print(f"{marker} is not in self.obs or is not categorical, \
+                use self.obs['{marker}'] = self.obs['{marker}'].astype('category')")
+        else:
+                print(f'{color} and {marker} not found in obs and variables')
+        return(index_to_plot)
+    
+
+
+
+  

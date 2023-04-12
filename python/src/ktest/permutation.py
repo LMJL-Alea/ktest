@@ -20,7 +20,8 @@ class Permutation:
         metadata_perm[self.condition] = condition
         
         kt_perm = Ktest(
-            data= self.get_dataframe_of_all_data(),
+            # data= self.get_dataframe_of_all_data(),
+            data= self.get_data(dataframe=True,in_dict=False),
             metadata=metadata_perm,
             condition = self.condition,
             data_name=f'{self.data_name}_perm_seed{seed}_',

@@ -630,33 +630,125 @@ class Base:
         return(index_output) 
 
 
-    def get_kmeans_landmarks(self):
+    def get_kmeans_landmarks(self,in_dict=True):
         
         condition = self.condition
         samples = self.samples
         
         samples_list = self.get_samples_list(condition,samples)
-        dict_data = {}
+        data = {}
         for sample in samples_list:
             kmeans_landmarks_name = self.get_kmeans_landmarks_name_for_sample(sample)
-            dict_data[sample] = self.data[kmeans_landmarks_name]['X']
-        return(dict_data)
-    
-    def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+            data[sample] = self.data[kmeans_landmarks_name]['X']
+        if in_dict:
+            return(data)
+        else:
+            return(torch.cat(list(data.values())))
+
+
+    def get_data(self,
+                 landmarks=False,
+                 condition=None,
+                 samples=None,
+                 marked_obs_to_ignore=None,
+                 data_name=None,
+                 in_dict=True,
+                 dataframe=False):
+        """
+        Returs the selected data in the desired format
+
+        Parameters
+        ----------
+            landmarks (default = False) : bool
+                if True, focuses on the nystrom landmarks
+                else, focuses on the observations. 
+      
+            condition (default = None): str
+                Column of the metadata that specify the dataset  
+  
+            samples (default = None): str 
+                List of values to select in the column condition of the metadata
+            
+            marked_obs_to_ignore (default = None): str
+                Column of the metadata specifying the observations to ignore
+
+            in_dict (default = True) : bool
+                if True : returns a dictionary of the outputs associated to each sample
+                else : returns an unique object containing all the outputs  
+            
+            dataframe (default = False) : bool
+                if True, the output tables are in pandas.DataFrame format. 
+                else, the output tables are in torch.Tensor format. 
+
+        """
+
         if data_name is None:    
             data_name = self.data_name
-    
+
+        if dataframe:
+            v = self.get_variables(data_name=data_name)
+
         if landmarks and self.landmark_method =='kmeans':
-            dict_data = self.get_kmeans_landmarks()
-            
+            data = self.get_kmeans_landmarks(in_dict=in_dict)
+
         else:
-            dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-            if landmarks and self.landmark_method=='kmeans':
-                dict_data = {k:self.data[data_name]['X'] for k in dict_index.keys()}
+            index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,in_dict=in_dict)
+
+            if in_dict:
+                data = {}
+                for k,i in index.items():
+                    x = self.data[data_name]['X'][self.obs.index.isin(i),:]
+                    data[k] = pd.DataFrame(x,i,v) if dataframe else x
             else:
-                dict_data = {k:self.data[data_name]['X'][self.obs.index.isin(v),:] for k,v in dict_index.items()}
-        return(dict_data)
+                x = self.data[data_name]['X'][self.obs.index.isin(index),:]
+                data = pd.DataFrame(x,index,v) if dataframe else x  
+
+        return(data)
     
+        # def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+        
+        # if data_name is None:    
+        #     data_name = self.data_name
+    
+        # if landmarks and self.landmark_method =='kmeans':
+        #     dict_data = self.get_kmeans_landmarks()
+            
+        # else:
+        #     dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        #     if landmarks and self.landmark_method=='kmeans':
+        #         dict_data = {k:self.data[data_name]['X'] for k in dict_index.keys()}
+        #     else:
+        #         dict_data = {k:self.data[data_name]['X'][self.obs.index.isin(v),:] for k,v in dict_index.items()}
+        # return(dict_data)
+    
+
+        # def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+            
+        #     if data_name is None:
+        #         data_name = self.data_name
+
+        #     dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
+        #     dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        #     variables = self.data[data_name]['variables']
+
+        #     dict_df = {}
+        #     for s in dict_data.keys():
+        #         x,i,v = dict_data[s],dict_index[s],variables
+        #         dict_df[s] = pd.DataFrame(x,i,v)
+        #     return(dict_df)
+
+        # def get_dataframe_of_all_data(self,landmarks=False,data_name=None):
+        #     if data_name is None:
+        #         data_name = self.data_name
+        #     if landmarks:
+        #         print('Warning : this function is not implemented for landmarks yet')
+        #     x = self.data[data_name]['X']
+        #     i = self.obs.index
+        #     v = self.data[data_name]['variables']
+
+        #     return(pd.DataFrame(x,i,v))
+
+
     def get_all_data(self,landmarks=False):
         if landmarks:
             print(f'get all data for landmarks is not mplemented yet')
@@ -677,42 +769,19 @@ class Base:
         dict_nobs = self.get_nobs(landmarks=landmarks)
         return(dict_nobs['ntot'])
 
-    def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
-        
-        if data_name is None:
-            data_name = self.data_name
-
-        dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
-        dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        variables = self.data[data_name]['variables']
-
-        dict_df = {}
-        for s in dict_data.keys():
-            x,i,v = dict_data[s],dict_index[s],variables
-            dict_df[s] = pd.DataFrame(x,i,v)
-        return(dict_df)
-    
     def get_dataframe_of_means(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
-        ddf = self.get_dataframes_of_data(
+        ddf = self.get_data(
             landmarks=landmarks,
             condition=condition,
             samples=samples,
             marked_obs_to_ignore=marked_obs_to_ignore,
-            data_name=data_name
+            data_name=data_name,
+            dataframe=True,
+            in_dict=True
         )
         return(pd.DataFrame({sample:ddf[sample].mean() for sample in ddf}))
 
 
-    def get_dataframe_of_all_data(self,landmarks=False,data_name=None):
-        if data_name is None:
-            data_name = self.data_name
-        if landmarks:
-            print('Warning : this function is not implemented for landmarks yet')
-        x = self.data[data_name]['X']
-        i = self.obs.index
-        v = self.data[data_name]['variables']
-
-        return(pd.DataFrame(x,i,v))
 
     def get_variables(self,data_name=None):
         """
@@ -879,7 +948,9 @@ class Base:
             df_proj = self.get_proj_residuals(name=name)
 
         elif proj in self.get_variables(data_name):
-            df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
+            # df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
+            df_proj = pd.DataFrame(self.get_data(samples='all',in_dict=False,dataframe=True)[proj])
+
         elif proj in self.obs:
             df_proj = self.obs[proj]
         else:
