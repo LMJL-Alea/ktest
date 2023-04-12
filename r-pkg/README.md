@@ -36,7 +36,7 @@ commands:
 
 ``` r
 install.package("remotes")
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
+remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
 ```
 
 > **Note:** `ktest` is not available on CRAN at the moment but will be
@@ -73,6 +73,8 @@ library(ktest)
 reticulate::virtualenv_create("ktest")
 # activate the python environment
 reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# verify python version
+reticulate::py_config()
 # install ktest package python requirements
 install_ktest(method = "virtualenv", envname = "ktest")
 # check ktest configuration
