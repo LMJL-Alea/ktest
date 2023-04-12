@@ -46,7 +46,7 @@ kt <- ktest(
 
 # univariate
 kt$univariate_test(
-    n_jobs=4L, save_path=file.path("results"),
+    n_jobs=4L, save_path="./",
     name='all_variables',
     kernel=list('function'='gauss','bandwidth'='median'),
     verbose = 1L
