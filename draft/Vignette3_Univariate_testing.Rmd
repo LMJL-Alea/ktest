@@ -1,6 +1,37 @@
+---
+title: "Univariate testing"
+author: "Ghislain DURIF"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r python}
+library(reticulate)
+# create virtualenv
+virtualenv_create("ktest")
+# activate python environment
+use_virtualenv(virtualenv = "ktest", required = TRUE)
+
+# install Python package
+virtualenv_install(
+    envname = "ktest",
+    packages = "pyktest @ git+https://github.com/AnthoOzier/ktest@rktest_dev#subdirectory=pyktest"
+)
+```
+
+Import
+
 ```python
 import pandas as pd
 from ktest.tester import Ktest
+```
+
+```{r import}
+pyktest <- reticulate::import("pyktest")
 ```
 
 ### Perform univariate testing (differential expression analysis) on all the genes
