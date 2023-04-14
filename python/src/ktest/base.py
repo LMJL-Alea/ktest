@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
-from .kernels import mediane,gauss_kernel,linear_kernel,gauss_kernel_mediane,fisher_zero_inflated_gaussian_kernel
+from .kernels import mediane,gauss_kernel,linear_kernel,gauss_kernel_mediane,fisher_zero_inflated_gaussian_kernel,gauss_kernel_mediane_per_variable
 from torch import cat
 from .utils import get_kernel_name,init_kernel_params,convert_to_torch_tensor,convert_to_pandas_index
     
@@ -197,7 +197,7 @@ class Base:
         Parameters
         ----------
             function (default = 'gauss') : str or function
-                str in ['gauss','linear','fisher_zero_inflated_gaussian'] for gauss kernel or linear kernel. 
+                str in ['gauss','linear','fisher_zero_inflated_gaussian','gauss_kernel_mediane_per_variable'] for gauss kernel or linear kernel. 
                 function : kernel function specified by user
 
             bandwidth (default = 'median') : str or float
@@ -233,7 +233,8 @@ class Base:
         has_bandwidth = False
 
         kernel_name = get_kernel_name(function=function,bandwidth=bandwidth,median_coef=median_coef) if kernel_name is None else kernel_name
-
+        if verbose>1:
+            print("kernel_name:",kernel_name)
         if function == 'gauss':
             has_bandwidth = True
             if bandwidth == 'median':
@@ -256,11 +257,20 @@ class Base:
                                                                     median_coef=median_coef,
                                                                     return_mediane=True,
                                                                     verbose=verbose)
+        elif function == 'gauss_kernel_mediane_per_variable':
+            has_bandwidth = True
+            kernel_,computed_bandwidth = gauss_kernel_mediane_per_variable(x=x,y=y,
+                                                                           bandwidth=bandwidth,
+                                                                          median_coef=median_coef,
+                                                                          return_mediane=True,
+                                                                          verbose=verbose)
+
         else:
             kernel_ = function
 
 
-
+        if verbose>1:
+            print("kernel",kernel_)
         self.data[self.data_name]['kernel'] = kernel_
         self.data[self.data_name]['kernel_name'] = kernel_name
         if has_bandwidth:
