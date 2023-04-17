@@ -2,7 +2,7 @@ from os import POSIX_FADV_SEQUENTIAL
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
-
+import pandas as pd
 from .kernel_statistics import Statistics
 from .utils_plot import init_plot_kfdat,init_plot_pvalue,text_truncations_of_interest
 from .utils_matplotlib import custom_histogram,highlight_on_histogram
@@ -195,9 +195,12 @@ class Plot_Standard(Statistics):
                     name=None,
                     orientation='vertical',
                     color=None,
+                    alpha=.5,
                     fig=None,ax=None,
                     show_conditions=True,
+                    legend=True,
                     legend_fontsize=15,
+                    lw=2,
                     condition=None,
                     samples=None,
                     highlight=None,
@@ -206,17 +209,21 @@ class Plot_Standard(Statistics):
                     highlight_label=None,
                     samples_colors=None,
                     marked_obs_to_ignore=None,
-                    kde=True,
+                    hist_type='kde',
                     kde_bw=.2,
+                    xshift=0,
+                    yshift=0,
+                    means=True,
+                    normalize=False,
                     ):
 
-        labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        # labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
         properties = self.get_plot_properties(
                         color=color,
-                        labels=labels,
+                        # labels=labels,
                         show_conditions=show_conditions,
                         condition=condition,
                         samples=samples,
@@ -238,12 +245,17 @@ class Plot_Standard(Statistics):
                                 fig=fig,
                                 ax=ax,
                                 orientation=orientation,
-                                alpha=.5,
-                                label=vprop['hist_args']['label'],
+                                alpha=alpha,
+                                label=vprop['hist_args']['label'] if legend else None,
                                 color=vprop['hist_args']['color'],
-                                kde=kde,
+                                hist_type=hist_type,
+                                lw=lw,
                                 kde_bw=kde_bw,
-                                minmax = [min,max]
+                                minmax = [min,max],
+                                xshift=xshift,
+                                yshift=yshift,
+                                means=means,
+                                normalize=normalize
                                 )
                 
 
@@ -286,7 +298,8 @@ class Plot_Standard(Statistics):
         else:
             ax.set_ylabel(self.get_axis_label(proj,t),fontsize=25)
 
-        ax.legend(fontsize=legend_fontsize)
+        if legend:
+            ax.legend(fontsize=legend_fontsize)
 
         # fig.tight_layout()
         return(fig,ax)
@@ -306,24 +319,42 @@ class Plot_Standard(Statistics):
                         #color_list,marker_list,big_marker_list,show_conditions
                         ):
         if color_list is None:
-            color_list = ['xkcd:cerulean','xkcd:light orange','xkcd:grass green']
+            color_list = ['xkcd:cerulean',
+                          'xkcd:light orange',
+                          'xkcd:grass green',
+                          'xkcd:cerise',
+                          'xkcd:mocha',
+                          'xkcd:greeny blue',
+                          'xkcd:vibrant blue',
+                          'xkcd:candy pink',
+                          'xkcd:lavender',
+                          'xkcd:pale green',
+                          'xkcd:peach',
+                          'xkcd:goldenrod',
+                          'xkcd:mahogany',
+                          'xkcd:terra cotta',
+                          'xkcd:acid green',
+                          'xkcd:teal blue',
+                          'xkcd:dusty pink',
+                          'xkcd:pinky red'
+                          ]
         if marker_list is None:
             marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
         properties = {}
-        # cx_ = color_list[0] # 'xkcd:cerulean'
-        # cy_ = color_list[1] #'xkcd:light orange'
-        mx_ = 'o'
-        my_ = 's'
-        variables = self.data[self.data_name]['variables']
+        variables = self.get_variables()
         marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
         
         dict_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        dict_data = self.get_dataframes_of_data(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        dict_data = self.get_data(condition=condition,
+                                  samples=samples,
+                                  marked_obs_to_ignore=marked_obs_to_ignore,
+                                  in_dict=True,
+                                  dataframe=True)
         samples_list = self.get_samples_list(condition,samples) 
         
         color_list = color_list if len(color_list)>=len(samples_list) else [None]*len(samples_list)   
-        if not isinstance(color_list,dict): 
-            color_list = {k:c for k,c in zip(samples_list,color_list)}
+        if isinstance(color_list,dict): 
+            color_list = [color_list[k] for k in samples_list]
         coef_bins = 3
         if marker is None and color is None : 
             # print("plot properties marker is None and color is None")
@@ -333,7 +364,7 @@ class Plot_Standard(Statistics):
                 lab = f'{k}({len(ipop)})' if legend else None
                 bins = coef_bins*int(np.floor(np.sqrt(len(ipop))))
                 m = marker_list[i]
-                c = color_list[k]
+                c = color_list[i]
                 bm = big_marker_list[i]
 
                 properties[k] = {'index':ipop,
@@ -355,7 +386,7 @@ class Plot_Standard(Statistics):
                     n = len(ipop)
                     df = dict_data[k]
                     c = df[color]
-                    cm = color_list[k]
+                    cm = color_list[i]
                     lab = f'{k}({n})' if legend else None
                     m = marker_list[i]
                     bm = big_marker_list[i]
@@ -374,10 +405,10 @@ class Plot_Standard(Statistics):
                                 ipop = self.obs.loc[self.obs[color]==pop].index
                                 n = len(ipop)
                                 ipop = ipop[ipop.isin(dict_index[k])]
-                                
+
                                 m = marker_list[j%len(marker_list)]
                                 mean_m = big_marker_list[j%len(big_marker_list)]
-
+                                c = color_list[(j)%len(color_list)]
                                 if marked_obs_to_ignore is not None:
                                     obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
                                     ipop = ipop[~ipop.isin(obs_to_ignore)]
@@ -386,8 +417,9 @@ class Plot_Standard(Statistics):
                                 properties[f'{pop}{k}'] = {'index':ipop,
                                                     'plot_args':{'marker':m},
                                                     'mean_plot_args':{'marker':mean_m,'label':lab},
-                                                    'hist_args':{'bins':bins,'label':lab}}
+                                                    'hist_args':{'bins':bins,'label':lab,'color':c}}
 
+                            
         
                         else:
                             # print('not show conditions')
@@ -399,14 +431,12 @@ class Plot_Standard(Statistics):
 
                             lab = f'{pop} ({len(ipop)})' if legend else None
                             bins=coef_bins*int(np.floor(np.sqrt(len(ipop))))
-                            c = color_list[k]
-                            
+                            c = color_list[i]
                             properties[pop] = {'index':ipop,
-                                            'plot_args':{'marker':'.','c':c},
+                                            'plot_args':{'marker':'.','c':None},
                                             'mean_plot_args':{'marker':'o','label':lab,'color':c},
-                                            'hist_args':{'bins':bins,'label':lab}}
-                            if c is not None:
-                                properties[k]['hist_args']['color']=c
+                                            'hist_args':{'bins':bins,'label':lab,'color':c}}
+
                             
                 else: # pour une info numérique 
                     # print(f'{color} is not categorical in obs')
@@ -598,7 +628,7 @@ class Plot_Standard(Statistics):
                     marked_obs_to_ignore=None,):
 
 
-        labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        # labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
 
@@ -612,7 +642,7 @@ class Plot_Standard(Statistics):
         properties = self.get_plot_properties(
                 marker=marker,
                 color=color,
-                labels=labels,
+                # labels=labels,
                 show_conditions=show_conditions,
                 condition=condition,
                 samples=samples,
@@ -750,6 +780,7 @@ class Plot_Standard(Statistics):
                     ax=None,
                     show_conditions=True,
                     orientation='vertical',
+                    alpha=.5,
                     legend_fontsize=15,
                     condition=None,
                     samples=None,
@@ -759,7 +790,7 @@ class Plot_Standard(Statistics):
                     highlight_label=None,
                     samples_colors=None,
                     marked_obs_to_ignore=None,
-                    kde=False,
+                    hist_type='kde',
                     kde_bw=.2,
                     verbose=0):
 
@@ -777,6 +808,7 @@ class Plot_Standard(Statistics):
                         name=kfdat_name,
                         orientation=orientation,
                         color=color,
+                        alpha=alpha,
                         fig=fig,ax=ax,
                         show_conditions=show_conditions,
                         legend_fontsize=legend_fontsize,
@@ -788,7 +820,7 @@ class Plot_Standard(Statistics):
                         samples=samples,
                         samples_colors=samples_colors,
                         marked_obs_to_ignore=marked_obs_to_ignore,
-                        kde=kde,
+                        hist_type=hist_type,
                         kde_bw=kde_bw,
                         )
         return(fig,ax)
@@ -802,12 +834,15 @@ class Plot_Standard(Statistics):
                               orientation='vertical',
                               highlight=None,
                     highlight_label=None,
+                    alpha=.5,
                               legend_fontsize=15):
         mmd_name = self.get_mmd_name()
-        fig,ax = self.density_proj(t='mmd',proj='proj_mmd',
+        fig,ax = self.density_proj(t='mmd',
+                                   proj='proj_mmd',
                                    name=mmd_name,
                                    orientation=orientation,
                                    color=color,
+                                   alpha=alpha,
                                    fig=fig,
                                    ax=ax,
                                    show_conditions=show_conditions,
@@ -1124,3 +1159,295 @@ class Plot_Standard(Statistics):
             ax.legend()
         
         return(fig,ax)
+    
+
+      
+    def get_plot_properties(self,
+                    marker=None,
+                    color=None,
+                    show_conditions=True,
+                    legend=True,
+                    condition=None,
+                    samples=None,
+                    marked_obs_to_ignore=None,
+                    marker_list = None,
+                    big_marker_list = None,
+                    color_list = None,
+                    coef_bins = 3,
+                    verbose=0):            
+            
+
+        properties = {}
+        
+        index_to_plot = self.get_indexes_to_plot(marker=marker,color=color,show_conditions=show_conditions,
+                        condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+
+        marker_dict,big_marker_dict = self.get_marker_to_plot(marker=marker,
+                    show_conditions=show_conditions,
+                    condition=condition,samples=samples,
+                    marker_list = marker_list,big_marker_list = big_marker_list,)
+        color_dict,mean_color_dict = self.get_color_to_plot(color=color,
+                    show_conditions=show_conditions,
+                    condition=condition,
+                    samples=samples,
+                    marked_obs_to_ignore=marked_obs_to_ignore,
+                    color_list = color_list)
+        
+        
+        # print('marker:',marker_dict.keys())
+        # print('color:',color_dict.keys())
+        # print('index:',index_to_plot.keys())
+        for k in index_to_plot.keys():
+            pop_index = index_to_plot[k]['index']
+            popc = index_to_plot[k]['popc']
+            popm = index_to_plot[k]['popm']
+            
+            # print(f'k:{k} popc:{popc} popm:{popm}')
+            
+            c = color_dict[popc]
+            if isinstance(c,pd.DataFrame):
+                c = c.loc[pop_index,color]
+            cm = mean_color_dict[popc]
+            m = marker_dict[popm]
+            bm = big_marker_dict[popm]
+
+            n = len(pop_index)
+            lab = f'{k} ({n})' if legend else None
+            bins = coef_bins*int(np.floor(np.sqrt(len(pop_index))))
+
+            properties[k] = {'index':pop_index,
+                                'plot_args':{'marker':m,'c':c},
+                                'mean_plot_args':{'marker':bm,'label':lab,'color':cm},
+                                'hist_args':{'bins':bins,'label':lab,'color':c}}
+        return(properties)
+
+    def get_indexes_to_plot(self,
+                        marker=None,
+                        color=None,
+                        show_conditions=True,
+                        condition=None,
+                        samples=None,
+                        marked_obs_to_ignore=None):
+
+                
+        index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        all_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,in_dict=False)
+        index_to_plot = {}
+        
+        if marker is None and color is None : 
+            if show_conditions:
+                for pop,pop_index in index.items():
+                    index_to_plot[pop] = {'index':pop_index,'popm':pop,'popc':pop}
+            else:
+                index_to_plot['pop'] = {'index':all_index,'popm':'popm','popc':'popc'}
+
+        elif isinstance(color,str) and marker is None:
+            if color in list(self.get_variables()):
+                if show_conditions:
+                    for pop,pop_index in index.items():
+                        index_to_plot[pop] = {'index':pop_index,'popm':pop,'popc':pop}
+                else:
+                    index_to_plot['pop'] = {'index':all_index,'popm':'popm','popc':'popc'}
+
+            elif color in list(self.obs.columns):
+                if self.obs[color].dtype == 'category':
+                    for popc in self.obs[color].cat.categories:
+                        popc_index = self.obs.loc[self.obs[color]==popc].index
+                        
+                        if show_conditions: 
+                            for popm,popm_index in index.items():
+                                pop_index = popm_index[popm_index.isin(popc_index)]
+                                index_to_plot[f'{popc} {popm}'] = {'index':pop_index,
+                                                               'popm':popm,
+                                                               'popc':popc}
+                        else:
+                            pop_index = all_index[all_index.isin(popc_index)]                            
+                            index_to_plot[popc] = {'index':pop_index,
+                                            'popm':'popm',
+                                            'popc':popc}
+                            
+
+                else: # pour une info numérique 
+                    if show_conditions:
+                        for pop,pop_index in index.items():
+                            index_to_plot[pop] = {'index':pop_index,'popm':pop,'popc':pop}
+                    else:
+                        index_to_plot['pop'] = {'index':all_index,'popm':'popm','popc':'popc'}
+
+
+        elif color is None and isinstance(marker,str):
+            print('color is None and marker is specified : this case is not treated yet')
+
+        elif isinstance(color,str) and isinstance(marker,str):
+            if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
+                if color in list(self.get_variables()):                    
+                    for popm in self.obs[marker].cat.categories:  
+                        popm_index = self.obs.loc[self.obs[marker]==popm].index
+                        if show_conditions: 
+                            for popc in index.keys():
+                                pop_index = popm_index[popm_index.isin(index[popc])]
+                                index_to_plot[f'{popc} {popm}'] = {'index':pop_index,
+                                                               'popm':popm,
+                                                               'popc':popc}
+                        else:
+                            pop_index = all_index[all_index.isin(popm_index)]   
+                            index_to_plot[popm] = {'index':pop_index,
+                                                    'popm':popm,
+                                                    'popc':'popc'}
+
+                elif color in list(self.obs.columns):
+                    if self.obs[color].dtype == 'category':
+                        for popc in self.obs[color].cat.categories:
+                            popc_index = self.obs[self.obs[color]==popc].index
+                            for popm in self.obs[marker].cat.categories:
+                                popm_index = self.obs[self.obs[marker]==popm].index
+                                pop_index = popm_index[popm_index.isin(popc_index)]
+
+                                if show_conditions: 
+                                    for k in index.keys():
+                                        pop_index = pop_index[pop_index.isin(index[k])]
+                                        index_to_plot[f'{k} {popc} {popm}'] = {'index':pop_index,
+                                                    'popm':popm,
+                                                    'popc':popc}
+                                else:
+                                    pop_index = all_index[all_index.isin(pop_index)]   
+                                    index_to_plot[f'{popc} {popm}'] = {'index':pop_index,
+                                                    'popm':popm,
+                                                    'popc':popc}
+                                    
+                    else: # pour une info numérique 
+                        for popm in self.obs[marker].cat.categories:
+                            popm_index = self.obs.loc[self.obs[marker]==popm].index
+                            if show_conditions: 
+                                for popc in index.keys():
+                                    pop_index = popm_index[popm_index.isin(index[popc])]
+                                    index_to_plot[f'{popc} {popm}'] = {'index':pop_index,
+                                                    'popm':popm,
+                                                    'popc':popc}
+                            else:
+                                pop_index = all_index[all_index.isin(popm_index)]
+                                index_to_plot[popm] = {'index':pop_index,
+                                                    'popm':popm,
+                                                    'popc':'popc'}
+
+            else:
+                print(f"{marker} is not in self.obs or is not categorical, \
+                use self.obs['{marker}'] = self.obs['{marker}'].astype('category')")
+        else:
+                print(f'{color} and {marker} not found in obs and variables')
+        return(index_to_plot)
+    
+    def get_marker_to_plot(self,
+                    marker=None,
+                    show_conditions=True,
+                    condition=None,
+                    samples=None,
+                    marker_list = None,
+                    big_marker_list = None,
+                        #color_list,marker_list,big_marker_list,show_conditions
+                        ):
+
+        if marker_list is None:
+            marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
+        if big_marker_list is None:
+            big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
+        
+        nm = len(marker_list)
+        samples_list = self.get_samples_list(condition,samples) 
+        
+        marker_dict = {}
+        big_marker_dict = {}
+
+        if marker is None and not show_conditions:
+            marker_dict['popm'] = '.'
+            big_marker_dict['popm'] = 'o'
+        else:
+            if marker is None:
+                popm_list = samples_list
+            elif marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
+                popm_list = self.obs[marker].cat.categories
+            else: 
+                print(f'marker {marker} not recognized')
+            
+            for i,popm in enumerate(popm_list):
+
+                    m = marker_list[i%nm]
+                    bm = big_marker_list[i%nm]
+                    
+                    marker_dict[popm] = m
+                    big_marker_dict[popm] = bm
+
+        return(marker_dict,big_marker_dict)
+
+    def get_color_to_plot(self,
+                    color=None,
+                    show_conditions=True,
+                    condition=None,
+                    samples=None,
+                    marked_obs_to_ignore=None,
+                    color_list = None):
+        if isinstance(color_list,dict):
+            color_dict = color_list
+            mean_color_dict=color_list
+
+        else:
+            if color_list is None:
+                color_list = ['xkcd:cerulean','xkcd:light orange',
+            'xkcd:grass green','xkcd:cerise','xkcd:mocha','xkcd:greeny blue',
+            'xkcd:vibrant blue','xkcd:candy pink','xkcd:lavender','xkcd:pale green',
+            'xkcd:peach','xkcd:goldenrod','xkcd:mahogany','xkcd:terra cotta',
+            'xkcd:acid green','xkcd:teal blue','xkcd:dusty pink','xkcd:pinky red']
+                
+            nc = len(color_list)
+            color_dict={}
+            mean_color_dict={}
+            variables = self.get_variables()
+            
+            samples_list = self.get_samples_list(condition,samples) 
+            
+            
+            
+            if color is None : 
+                if show_conditions:
+                    for i,popc in enumerate(samples_list):
+                        color_dict[popc] = color_list[i%nc]
+                        mean_color_dict[popc] = color_list[i%nc]
+                else:
+                    color_dict['popc'] = color_list[0]
+                    mean_color_dict['popc'] = color_list[0]
+
+            elif isinstance(color,str):
+                if color in list(variables):
+                    data = self.get_data(condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=marked_obs_to_ignore,
+                                    in_dict=False,
+                                    dataframe=True)
+
+                    if show_conditions:
+                        for i,popc in enumerate(samples_list):
+                            color_dict[popc] = data[color].to_frame()
+                            mean_color_dict[popc] = color_list[i%nc]
+                    else:                    
+                        color_dict['popc'] = data[color].to_frame()
+                        mean_color_dict['popc'] = color_list[0]
+
+                elif color in list(self.obs.columns):
+                    # print("color in list(variables)")
+                    if self.obs[color].dtype == 'category':
+                        for i,popc in enumerate(self.obs[color].cat.categories):
+                            color_dict[popc] = color_list[i%nc]
+                            mean_color_dict[popc] = color_list[i%nc]                        
+
+                    else: # pour une info numérique 
+                        # print(f'{color} is not categorical in obs')
+                        if show_conditions:
+                            for i,popc in enumerate(samples_list):
+                                color_dict[popc] = self.obs[color].to_frame()
+                                mean_color_dict[popc] = color_list[i%nc]  
+                        else:
+                            color_dict['popc'] = self.obs[color].to_frame()
+                            mean_color_dict['popc'] = color_list[i%nc]  
+            else:
+                    print(f'{color} not found in obs and variables')
+        return(color_dict,mean_color_dict)

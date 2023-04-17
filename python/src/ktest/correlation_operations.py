@@ -20,7 +20,9 @@ class Correlations(Base):
         variables = self.get_variables()
         df_proj= self.init_df_proj(proj)
         t = 30 if t is None else t 
-        df = self.get_dataframe_of_all_data()
+        # df = self.get_dataframe_of_all_data()
+        df = self.get_data(in_dict=False,dataframe=True)
+
         
         for ti in range(1,t):
             df[f't{ti}'] = pd.Series(df_proj[f'{ti}'])

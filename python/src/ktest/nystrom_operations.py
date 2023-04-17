@@ -139,7 +139,8 @@ class NystromOps(OutliersOps,Verbosity):
         dict_nobs  =  self.get_nobs(landmarks=False)
         dict_n_landmarks = self.get_dict_n_landmarks(verbose=verbose)
         landmarks_name = self.get_landmarks_name()
-        dict_data = self.get_dataframes_of_data()
+        # dict_data = self.get_dataframes_of_data()
+        dict_data = self.get_data(in_dict=True,dataframe=True)
 
             
         for sample in dict_index.keys():

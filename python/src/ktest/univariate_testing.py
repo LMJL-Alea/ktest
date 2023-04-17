@@ -65,20 +65,32 @@ class Univariate:
         if data_name is None:
             data_name = self.data_name
 
-        dict_df = self.get_dataframes_of_data(data_name=data_name)
+        # dict_df = self.get_dataframes_of_data(data_name=data_name)
+        dict_df = self.get_data(data_name=data_name,
+                                in_dict=True,dataframe=True)
+        dfa = self.get_data(data_name=data_name,
+                                 in_dict=False,
+                                 dataframe=True)
         dfzp = pd.DataFrame()
-        for s,df in dict_df.items():
+        sl = self.get_samples_list()
+        for s in sl:
+            df = dict_df[s]
             dfzp[f'{s}_nz'] = (df==0).sum()
             dfzp[f'{s}_n'] = len(df)
             dfzp[f'{s}_pz'] = dfzp[f'{s}_nz']/len(df)
             dfzp[f'{s}_pct_expression'] = 1 - dfzp[f'{s}_pz']
             dfzp[f'{s}_mean'] = df.mean()
-
-
+        dfzp['nz'] = (dfa==0).sum()
+        dfzp['pz'] = dfzp[f'nz']/len(dfa)
+        dfzp[f'pct_expression'] = 1 - dfzp[f'pz']
+        
         self.update_var_from_dataframe(dfzp)
     
     def it_is_possible_to_compute_log2fc(self,data_name=None):
-        df = self.get_dataframe_of_all_data(data_name)
+        # df = self.get_dataframe_of_all_data(data_name)
+        df = self.get_data(data_name=data_name,
+                           in_dict=False,
+                           dataframe=True)
         npositive = (df>=0).sum().sum()
         ntotal = df.shape[0]*df.shape[1]
         return(npositive == ntotal)
@@ -90,7 +102,10 @@ class Univariate:
 
         if self.it_is_possible_to_compute_log2fc(data_name):
 
-            dfs = self.get_dataframes_of_data (data_name=data_name)     
+            # dfs = self.get_dataframes_of_data (data_name=data_name)   
+            dfs = self.get_data(data_name=data_name,
+                                dataframe=True,
+                                in_dict=True)  
             s1,s2 = dfs.keys()
             dffc = pd.DataFrame()
             cols = []
@@ -125,7 +140,10 @@ class Univariate:
 
     def compute_log2fc_from_another_dataframe(self,df,data_name='raw'):
         
-        index = self.get_dataframe_of_all_data().index
+        # index = self.get_dataframe_of_all_data().index
+        index = self.get_index(in_dict=False)
+        
+
         df = df[df.index.isin(index)]
         self.add_data_to_Ktest_from_dataframe(df,data_name=data_name,update_current_data_name=False)            
         self.add_log2fc_to_var(data_name=data_name)
@@ -235,7 +253,8 @@ class Univariate:
             the list of 'k' variables that have the higher variance of the active dataset.
         """
 
-        df = self.get_dataframe_of_all_data()
+        # df = self.get_dataframe_of_all_data()
+        df = self.get_data(in_dict=False,dataframe=True)
         return(df.var().sort_values(ascending=False)[:k].index)
  
     def get_genes_presents_in_more_than_k_cells(self,k=3,data_name=None):
@@ -319,6 +338,10 @@ class Univariate:
             print(kernel_params)
         data = self.init_df_proj(variable)
         meta = self.obs.copy()
+        # data = self.get_data(dataframe=True,in_dict=False)[variable].to_frame()
+        # # init_df_proj(variable)
+        # meta = self.get_metadata(in_dict=False).copy()
+        
         test_params=self.test_params_initial.copy()
         
         if ignore_zeros:

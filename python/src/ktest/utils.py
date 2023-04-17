@@ -55,6 +55,8 @@ def get_kernel_name(function,bandwidth,median_coef):
             n+=f'_{bandwidth}'
     elif function == 'linear':
         n+=function
+    elif function == 'gauss_kernel_mediane_per_variable':
+        n+=function
     else:
         n='user_specified'
     return(n)

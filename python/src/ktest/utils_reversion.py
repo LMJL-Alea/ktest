@@ -435,7 +435,7 @@ def get_pop_from_discriminant(self,
                                         '48HREV_1':'xkcd:aqua green',
                                         '48HREV_2':'xkcd:light magenta'},
                               nobs=None,
-                              kde=True,
+                              hist_type='kde',
                               kde_bw=.2):
     self.set_test_data_info(samples=comparaison)
     self.projections(t)
@@ -448,7 +448,7 @@ def get_pop_from_discriminant(self,
                            fig=fig,
                            ax=ax,
                            highlight=pop,
-                           kde=kde,
+                                hist_type=hist_type,
                            kde_bw=kde_bw)
     if threshold is not None:
         ax.axvline(threshold,c='crimson',ls='--')
@@ -566,7 +566,7 @@ def hist_of_every_reversion_discriminant(self,t,
                                                    '48HREV_1':'xkcd:aqua green',
                                                    '48HREV_2':'xkcd:light magenta'},
                                         highlight=None,
-                                        kde=True,
+                                        hist_type='kde',
                                         kde_bw=.2):
 
     if condition is None:
@@ -579,7 +579,7 @@ def hist_of_every_reversion_discriminant(self,t,
                              fig=fig,ax=ax,
                              samples_colors=[colors[s] for s in comparaison],
                              highlight=highlight,
-                             kde=kde,
+                                hist_type=hist_type,
                              kde_bw=kde_bw)
     return(fig,axes)
                   
@@ -594,7 +594,7 @@ def study_pop(self,
               ylim1=(-5,1000),
               ylim2=(-5,1000),
               t_repr=None,
-              kde=False,
+              hist_type='hist',
               kde_bw=.2,
               ylim_clusters=[-2,2],
               pval_splitted=True,
@@ -612,7 +612,7 @@ def study_pop(self,
                                     threshold=threshold,
                                     orientation=orientation,
                                     nobs=nobs,
-                                    kde=kde,
+                                hist_type=hist_type,
                                     kde_bw=kde_bw,
                                     )
     
@@ -621,7 +621,7 @@ def study_pop(self,
                                          t=t_repr,
                                          highlight=pop,
                                          comparaisons=[['48HREV', '0H'], ['48HREV', '24H'], ['48HREV', '48HDIFF']],
-                                         kde=kde,
+                                hist_type=hist_type,
                                          kde_bw=kde_bw)
     # see_pop_on_other_comparisons(self,t=t_repr,pop=pop)
     # see_pop_on_other_comparisons(self,t=t_repr,pop=pop,hist=False,next_pc=True)
@@ -669,7 +669,10 @@ def custom_clustering(df,n_clusters,n_init=10,max_iter=300,random_state=4):
 
 def density_of_pvalues(self,condition,samples,clusters,t=3,log=False,
                       colors = {0:'b',1:'orange',2:'g',3:'r',4:'purple'},
-                       verbose=1,kde=True,kde_bw=.2,coef_bins=3,fig=None,ax=None
+                       verbose=1,
+                                                       hist_type='kde',
+                       kde_bw=.2,
+                       coef_bins=3,fig=None,ax=None
     ):
 
     if fig is None:
@@ -701,7 +704,8 @@ def density_of_pvalues(self,condition,samples,clusters,t=3,log=False,
                              color=colors[k],
                              label=f'cluster {k} ({len(df[df<.05])}/{len(df)} DE))',
                              fig=fig,ax=ax,
-                             kde=kde,kde_bw=kde_bw,
+                                hist_type=hist_type,
+                            kde_bw=kde_bw,
                              coef_bins=coef_bins,
                             means=False)
         ax.legend()

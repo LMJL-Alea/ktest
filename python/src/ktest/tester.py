@@ -761,9 +761,9 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                                marked_obs_to_ignore=marked_obs_to_ignore,
                                in_dict=in_dict)
         if in_dict:
-            return({k:df[df.index.isin(i)] for k,i in index.items()})
+            return({k:df.loc[i] for k,i in index.items()})
         else:
-            return(df[df.index.isin(index)])
+            return(df.loc[index])
 
     def get_metadata(self,
                      condition=None,

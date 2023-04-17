@@ -92,6 +92,37 @@ def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=Fal
     else: 
         return kernel
 
+def mediane_per_variable(x,y,verbose=0):
+    x=torch_transformator(x)
+    y=torch_transformator(y)
+    z = torch.cat([x,y])
+    medianes = torch.zeros(z.shape[1])
+    for v in range(z.shape[1]):
+        medianes[v] = mediane(z[:,[v]]).item()
+    return(medianes)
+
+
+def gauss_kernel_mediane_per_variable(x,y,bandwidth='p',median_coef=1,return_mediane=False,verbose=0):
+    medianes = median_coef * mediane_per_variable(x,y,verbose=verbose)
+    if bandwidth=='median':
+        computed_bandwidth = median_coef*mediane(x/medianes,y/medianes)
+    elif bandwidth =='p':
+        computed_bandwidth = median_coef*len(medianes)
+    elif bandwidth == 'pmedian':
+        computed_bandwidth = median_coef*mediane(x/medianes,y/medianes)*len(medianes)
+    else:
+        computed_bandwidth = median_coef*bandwidth
+
+    kernel = lambda x,y: gauss_kernel(x/medianes,y/medianes,computed_bandwidth)
+    if return_mediane:
+        return(kernel,computed_bandwidth)
+    else:
+        return(kernel)
+
+
+
+
+
 def gauss_kernel_mediane_zi(x,y,median_coef=1,return_mediane=False,verbose=0):
     xnz=x[x[:,0]!=0]
     ynz=y[y[:,0]!=0]

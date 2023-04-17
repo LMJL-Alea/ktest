@@ -42,6 +42,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         for t in toi:
             ax.axvline(t,ls='--',alpha=.8)
         return(fig,axes)
+                   
+                   
 
     def plot_density_of_variable(self,
                                  variable,
@@ -49,12 +51,25 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                  ax=None,
                                  color=None,
                                  highlight=None,
+                                 highlight_color=None,
+                                 highlight_linewidth=3,
                                  highlight_label=None,
-                                 kde=False,
-                                 kde_bw=.2,
                                  samples_colors=None,
+                                 alpha=.5,
+                                 hist_type='kde',
+                                 kde_bw=.2,
+                                 show_conditions=True,
+                                 legend=True,
+                                 legend_fontsize=15,
+                                 lw=2,
                                  condition=None,
-                                 samples=None):
+                                 samples=None,
+                                 marked_obs_to_ignore=None,
+                                 xshift=0,
+                                 yshift=0,
+                                 orientation='vertical',
+                                 normalize=False,
+                                 means=True):
         if fig is None:
             fig,ax =plt.subplots(figsize=(10,6))
             
@@ -63,12 +78,26 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                           fig=fig,
                           ax=ax,
                           color=color,
+                          alpha=alpha,
                           highlight=highlight,
-                        highlight_label=highlight_label,
-                          kde=kde,kde_bw=kde_bw,
+                          highlight_label=highlight_label,
+                          highlight_color=highlight_color,
+                          highlight_linewidth=highlight_linewidth,
+                          show_conditions=show_conditions,
+                          legend=legend,
+                          legend_fontsize=legend_fontsize,
+                          lw=lw,
+                          hist_type=hist_type,kde_bw=kde_bw,
                             condition=condition,
                             samples=samples,
-                            samples_colors=samples_colors,)
+                            marked_obs_to_ignore=marked_obs_to_ignore,
+                            samples_colors=samples_colors,
+                            orientation=orientation,
+                            xshift=xshift,
+                            yshift=yshift,
+                            normalize=normalize,
+                            means=means
+                            )
         
         title = f'{variable}\n'
         zero_proportions = self.compute_zero_proportions_of_variable(variable)
@@ -79,6 +108,144 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                 title += f' {c_}: {nz}z '
         
         ax.set_title(title,fontsize=20)
+        return(fig,ax)
+
+    def plot_density_of_variables_horizon(self,
+                                        genes,
+                                        fig=None,
+                                        ax=None,
+                                        kde_bw=.2,
+                                        xshift_max=8,
+                                        yshift_max=3,
+                                        legend=True,
+                                        means=True,
+                                        lw=3,    
+                                    color=None,
+                                    highlight=None,
+                                    highlight_color=None,
+                                    highlight_linewidth=.5,
+                                    highlight_label=None,
+                                    samples_colors=None,
+                                    alpha=.5,
+                                    show_conditions=True,
+                                    legend_fontsize=15,
+                                    condition=None,
+                                    samples=None,
+                                    marked_obs_to_ignore=None,
+                                    orientation='vertical',
+                                    normalize=True
+                                    ):
+        if fig is None:
+            fig,ax=plt.subplots(figsize=(7,7))
+
+        ng = len(genes)
+        
+        yshifts = [i/ng*yshift_max for i in range(ng)]
+        xshifts = [i/ng*xshift_max for i in range(ng)]
+        ax.plot(xshifts,yshifts,alpha=.5,c='grey')
+        ax.scatter(xshifts,yshifts,marker='|',s=100,color='grey')
+        
+        for i in range(ng)[::-1]:
+            if legend :
+                legend_=True if i==0 else False
+            else:
+                legend_=legend
+            x= xshifts[i]
+            y=yshifts[i]
+            g=genes[i]
+            
+            ax.axhline(y,alpha=.5,c='grey')
+                        
+            self.plot_density_of_variable(variable=g,
+                                        fig=fig,
+                                        ax=ax,
+                                        color=color,
+                                    highlight=highlight,
+                                    highlight_color=highlight_color,
+                                    highlight_linewidth=highlight_linewidth,
+                                    highlight_label=highlight_label,
+                                    samples_colors=samples_colors,
+                                    alpha=alpha,
+                                    hist_type='kde',
+                                    kde_bw=kde_bw,
+                                    show_conditions=show_conditions,
+                                    legend=legend_,
+                                    legend_fontsize=legend_fontsize,
+                                    lw=lw,
+                                    condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=marked_obs_to_ignore,
+                                    xshift=x,
+                                    yshift=y,
+                                    orientation=orientation,
+                                    means=means,
+                                    normalize=normalize)  
+
+        ax.set_yticks(yshifts)
+        ax.set_yticklabels(genes,fontsize=10)
+
+        
+        return(fig,ax)
+    
+
+    def plot_density_of_variables_violin(self,
+                                    variables,
+                                    fig=None,
+                                    ax=None,
+                                    color=None,
+                                    highlight=None,
+                                    highlight_color=None,
+                                    highlight_linewidth=3,
+                                    highlight_label=None,
+                                    samples_colors=None,
+                                    alpha=.5,
+                                    kde_bw=.2,
+                                    show_conditions=True,
+                                    legend=True,
+                                    legend_fontsize=15,
+                                    lw=2,
+                                    condition=None,
+                                    samples=None,
+                                    marked_obs_to_ignore=None,
+                                    orientation='horizontal',
+                                    means=True,
+                                    separation=2.2):
+        if fig is None:
+            fig,ax = plt.subplots(figsize=(12,6))
+        
+        yshifts = [i*separation for i in range(len(variables))]
+        for i,v in enumerate(variables):
+            if legend and i != 0:
+                legend=False
+            self.plot_density_of_variable(variable=v,
+                                        fig=fig,
+                                    ax=ax,
+                                    color=color,
+                                    highlight=highlight,
+                                    highlight_color=highlight_color,
+                                    highlight_linewidth=highlight_linewidth,
+                                    highlight_label=highlight_label,
+                                    samples_colors=samples_colors,
+                                    alpha=alpha,
+                                    hist_type='violin',
+                                    kde_bw=kde_bw,
+                                    show_conditions=show_conditions,
+                                    legend=legend,
+                                    legend_fontsize=legend_fontsize,
+                                    lw=lw,
+                                    condition=condition,
+                                    samples=samples,
+                                    marked_obs_to_ignore=marked_obs_to_ignore,
+                                    xshift=0,
+                                    yshift=yshifts[i],
+                                    orientation=orientation,
+                                    means=means)  
+        if orientation == 'vertical':
+            ax.set_yticks(yshifts)
+            ax.set_yticklabels(variables,rotation=0,fontsize=10)
+        else:
+            ax.set_xticks(yshifts)
+            ax.set_xticklabels(variables,rotation=90,fontsize=10)
         return(fig,ax)
 
 
@@ -173,7 +340,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                                 color=None,marker=None,highlight=None,
                                                 samples_colors=None,
                                                 previous_discriminant=False,
-                                                kde=False,kde_bw =.2,
+                                                hist_type='hist',
+                                                kde_bw =.2,
                                                 condition=None,
                                                 samples=None,
                                                 pval_t=None,
@@ -209,7 +377,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                       ax=axd['A'],
                                       color=color,
                                       highlight=highlight,
-                                      kde=kde,
+                                      hist_type=hist_type,
                                       kde_bw=kde_bw,
                                       samples_colors=samples_colors,
                                       condition=condition,
@@ -224,7 +392,9 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                                         fig=fig,
                                                         ax=axd['C']
                                                         )
-        self.hist_discriminant(t=t,fig=fig,ax=axd['D'],orientation='horizontal',kde=kde,kde_bw=kde_bw)
+        self.hist_discriminant(t=t,fig=fig,ax=axd['D'],orientation='horizontal',
+                                hist_type=hist_type,
+                               kde_bw=kde_bw)
         
         axd['A'].legend([])
         axd['A'].set_xlabel('')
