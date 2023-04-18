@@ -102,8 +102,45 @@ def mediane_per_variable(x,y,verbose=0):
     return(medianes)
 
 
+def get_weights(x,y,weights,weights_power=1,verbose=0):
+    if isinstance(weights,str):
+        if weights == 'median':
+            weights_=  mediane_per_variable(x,y)**weights_power
+        elif weights == 'variance':
+            weights_ = torch.cat([x,y]).var(axis=0)**weights_power
+        else:
+            print(f"kernel weights {weights} not recognized.")
+    else:
+        weights_ = weights ** weights_power 
+    if verbose>1:
+        print('kernel weights : ',end=' ')
+        if isinstance(weights,str):
+            print(weights,end=' ')
+        if weights_power != 1:
+            print(f'weights_power:{weights_power}',end= '')
+        print('\nweigths :',weights_[:5])
+    return(weights_)
+
+
+
+def gauss_kernel_weighted_variables(x,y,weights,weights_power=1,bandwidth='median',median_coef=1,return_mediane=False,verbose=0):
+    weights_ = get_weights(x,y,weights,weights_power=weights_power,verbose=verbose)
+    if bandwidth=='median':
+        computed_bandwidth = median_coef*mediane(x*weights_,y*weights_)
+    elif bandwidth =='p':
+        computed_bandwidth = median_coef*len(weights_)
+    else:
+        computed_bandwidth = median_coef*bandwidth
+
+    kernel = lambda x,y: gauss_kernel(x*weights_,y*weights_,computed_bandwidth)
+    if return_mediane:
+        return(kernel,computed_bandwidth)
+    else:
+        return(kernel)
+
+
 def gauss_kernel_mediane_per_variable(x,y,bandwidth='p',median_coef=1,return_mediane=False,verbose=0):
-    medianes = median_coef * mediane_per_variable(x,y,verbose=verbose)
+    medianes = mediane_per_variable(x,y,verbose=verbose)
     if bandwidth=='median':
         computed_bandwidth = median_coef*mediane(x/medianes,y/medianes)
     elif bandwidth =='p':

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
-from .kernels import mediane,gauss_kernel,linear_kernel,gauss_kernel_mediane,fisher_zero_inflated_gaussian_kernel,gauss_kernel_mediane_per_variable
+from .kernels import gauss_kernel,linear_kernel,gauss_kernel_mediane,fisher_zero_inflated_gaussian_kernel,gauss_kernel_weighted_variables,gauss_kernel_mediane_per_variable
 from torch import cat
 from .utils import get_kernel_name,init_kernel_params,convert_to_torch_tensor,convert_to_pandas_index
     
@@ -191,7 +191,15 @@ class Base:
     def set_truncation(self,t):
         self.truncation=t
 
-    def kernel(self,function='gauss',bandwidth='median',median_coef=1,kernel_name=None,pi1=None,pi2=None,verbose=0):
+    def kernel(self,function='gauss',
+               bandwidth='median',
+               median_coef=1,
+               kernel_name=None,
+               weights = None,
+               weights_power = 1,
+               pi1=None,
+               pi2=None,
+               verbose=0):
         '''
         
         Parameters
@@ -227,9 +235,8 @@ class Base:
                 if kernel_name is not None:
                     s+=f'\n\tkernel_name : {kernel_name}'
             print(s)
-
+        
         x,y = self.get_xy()
-        verbose = self.verbose
         has_bandwidth = False
 
         kernel_name = get_kernel_name(function=function,bandwidth=bandwidth,median_coef=median_coef) if kernel_name is None else kernel_name
@@ -237,16 +244,33 @@ class Base:
             print("kernel_name:",kernel_name)
         if function == 'gauss':
             has_bandwidth = True
-            if bandwidth == 'median':
+            if weights is not None:
+                if isinstance(weights,str):
+                    if weights in self.get_var():
+                        weights_ = self.get_var()[weights]
+                    elif weights in ['median','variance']:
+                        weights_=weights
+                    else: 
+                        print(f"kernel weights '{weights}' not recognized.")
+                else:
+                    weights_ = weights
+                kernel_,computed_bandwidth = gauss_kernel_weighted_variables(x=x,y=y,
+                                                                           weights=weights_,
+                                                                           weights_power=weights_power,
+                                                                           bandwidth=bandwidth,
+                                                                          median_coef=median_coef,
+                                                                          return_mediane=True,
+                                                                          verbose=verbose)
+
+            else:
                 kernel_,computed_bandwidth = gauss_kernel_mediane(x=x,y=y,      
                                                 bandwidth=bandwidth,  
                                                median_coef=median_coef,
                                                return_mediane=True,
                                                verbose=verbose)
-            else:
-                computed_bandwidth = bandwidth * median_coef
-                kernel_ = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
-                        
+
+
+
         elif function == 'linear':
             kernel_ = linear_kernel
         elif function == 'fisher_zero_inflated_gaussian':
@@ -257,13 +281,15 @@ class Base:
                                                                     median_coef=median_coef,
                                                                     return_mediane=True,
                                                                     verbose=verbose)
-        elif function == 'gauss_kernel_mediane_per_variable':
-            has_bandwidth = True
-            kernel_,computed_bandwidth = gauss_kernel_mediane_per_variable(x=x,y=y,
-                                                                           bandwidth=bandwidth,
-                                                                          median_coef=median_coef,
-                                                                          return_mediane=True,
-                                                                          verbose=verbose)
+        # elif function == 'gauss_kernel_mediane_per_variable':
+        #     has_bandwidth = True
+        #     kernel_,computed_bandwidth = gauss_kernel_mediane_per_variable(x=x,y=y,
+        #                                                                    bandwidth=bandwidth,
+        #                                                                   median_coef=median_coef,
+        #                                                                   return_mediane=True,
+        #                                                                   verbose=verbose)
+
+
 
         else:
             kernel_ = function
@@ -279,6 +305,8 @@ class Base:
         self.kernel_params = init_kernel_params(function=function,
                                                 bandwidth=bandwidth,
                                                 median_coef=median_coef,
+                                                weights=weights,
+                                                weights_power=weights_power,
                                                 kernel_name=kernel_name,
                                                 pi1=pi1,pi2=pi2)
 
