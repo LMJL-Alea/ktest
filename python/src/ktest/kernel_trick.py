@@ -126,29 +126,7 @@ class KernelTrick(GramMatrices):
                 pkm = 1/n_landmarks**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
                 # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
-        # exploration jamais terminée 
-        if cov == 'nystrom1' and cov_anchors == 'separated':
-            # utile ?  A mettre à jour
-            # A mettre à jour 2 fois 
-            if mmd == 'standard':
-                a = 0
-                # x,y = self.get_xy()
-                # z1,z2 = self.get_xy(landmarks=True)
-                # Kz1x = self.kernel(z1,x)
-                # Kz1y = self.kernel(z1,y)
-                # Kz2x = self.kernel(z2,x)
-                # Kz2y = self.kernel(z2,y)
-                # Uz1 = self.spev['x']['anchors'][anchors_basis]['ev']
-                # Lz1 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-1)
-                # Uz2 = self.spev['y']['anchors'][anchors_basis]['ev']
-                # Lz2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
-                # omega1 = self.compute_omega(sample='x',quantization=False)
-                # omega2 = self.compute_omega(sample='y',quantization=False)
-                # Pn1 = self.compute_covariance_centering_matrix(sample='x')
-                # Pn2 = self.compute_covariance_centering_matrix(sample='y')
-                # haut = mv(Lz1,mv(Uz1,mv(Kz1x,mv(Pn1,mv(Kz1x,mv(Uz1,mv(Lz1,mv(Uz1.T,mv(Kz1y,omega2) -mv(Kz1x,omega1)))))))))
-                # bas = mv(Lz2,mv(Uz2,mv(Kz2y,mv(Pn2,mv(Kz2y,mv(Uz2,mv(Lz2,mv(Uz2.T,mv(Kz2y,omega2) -mv(Kz2x,omega1)))))))))
-                
+
 
         # aucun avantage 
         if cov == 'quantization': # pas à jour 

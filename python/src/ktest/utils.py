@@ -82,7 +82,14 @@ def init_test_params(stat='kfda',
             'seed_permutation':seed_permutation
             })
 
-def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_name=None,pi1=None,pi2=None):
+def init_kernel_params(function='gauss',
+                       bandwidth='median',
+                       median_coef=1,
+                       weights=None,
+                       weights_power=1,
+                       kernel_name=None,
+                       pi1=None,
+                       pi2=None):
     """
     Returns an object that defines the kernel
     """
@@ -91,6 +98,8 @@ def init_kernel_params(function='gauss',bandwidth='median',median_coef=1,kernel_
             'bandwidth':bandwidth,
             'median_coef':median_coef,
             'kernel_name':kernel_name,
+            'weights':weights,
+            'weights_power':weights_power,
             'pi1':pi1,
             'pi2':pi2
             }

@@ -111,7 +111,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         """
         
         super(Ktest,self).__init__()
-
         if kernel is None:
             kernel = init_kernel_params()
 
