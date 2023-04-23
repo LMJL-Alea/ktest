@@ -343,6 +343,16 @@ def plot_effectifs_matrix(effectifs,labels,fig=None,ax=None):
 
     return(fig,ax)
 
+def plot_dendrogram_from_distance_matrix(s,labels=None,fig=None,ax=None):
+    from scipy.cluster.hierarchy import dendrogram,linkage
+    if fig is None:
+        fig,ax = plt.subplots(figsize=(20,7))
+    n=len(s)
+    
+    Z = linkage(s[np.triu_indices(n,k=1)])
+    d = dendrogram(Z,labels=labels,ax=ax,)
+    return(d,fig,ax)
+
 
 def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
     c1=np.array(mpl.colors.to_rgb(c1))
