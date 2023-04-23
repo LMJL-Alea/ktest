@@ -215,6 +215,7 @@ class Plot_Standard(Statistics):
                     yshift=0,
                     means=True,
                     normalize=False,
+                    non_zero_only=False
                     ):
 
         # labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
@@ -232,6 +233,8 @@ class Plot_Standard(Statistics):
 
         df_proj= self.init_df_proj(proj,name)
         df_proj = df_proj[proj] if proj in df_proj else df_proj[str(t)]
+        if non_zero_only:
+            df_proj = df_proj[df_proj!=0]
         min,max = df_proj.min(),df_proj.max()
         # quand beaucoup de plot se chevauchent, ça serait sympa de les afficher en 3D pour mieux les voir 
         
