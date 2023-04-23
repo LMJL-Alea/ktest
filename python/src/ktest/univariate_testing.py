@@ -81,6 +81,7 @@ class Univariate:
             dfzp[f'{s}_pct_expression'] = 1 - dfzp[f'{s}_pz']
             dfzp[f'{s}_mean'] = df.mean()
         dfzp['nz'] = (dfa==0).sum()
+        dfzp['ne'] = (dfa!=0).sum()
         dfzp['pz'] = dfzp[f'nz']/len(dfa)
         dfzp[f'pct_expression'] = 1 - dfzp[f'pz']
         
