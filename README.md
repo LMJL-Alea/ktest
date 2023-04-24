@@ -15,5 +15,6 @@ pip install ktest@git+https://github.com/AnthoOzier/ktest@main#subdirectory=pyth
 See [`r-pkg`](./r-pkg) directory.
 
 ```r
-remotes::install_github("AnthoOzier/ktest", ref = "rktest_dev", subdir = "r-pkg")
+remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
 ```
+
