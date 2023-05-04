@@ -240,7 +240,9 @@ def custom_histogram(data,
     """
 
     if hist_type=='kde':
-        if not len(data[data==0])==len(data):
+        nz_data = data[data!=0]
+        if len(nz_data)>0 and len(nz_data.unique())>1:
+        # if len(data[data==0])<len(data)-1:
             fig,ax,color=custom_rug(data=data,
                fig=fig,
                ax=ax,
