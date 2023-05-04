@@ -69,7 +69,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                  yshift=0,
                                  orientation='vertical',
                                  normalize=False,
-                                 means=True):
+                                 means=True,
+                                 non_zero_only=False):
         if fig is None:
             fig,ax =plt.subplots(figsize=(10,6))
             
@@ -96,7 +97,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                             xshift=xshift,
                             yshift=yshift,
                             normalize=normalize,
-                            means=means
+                            means=means,
+                            non_zero_only=non_zero_only
                             )
         
         title = f'{variable}\n'
@@ -120,21 +122,22 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                         legend=True,
                                         means=True,
                                         lw=3,    
-                                    color=None,
-                                    highlight=None,
-                                    highlight_color=None,
-                                    highlight_linewidth=.5,
-                                    highlight_label=None,
-                                    samples_colors=None,
-                                    alpha=.5,
-                                    show_conditions=True,
-                                    legend_fontsize=15,
-                                    condition=None,
-                                    samples=None,
-                                    marked_obs_to_ignore=None,
-                                    orientation='vertical',
-                                    normalize=True
-                                    ):
+                                        color=None,
+                                        highlight=None,
+                                        highlight_color=None,
+                                        highlight_linewidth=.5,
+                                        highlight_label=None,
+                                        samples_colors=None,
+                                        alpha=.5,
+                                        show_conditions=True,
+                                        legend_fontsize=15,
+                                        condition=None,
+                                        samples=None,
+                                        marked_obs_to_ignore=None,
+                                        orientation='vertical',
+                                        normalize=True,
+                                        non_zero_only=False,
+                                        ):
         if fig is None:
             fig,ax=plt.subplots(figsize=(7,7))
 
@@ -160,26 +163,27 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                         fig=fig,
                                         ax=ax,
                                         color=color,
-                                    highlight=highlight,
-                                    highlight_color=highlight_color,
-                                    highlight_linewidth=highlight_linewidth,
-                                    highlight_label=highlight_label,
-                                    samples_colors=samples_colors,
-                                    alpha=alpha,
-                                    hist_type='kde',
-                                    kde_bw=kde_bw,
-                                    show_conditions=show_conditions,
-                                    legend=legend_,
-                                    legend_fontsize=legend_fontsize,
-                                    lw=lw,
-                                    condition=condition,
-                                    samples=samples,
-                                    marked_obs_to_ignore=marked_obs_to_ignore,
-                                    xshift=x,
-                                    yshift=y,
-                                    orientation=orientation,
-                                    means=means,
-                                    normalize=normalize)  
+                                        highlight=highlight,
+                                        highlight_color=highlight_color,
+                                        highlight_linewidth=highlight_linewidth,
+                                        highlight_label=highlight_label,
+                                        samples_colors=samples_colors,
+                                        alpha=alpha,
+                                        hist_type='kde',
+                                        kde_bw=kde_bw,
+                                        show_conditions=show_conditions,
+                                        legend=legend_,
+                                        legend_fontsize=legend_fontsize,
+                                        lw=lw,
+                                        condition=condition,
+                                        samples=samples,
+                                        marked_obs_to_ignore=marked_obs_to_ignore,
+                                        xshift=x,
+                                        yshift=y,
+                                        orientation=orientation,
+                                        means=means,
+                                        normalize=normalize,
+                                        non_zero_only=non_zero_only)  
 
         ax.set_yticks(yshifts)
         ax.set_yticklabels(genes,fontsize=10)
@@ -209,7 +213,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                     marked_obs_to_ignore=None,
                                     orientation='horizontal',
                                     means=True,
-                                    separation=2.2):
+                                    separation=2.2,
+                                    non_zero_only=False):
         if fig is None:
             fig,ax = plt.subplots(figsize=(12,6))
         
@@ -239,7 +244,8 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                                     xshift=0,
                                     yshift=yshifts[i],
                                     orientation=orientation,
-                                    means=means)  
+                                    means=means,
+                                    non_zero_only=non_zero_only)  
         if orientation == 'vertical':
             ax.set_yticks(yshifts)
             ax.set_yticklabels(variables,rotation=0,fontsize=10)

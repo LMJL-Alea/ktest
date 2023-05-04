@@ -76,11 +76,13 @@ class Univariate:
         for s in sl:
             df = dict_df[s]
             dfzp[f'{s}_nz'] = (df==0).sum()
+            dfzp[f'{s}_ne'] = (df!=0).sum()
             dfzp[f'{s}_n'] = len(df)
             dfzp[f'{s}_pz'] = dfzp[f'{s}_nz']/len(df)
             dfzp[f'{s}_pct_expression'] = 1 - dfzp[f'{s}_pz']
             dfzp[f'{s}_mean'] = df.mean()
         dfzp['nz'] = (dfa==0).sum()
+        dfzp['ne'] = (dfa!=0).sum()
         dfzp['pz'] = dfzp[f'nz']/len(dfa)
         dfzp[f'pct_expression'] = 1 - dfzp[f'pz']
         
@@ -338,6 +340,7 @@ class Univariate:
             print(kernel_params)
         data = self.init_df_proj(variable)
         meta = self.obs.copy()
+        data =  data.loc[data.index[data.index.get_indexer(meta.index)]]
         # data = self.get_data(dataframe=True,in_dict=False)[variable].to_frame()
         # # init_df_proj(variable)
         # meta = self.get_metadata(in_dict=False).copy()
