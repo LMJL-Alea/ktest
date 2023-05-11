@@ -738,7 +738,9 @@ class Base:
                     x = self.data[data_name]['X'][self.obs.index.isin(i),:]
                     data[k] = pd.DataFrame(x,i,v) if dataframe else x
             else:
-                x = self.data[data_name]['X'][self.obs.index.isin(index),:]
+                indexer_ = self.obs.index.get_indexer(index)
+                # x = self.data[data_name]['X'][self.obs.index.isin(index),:]
+                x = self.data[data_name]['X'][indexer_,:]
                 data = pd.DataFrame(x,index,v) if dataframe else x  
 
         return(data)

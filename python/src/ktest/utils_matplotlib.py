@@ -240,7 +240,9 @@ def custom_histogram(data,
     """
 
     if hist_type=='kde':
-        if not len(data[data==0])==len(data):
+        nz_data = data[data!=0]
+        if len(nz_data)>0 and len(nz_data.unique())>1:
+        # if len(data[data==0])<len(data)-1:
             fig,ax,color=custom_rug(data=data,
                fig=fig,
                ax=ax,
@@ -342,6 +344,16 @@ def plot_effectifs_matrix(effectifs,labels,fig=None,ax=None):
         ax.text(i, j, f'{effectifs[i,j]:.2f}', va='center', ha='center')
 
     return(fig,ax)
+
+def plot_dendrogram_from_distance_matrix(s,labels=None,fig=None,ax=None):
+    from scipy.cluster.hierarchy import dendrogram,linkage
+    if fig is None:
+        fig,ax = plt.subplots(figsize=(20,7))
+    n=len(s)
+    
+    Z = linkage(s[np.triu_indices(n,k=1)])
+    d = dendrogram(Z,labels=labels,ax=ax,)
+    return(d,fig,ax)
 
 
 def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
