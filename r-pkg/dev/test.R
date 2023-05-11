@@ -10,6 +10,7 @@ pkg_dir <- file.path(proj_dir, "r-pkg")
 devtools::load_all(pkg_dir)
 
 venv <- "ktest-dev"
+virtualenv_remove(venv)
 virtualenv_create(venv)
 use_virtualenv(virtualenv = venv, required = TRUE)
 py_config()
@@ -30,7 +31,8 @@ meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header 
 # test
 kt <- ktest(
     sc_df, meta_sc_df,
-    condition='condition', samples=c('0H','48HREV'), verbose=1
+    condition='condition', samples=c('0H','48HREV'), verbose=1,
+    kernel=list('function'='gauss','bandwidth'='median','weights'='variance','weights_power'=-1/2)
 )
 
 # multivariate
