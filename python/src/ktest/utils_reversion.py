@@ -485,8 +485,9 @@ def see_pop_on_other_comparisons(self,t,pop,
 
 def cluster_genes_from_condition(self,condition,n_clusters,colors = {'0H':'xkcd:bright blue','24H':'xkcd:leaf green','48HDIFF':'crimson','48HREV':'xkcd:pale purple',
          '48HREV_1':'xkcd:aqua green','48HREV_2':'xkcd:light magenta'},ylim=(-2,2),vert=True,
-         verbose=0):
-    
+         verbose=0,fig=None,axes=None):
+    if fig is None:
+        fig,axes = plt.subplots(ncols = n_clusters,figsize=(8*n_clusters,6))
     dfm = self.get_dataframe_of_means(condition=condition,samples='all',
                                       )
     kmeans = KMeans(
@@ -505,7 +506,6 @@ def cluster_genes_from_condition(self,condition,n_clusters,colors = {'0H':'xkcd:
     var[col_cluster]=kmeans.labels_
     var[col_cluster] = var[col_cluster].astype('category')
     
-    fig,axes = plt.subplots(ncols = n_clusters,figsize=(8*n_clusters,6))
     for cat in range(n_clusters):
         ax = axes[cat]
         df = var[var[col_cluster]==cat].copy()
@@ -522,7 +522,7 @@ def cluster_genes_from_condition(self,condition,n_clusters,colors = {'0H':'xkcd:
         else:
             ax.set_xlim(ylim)
         # plt.show()
-    return(col_cluster)
+    return(col_cluster,fig,axes)
 
 def plot_pvals_of_splitted(self,condition,pval=False,ylim1=(-5,1000),ylim2=(-5,1000)):
     self.set_test_data_info(condition=condition,samples=['24H','0H'])

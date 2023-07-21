@@ -34,9 +34,8 @@ class ProjectionOps(KernelTrick):
         upk=self.compute_upk(t,proj_condition=condition,proj_samples=samples,proj_marked_obs_to_ignore=marked_obs_to_ignore)
         n1,n2,n = self.get_n1n2n()
 
-        if cov == 'standard' or 'nystrom' in cov: 
+        if cov == 'standard' or 'nystrom' in cov:  
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
-            # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
         if cov == 'quantization':
             proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).numpy()
 

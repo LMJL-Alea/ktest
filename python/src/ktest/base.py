@@ -311,7 +311,9 @@ class Base:
                                                 pi1=pi1,pi2=pi2)
 
     def get_kernel_params(self):
-        return(self.kernel_params)
+        return(self.kernel_params.copy())
+
+
 
     def _update_dict_data(self,x,data_name,update_current_data_name=True): 
         '''

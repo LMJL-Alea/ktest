@@ -171,5 +171,50 @@ def filter_genes_with_de_methods_and_pz(self,dfpvals,
         print(f'{len(goi)} genes')
     return(goi)
     
+def center_in_input_space(self,center_by=None,center_non_zero_only=False):
+    if center_by == 'replicate':
 
+        data_r = self.get_data(condition='replicate',dataframe=True,in_dict=True)
+        all_data_ = self.get_data(condition='replicate',dataframe=True,in_dict=False)
+        dfc = all_data_[all_data_!=0].mean() if center_non_zero_only else all_data_.mean()
+        
+        data_ ={}
+        for k,v in data_r.items():
+#             print(k)
+            if center_non_zero_only:
+                v[v!=0] = v[v!=0] - v[v!=0].mean() + dfc
+                data_[k] = v
+            else:
+                data_[k] = v - v.mean() + dfc
+
+
+    elif center_by == '#-replicate_+label':    
+        data_r = self.get_data(condition='replicate',dataframe=True)
+        data_l = self.get_data(condition='label',dataframe=True)
+        if center_non_zero_only:
+            mean_l = {k:v[v!=0].mean() for k,v in data_l.items()}
+            mean_r = {k:v[v!=0].mean() for k,v in data_r.items()}
+        else:
+            mean_l = {k:v.mean() for k,v in data_l.items()}
+            mean_r = {k:v.mean() for k,v in data_r.items()}
+
+        metadata_l = self.get_metadata(condition='label',in_dict=True)
+        r_in_l = {k:metadata_l[k]['replicate'].unique().to_list() for k in metadata_l.keys()}
+
+        data_ = {}
+        for l,ml in mean_l.items():
+            for r,dr in data_r.items():
+                if r in r_in_l[l]:
+                    if center_non_zero_only:
+                        dr[dr!=0] = dr[dr!=0] - mean_r[r] + ml
+                        data_[r] = dr
+                    else:
+                        data_[r] =  dr - mean_r[r] + ml
+                         
+    
+    new_df = pd.concat(data_.values())
+    new_meta = self.get_metadata(condition='label',in_dict=False)
+    new_meta = new_meta.iloc[new_meta.index.get_indexer(new_df.index)].copy()
+
+    return(new_df,new_meta)
 

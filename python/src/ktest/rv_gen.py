@@ -49,6 +49,8 @@ def generate_multivariate_gaussian(p,nobs,seed,spectrum='isotropic',sigma_noise=
 def generate_standard_gaussian_2D(n=300,seed=0):
     return(generate_multivariate_gaussian(p=2, nobs=n, seed=seed, sigma_noise=.01,spectrum='isotropic'))
 
+
+
 def generate_gaussian_mixture(means,covs,weights,nobs,seed,return_assignations=False):
     np.random.seed(seed=seed)
 
@@ -175,6 +177,20 @@ def rot_plane(y,angle=np.pi/2):
     e1,e2 = 0,1
     m[e1, e1] = c;    m[e1, e2] = -s;    m[e2, e1] = s;    m[e2, e2] = c
     return(np.matmul(y,m))
+
+def rescale_2d_data(data,rx,ry):
+    M = np.array([[rx,0],[0,ry]])
+    return(np.matmul(data,M))
+
+def rotate_2d_data(data,a):
+    alpha = a * np.pi
+    N = np.array([[np.cos(alpha),np.sin(alpha)],[-np.sin(alpha),np.cos(alpha)]])
+    
+    return(np.matmul(data,N))
+
+def shift_2d_data(data,sx,sy): 
+    B = np.array([sx,sy])
+    return(data+B)
 
 
 

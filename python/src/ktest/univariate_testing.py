@@ -18,6 +18,193 @@ class Univariate:
     def __init__(self):        
         super(Univariate, self).__init__()
 
+    def univariate_test(self,
+                        variables_to_test=None,
+                        fromto=[0,-1],
+                        name=None,
+                        save_path=None,
+                        overwrite=False,
+                        truncations_of_interest=list(range(1,31)),
+                        n_jobs=1,
+                        lots=None,
+                        ignore_zeros=False,
+                        diagnostic=False,
+                        t_diagnostic=31,
+                        kernel=None,
+                        kernel_info=None,
+                        verbose=0):
+        """
+        Perform univariate testing or Differential Expression Analysis on each variable.
+        The results are stored in the var dataframe accessible through `ktest.get_var()`
+        and saved in `save_path` if specified. 
+        The results stored are the kfda statistics and p-values associated to each truncation present in
+        `truncations_of_interest`. 
+        If `diagnostic` is True, the explained variabilities and explained differences 
+            are added to the result dataframe for truncations from 1 to `t_diagnostic`            
+
+        Parameters
+        ----------
+            variables_to_test (default = None) : iterable of variables
+                List of variables of interest to be tested. 
+                Has priority over `fromto`.
+            
+            fromto (default = [0,-1]) : list of two int 
+                Position in the object variables list of the first and last variable to test
+                If the second entry is -1, the last variable to test is the last one in the variables list.     
+                Warning : not designed to test a specific set of variables (e.g. genes pathway), 
+                        parameter `variables_to_test` is.   
+                Warning : ignored if `variables_to_test` is specified. 
+
+            name (default = None) : int 
+                A name to refer to this set of tests if you aim at testing different groups
+                 of variables separately (e.g. different gene pathways)
+
+            save_path (default = None) : str
+                path of the directory in which to save the resulting .csv file. 
+                the file is automatically named with respect to test info. 
+                if None : the results are not written in a .csv file
+                
+            overwrite (default = False) : bool
+                ignored if `save_path` is not specified
+                if True : the written .csv file will contain current results only
+                if False :if the result file to be saved already exists in the directory `save_path`, 
+                    its results are loaded and added to the current results so that all the results
+                    are saved. 
+            
+            truncations_of_interest (default = list(range(1,31)) : List of int
+                List of truncations to compute the results of. 
+
+            n_jobs (default = 1) : int 
+                Number of CPUs to use for parallel computing. 
+                
+            lots (default = 100) : int
+                Number of tested variables between each save of intermediate results.
+
+            ignore_zeros (default = False) : bool
+                Whether or not considers null observations for univariate testing. 
+
+            diagnostic (default = False) : bool
+                if True, the diagnostic quantities (explained variabilities and explained differences)
+                are added to the results. 
+
+            t_diagnostic (default = 31) : int
+                ignored if `diagnostic` is False
+                the diagnostic quantities are added to the result dataframe 
+                for truncations from 1 to `t_diagnostic`  
+            
+            kernel_bandwidth_col_in_var (default = None) : str 
+                Specify the kernel bandwidth to use for each variable with a column of the var dataframe (e.g. a column containing the variances) 
+                Ignored if the kernel is not gaussian
+
+            verbose (default = 0) : int
+                The higher, the more verbose is the function.     
+        """
+
+        if name is None:
+            name = '' if self.univariate_name is None else self.univariate_name
+        self.univariate_name=name
+
+        if not overwrite:
+            self.load_univariate_test_results_in_var_if_possible(save_path,name=name,verbose=verbose) # load data if necessary
+        self.update_var_from_vard(verbose=verbose)
+        voi = self.determine_variables_to_test(fromto=fromto,variables_to_test=variables_to_test,
+                                                name=name,ignore_zeros=ignore_zeros,verbose=verbose) # determine variables to test
+        t00 = time()
+        if len(voi)==0:
+            if verbose>0:
+                print(f'- No variable to test')
+        else:
+            if lots is None:
+                lots = len(voi)
+            vss = [voi[h*lots:(h+1)*lots] for h in range(len(voi)//lots)]
+            vss += [voi[(len(voi)//lots)*lots:]]
+            i=0
+
+            for vs in vss: 
+                if len(vs)>0:
+                    i+=len(vs)
+                    if verbose>0:
+                        v0,v1 = vs[0],vs[-1]
+                        print(f'- Testing {len(vs)} variables from {v0} to {v1} with n_jobs={n_jobs}\n\t...')
+
+                    t0 = time()  
+                    if n_jobs == 1:
+                        results=[]
+                        for v in vs:
+                            if verbose==1:
+                                print(v,end=' ')
+                            elif verbose >1:
+                                print('\n',v)
+                            results+=[
+                                self.univariate_test_of_variable(
+                                                v,name=name,
+                                                kernel=kernel,
+                                                kernel_info=kernel_info,
+                                                parallel=True,
+                                                truncations_of_interest=truncations_of_interest,
+                                                ignore_zeros=ignore_zeros,
+                                                diagnostic=diagnostic,
+                                                t_diagnostic=t_diagnostic,
+                                                verbose=verbose-1
+                                    )]
+                        print('')
+                    elif n_jobs >1:
+                        with parallel_backend('loky'):
+                            results = Parallel(n_jobs=n_jobs)(
+                                delayed(self.univariate_test_of_variable)(
+                                    v,name=name,
+                                    kernel=kernel,
+                                    kernel_info=kernel_info,
+                                    truncations_of_interest=truncations_of_interest,
+                                    diagnostic=diagnostic,
+                                    ignore_zeros=ignore_zeros,
+                                    t_diagnostic=t_diagnostic,
+                                    parallel=True,
+                                    verbose=verbose-1
+                                ) for v  in  vs)
+                    
+                    if verbose>0:
+                        print(f'\tDone in {time() - t0}')
+                        print(f' \n\t{i}/{len(voi)} variables tested in {time() - t00}')
+                    self.update_vard_from_parallel_univariate_kfda_results(results=results,tested_variables=vs,verbose=verbose) # update vard attribute with the results of vs genes tested
+                    self.save_univariate_results(save_path=save_path,name=name,overwrite=overwrite,verbose=verbose) # save intermediate results in file in case of early interuption
+
+        self.save_univariate_results(save_path,name,verbose=verbose) # save intermediate results in file in case of early interuption
+
+
+
+
+    def univariate_test_of_variable(self,
+                                    variable,
+                                    name=None,
+                                    kernel=None,
+                                    kernel_info=None,
+                                    parallel=False,
+                                    truncations_of_interest=list(range(1,31)),
+                                    ignore_zeros=False,
+                                    diagnostic=False,
+                                    t_diagnostic=31,
+                                    verbose=0):
+
+        col = self.get_column_name_in_var(name=name,output='univariate')
+        var = self.get_var()
+        vard = self.get_vard()
+
+        if col in var and var[col][variable]==1:
+            if verbose>1:
+                print(f'\t{variable} already tested')
+        else:
+            t=self.compute_univariate_kfda(variable,kernel=kernel,kernel_info=kernel_info,ignore_zeros=ignore_zeros,verbose=verbose)
+
+        self.add_results_univariate_kfda_in_vard(t,variable,name=name,
+                    truncations_of_interest=truncations_of_interest,diagnostic=diagnostic,t_diagnostic=t_diagnostic,verbose=verbose)
+        
+        if parallel:
+            return({'v':variable,**vard[variable]})
+        return(t) 
+ 
+
+ 
     def compute_zero_proportions_of_variable(self,variable):
         """
         Returns a dict object with the zero information of the variable with respect to the tested conditions.
@@ -516,188 +703,6 @@ class Univariate:
             # print(string)
 
 
-
-    def univariate_test_of_variable(self,
-                                    variable,
-                                    name=None,
-                                    kernel=None,
-                                    kernel_info=None,
-                                    parallel=False,
-                                    truncations_of_interest=list(range(1,31)),
-                                    ignore_zeros=False,
-                                    diagnostic=False,
-                                    t_diagnostic=31,
-                                    verbose=0):
-
-        col = self.get_column_name_in_var(name=name,output='univariate')
-        var = self.get_var()
-        vard = self.get_vard()
-
-        if col in var and var[col][variable]==1:
-            if verbose>1:
-                print(f'\t{variable} already tested')
-        else:
-            t=self.compute_univariate_kfda(variable,kernel=kernel,kernel_info=kernel_info,ignore_zeros=ignore_zeros,verbose=verbose)
-
-        self.add_results_univariate_kfda_in_vard(t,variable,name=name,
-                    truncations_of_interest=truncations_of_interest,diagnostic=diagnostic,t_diagnostic=t_diagnostic,verbose=verbose)
-        
-        if parallel:
-            return({'v':variable,**vard[variable]})
-        return(t) 
- 
-    def univariate_test(self,
-                        variables_to_test=None,
-                        fromto=[0,-1],
-                        name=None,
-                        save_path=None,
-                        overwrite=False,
-                        truncations_of_interest=list(range(1,31)),
-                        n_jobs=1,
-                        lots=None,
-                        ignore_zeros=False,
-                        diagnostic=False,
-                        t_diagnostic=31,
-                        kernel=None,
-                        kernel_info=None,
-                        verbose=0):
-        """
-        Perform univariate testing or Differential Expression Analysis on each variable.
-        The results are stored in the var dataframe accessible through `ktest.get_var()`
-        and saved in `save_path` if specified. 
-        The results stored are the kfda statistics and p-values associated to each truncation present in
-        `truncations_of_interest`. 
-        If `diagnostic` is True, the explained variabilities and explained differences 
-            are added to the result dataframe for truncations from 1 to `t_diagnostic`            
-
-        Parameters
-        ----------
-            variables_to_test (default = None) : iterable of variables
-                List of variables of interest to be tested. 
-                Has priority over `fromto`.
-            
-            fromto (default = [0,-1]) : list of two int 
-                Position in the object variables list of the first and last variable to test
-                If the second entry is -1, the last variable to test is the last one in the variables list.     
-                Warning : not designed to test a specific set of variables (e.g. genes pathway), 
-                        parameter `variables_to_test` is.   
-                Warning : ignored if `variables_to_test` is specified. 
-
-            name (default = None) : int 
-                A name to refer to this set of tests if you aim at testing different groups
-                 of variables separately (e.g. different gene pathways)
-
-            save_path (default = None) : str
-                path of the directory in which to save the resulting .csv file. 
-                the file is automatically named with respect to test info. 
-                if None : the results are not written in a .csv file
-                
-            overwrite (default = False) : bool
-                ignored if `save_path` is not specified
-                if True : the written .csv file will contain current results only
-                if False :if the result file to be saved already exists in the directory `save_path`, 
-                    its results are loaded and added to the current results so that all the results
-                    are saved. 
-            
-            truncations_of_interest (default = list(range(1,31)) : List of int
-                List of truncations to compute the results of. 
-
-            n_jobs (default = 1) : int 
-                Number of CPUs to use for parallel computing. 
-                
-            lots (default = 100) : int
-                Number of tested variables between each save of intermediate results.
-
-            ignore_zeros (default = False) : bool
-                Whether or not considers null observations for univariate testing. 
-
-            diagnostic (default = False) : bool
-                if True, the diagnostic quantities (explained variabilities and explained differences)
-                are added to the results. 
-
-            t_diagnostic (default = 31) : int
-                ignored if `diagnostic` is False
-                the diagnostic quantities are added to the result dataframe 
-                for truncations from 1 to `t_diagnostic`  
-            
-            kernel_bandwidth_col_in_var (default = None) : str 
-                Specify the kernel bandwidth to use for each variable with a column of the var dataframe (e.g. a column containing the variances) 
-                Ignored if the kernel is not gaussian
-
-            verbose (default = 0) : int
-                The higher, the more verbose is the function.     
-        """
-
-        if name is None:
-            name = '' if self.univariate_name is None else self.univariate_name
-        self.univariate_name=name
-
-        if not overwrite:
-            self.load_univariate_test_results_in_var_if_possible(save_path,name=name,verbose=verbose) # load data if necessary
-        self.update_var_from_vard(verbose=verbose)
-        voi = self.determine_variables_to_test(fromto=fromto,variables_to_test=variables_to_test,
-                                                name=name,ignore_zeros=ignore_zeros,verbose=verbose) # determine variables to test
-        t00 = time()
-        if len(voi)==0:
-            if verbose>0:
-                print(f'- No variable to test')
-        else:
-            if lots is None:
-                lots = len(voi)
-            vss = [voi[h*lots:(h+1)*lots] for h in range(len(voi)//lots)]
-            vss += [voi[(len(voi)//lots)*lots:]]
-            i=0
-
-            for vs in vss: 
-                if len(vs)>0:
-                    i+=len(vs)
-                    if verbose>0:
-                        v0,v1 = vs[0],vs[-1]
-                        print(f'- Testing {len(vs)} variables from {v0} to {v1} with n_jobs={n_jobs}\n\t...')
-
-                    t0 = time()  
-                    if n_jobs == 1:
-                        results=[]
-                        for v in vs:
-                            if verbose==1:
-                                print(v,end=' ')
-                            elif verbose >1:
-                                print('\n',v)
-                            results+=[
-                                self.univariate_test_of_variable(
-                                                v,name=name,
-                                                kernel=kernel,
-                                                kernel_info=kernel_info,
-                                                parallel=True,
-                                                truncations_of_interest=truncations_of_interest,
-                                                ignore_zeros=ignore_zeros,
-                                                diagnostic=diagnostic,
-                                                t_diagnostic=t_diagnostic,
-                                                verbose=verbose-1
-                                    )]
-                        print('')
-                    elif n_jobs >1:
-                        with parallel_backend('loky'):
-                            results = Parallel(n_jobs=n_jobs)(
-                                delayed(self.univariate_test_of_variable)(
-                                    v,name=name,
-                                    kernel=kernel,
-                                    kernel_info=kernel_info,
-                                    truncations_of_interest=truncations_of_interest,
-                                    diagnostic=diagnostic,
-                                    ignore_zeros=ignore_zeros,
-                                    t_diagnostic=t_diagnostic,
-                                    parallel=True,
-                                    verbose=verbose-1
-                                ) for v  in  vs)
-                    
-                    if verbose>0:
-                        print(f'\tDone in {time() - t0}')
-                        print(f' \n\t{i}/{len(voi)} variables tested in {time() - t00}')
-                    self.update_vard_from_parallel_univariate_kfda_results(results=results,tested_variables=vs,verbose=verbose) # update vard attribute with the results of vs genes tested
-                    self.save_univariate_results(save_path=save_path,name=name,overwrite=overwrite,verbose=verbose) # save intermediate results in file in case of early interuption
-
-        self.save_univariate_results(save_path,name,verbose=verbose) # save intermediate results in file in case of early interuption
 
     # functions for parallel univariate testing        
     def load_univariate_test_results_in_var_if_possible(self,save_path,name=None,verbose=0):
