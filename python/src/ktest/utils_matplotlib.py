@@ -345,6 +345,8 @@ def plot_effectifs_matrix(effectifs,labels,fig=None,ax=None):
 
     return(fig,ax)
 
+
+
 def plot_dendrogram_from_distance_matrix(s,labels=None,fig=None,ax=None):
     from scipy.cluster.hierarchy import dendrogram,linkage
     if fig is None:
@@ -360,3 +362,10 @@ def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0)
     c1=np.array(mpl.colors.to_rgb(c1))
     c2=np.array(mpl.colors.to_rgb(c2))
     return mpl.colors.to_hex((1-mix)*c1 + mix*c2)
+
+
+
+def scatter_2d(ax,data,c,dim1=0,dim2=1,s=10,equal=True,label=None,alpha=1):
+    ax.scatter(data[:,dim1],data[:,dim2],c=c,s=s,label=label,alpha=alpha)
+    if equal:
+        ax.axis('equal')
