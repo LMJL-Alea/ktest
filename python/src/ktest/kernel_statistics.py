@@ -180,7 +180,6 @@ class Statistics(ProjectionOps):
         # pour ne pas avoir à chercher le nom de cette colonne difficilement, il est renvoyé ici
         return(kfdat_name)
 
-
     def compute_kfdat_contrib(self,t):    
         
         sp,ev = self.get_spev('covw')

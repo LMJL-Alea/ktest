@@ -15,10 +15,10 @@ Les résidus pour la troncature t sont définis comme les directions
  d'une ACP sur l'orthogonal de l'axe discriminant correspondant à la troncature t.  
 """
         ####
-class Residuals(Statistics): 
+class Orthogonal(Statistics): 
 
     def __init__(self):
-        super(Residuals,self).__init__()
+        super(Orthogonal,self).__init__()
 
 
     def compute_discriminant_axis_qh(self,t):
@@ -57,7 +57,7 @@ class Residuals(Statistics):
 
             qh = 1/n_landmarks * mv(P,mv(Uz,mv(Lz12,mv(Ut,mv(Lt32,mv(Ut.T,mv(Lz12,mv(Uz.T,mv(P,mv(Kmn,omega))))))))))
         else:
-            print(f'approximation {cov} not computed yet for residuals')
+            print(f'approximation {cov} not computed yet for orthogonal')
         return(qh)
 
     def project_on_discriminant_axis(self,t=None):
@@ -90,7 +90,7 @@ class Residuals(Statistics):
     def compute_proj_on_discriminant_orthogonal(self,t=None):
         ''' 
         Compute P_\epsilon which is such that kx P_\epsilon = \epsilon = kx - hh^tkx
-         \epsilon is the residual of the observation, orthogonal to the discriminant axis.  
+         \epsilon is the orthogonal of the observation, orthogonal to the discriminant axis.  
         '''
         cov = self.approximation_cov
         n = self.get_ntot(landmarks=False)
@@ -109,7 +109,7 @@ class Residuals(Statistics):
 
         return(P_epsilon)
 
-    def compute_residual_covariance(self,t=None,center = 'W'):
+    def compute_orthogonal_covariance(self,t=None,center = 'W'):
         
         cov = self.approximation_cov
         nm = self.get_ntot(landmarks=(cov=='nystrom3'))
@@ -146,13 +146,13 @@ class Residuals(Statistics):
                 Kmn.T,Pz,Uz,Lz12])
         return(K_epsilon)
 
-    def diagonalize_residual_covariance(self,t,center='W'):
+    def diagonalize_orthogonal_covariance(self,t,center='W'):
 
         cov = self.approximation_cov    
         
-        residuals_name = self.get_residuals_name(t=t,center=center)
+        orthogonal_name = self.get_orthogonal_name(t=t,center=center)
         
-        if residuals_name not in self.spev['residuals']:
+        if orthogonal_name not in self.spev['orthogonal']:
             nm = self.get_ntot(landmarks=(cov=='nystrom3'))
             if center.lower() == 't':
                 In = eye(nm, dtype=float64)
@@ -160,7 +160,7 @@ class Residuals(Statistics):
                 P = In - 1/nm * Jn
             elif center.lower() =='w':
                 P = self.compute_covariance_centering_matrix(quantization=False,landmarks=(cov=='nystrom3'))
-            K_epsilon = self.compute_residual_covariance(t,center=center)
+            K_epsilon = self.compute_orthogonal_covariance(t,center=center)
             P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
             n = self.get_ntot(landmarks=False)
 
@@ -179,38 +179,38 @@ class Residuals(Statistics):
                 if len(ev) != len(P):
                     P = P[:,:len(ev)]
                 fv = 1/sqrt(n) * 1/n_landmarks * torch.linalg.multi_dot([Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12])
-            self.spev['residuals'][residuals_name] = {'sp':sp,'ev':fv}
-            return(residuals_name)
+            self.spev['orthogonal'][orthogonal_name] = {'sp':sp,'ev':fv}
+            return(orthogonal_name)
             
-    def proj_residus(self,t,ndirections=10,center='w'):
+    def proj_orthogonal(self,t,ndirections=10,center='w'):
 
         cov = self.approximation_cov    
         
-        residuals_name = self.get_residuals_name(t=t,center=center,)
+        orthogonal_name = self.get_orthogonal_name(t=t,center=center,)
         
-        if residuals_name not in self.df_proj_residuals:
-            _,Ures = self.get_spev('residuals',t=t,center=center)
+        if orthogonal_name not in self.df_proj_orthogonal:
+            _,Ures = self.get_spev('orthogonal',t=t,center=center)
             epsilon = Ures[:,:ndirections]
 
             if cov == 'standard':
                 K = self.compute_gram()
-                proj_residus = matmul(K,epsilon)
+                proj_orthogonal = matmul(K,epsilon)
             if cov == 'nystrom3':
                 Kmn = self.compute_kmn() 
-                proj_residus = matmul(Kmn.T,epsilon)
+                proj_orthogonal = matmul(Kmn.T,epsilon)
 
             index = self.get_index(in_dict=False)
-            if proj_residus.shape[1] == ndirections:
+            if proj_orthogonal.shape[1] == ndirections:
                 columns = [str(i) for i in range(1,ndirections+1)]
             else:
-                columns = [str(i) for i in range(1,proj_residus.shape[1]+1)]
-            self.df_proj_residuals[residuals_name] = pd.DataFrame(proj_residus,
+                columns = [str(i) for i in range(1,proj_orthogonal.shape[1]+1)]
+            self.df_proj_orthogonal[orthogonal_name] = pd.DataFrame(proj_orthogonal,
                         index= index,columns=columns)
-        return(residuals_name)
+        return(orthogonal_name)
 
-    def residuals(self,t=None,ndirections=10,center='w'):
+    def orthogonal(self,t=None,ndirections=10,center='w'):
         """
-        Computes the residual projections, namely the projections of the observations 
+        Computes the orthogonal projections, namely the projections of the observations 
         on the principal components of a covariance structure computed on the space orthogonal 
         to the discriminant axis.  
 
@@ -220,20 +220,20 @@ class Residuals(Statistics):
                 Truncation from which the orthogonal space is defined
 
             ndirections : int
-                Number of principal components to compute in the residual space 
+                Number of principal components to compute in the orthogonal space 
                 (in practice we only focus on the first one)
 
             center (default = 'w'): str in ['k','s','w']
                 Defines the covariance structure to determine the principal components of 
-                in the residual space.
-                k : second order moment of the embeddings in the residual space
-                s : total covariance structure of the embeddings in the residual space
+                in the orthogonal space.
+                k : second order moment of the embeddings in the orthogonal space
+                s : total covariance structure of the embeddings in the orthogonal space
                 w : within-group covariance operator
                 
         """
 
-        self.diagonalize_residual_covariance(t=t,center=center)
-        self.proj_residus(t=t,ndirections=ndirections,center=center)
+        self.diagonalize_orthogonal_covariance(t=t,center=center)
+        self.proj_orthogonal(t=t,ndirections=ndirections,center=center)
 
 
         

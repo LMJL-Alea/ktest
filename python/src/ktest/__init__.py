@@ -10,7 +10,7 @@ from .nystrom_operations import NystromOps
 from .outliers_operations import OutliersOps
 from .projection_operations import ProjectionOps
 from .pvalues import Pvalues
-from .residuals import Residuals
+from .orthogonal import Orthogonal
 from .save_data import SaveData
 from .truncation_selection import TruncationSelection
 from .univariate_testing import Univariate

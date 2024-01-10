@@ -2,13 +2,13 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from .tester import Ktest
-from .utils import init_kernel_params
+from .kernel_function import init_kernel_params
 import numpy as np
 from sklearn.cluster import KMeans
 from .utils_matplotlib import custom_boxplot,custom_histogram
 # pyktest 
 # get_mmd_name -> condition sample data_name
-# residuals -> condition sample data_name
+# orthogonal -> condition sample data_name
 # modif les titres et noms d'axes dans les fonctions de plot 
 
 def get_meta_from_df(df):
@@ -52,7 +52,7 @@ def get_Ktest_from_df_and_comparaison(df,comparaison,name,kernel=None,nystrom=Fa
 
 
 def get_name_in_dict_data(k):
-    name = 'corrected_counts' if 'corrected_counts' in k else 'residuals'
+    name = 'corrected_counts' if 'corrected_counts' in k else 'orthogonal'
     name += '_batch_corrected' if '_batch_corrected' in k else ''
     return(name)
 
@@ -247,7 +247,7 @@ def figures_outliers_of_reversion(ktest,t,df,outliers_list,outliers_name,color=N
 
 
     ax = axes[2]
-    ktest.plot_residuals(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
+    ktest.plot_orthogonal(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
     ax.set_title(outliers_name,fontsize=30)
 
     ax = axes[3]
@@ -292,7 +292,7 @@ def figures_outliers_of_reversion2(ktest,t,df,outliers_list,outliers_name,color=
     ktest.hist_discriminant(t=t,fig=fig,ax=ax,)
 
     ax = axes[2]
-    ktest.plot_residuals(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
+    ktest.plot_orthogonal(t=t,fig=fig,ax=ax,highlight=outliers_list,color=color,marker=marker)
     ax.set_title(outliers_name,fontsize=30)
 
     ax = axes[0]

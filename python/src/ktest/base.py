@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 from typing_extensions import Literal
 from typing import Optional,Callable,Union,List
-from .kernels import gauss_kernel,linear_kernel,gauss_kernel_mediane,fisher_zero_inflated_gaussian_kernel,gauss_kernel_weighted_variables,gauss_kernel_mediane_per_variable
 from torch import cat
-from .utils import get_kernel_name,init_kernel_params,convert_to_torch_tensor,convert_to_pandas_index
-    
+from .utils import convert_to_torch_tensor,convert_to_pandas_index
+from .names import Names    
+from .kernel_function import Kernel_Function
 
-class Base:
+class Base(Names,Kernel_Function):
 
     def __init__(self,verbose=0):        
         super(Base, self).__init__()
@@ -61,15 +61,20 @@ class Base:
         self.df_proj_kpca = {}
         self.df_proj_mmd = {}
         self.df_proj_unidirectional_mmd = {}
+        self.df_proj_orthogonal = {}
         self.df_proj_residuals = {}
         
         # Eigenvectors
-        self.spev = {'covw':{},'anchors':{},'residuals':{}} # dict containing every result of diagonalization
+        self.spev = {'covw':{},'anchors':{},'residuals':{},'orthogonal':{}} # dict containing every result of diagonalization
         # les vecteurs propres sortant de eigsy sont rangés en colonnes
 
         # for verbosity 
         self.start_times = {}
 
+        # For general hypothesis testing
+        self.hypotheses = {}
+        self.current_hyp = None
+        
 
     def set_test_params(self,
                     stat='kfda',
@@ -190,129 +195,6 @@ class Base:
                 
     def set_truncation(self,t):
         self.truncation=t
-
-    def kernel(self,function='gauss',
-               bandwidth='median',
-               median_coef=1,
-               kernel_name=None,
-               weights = None,
-               weights_power = 1,
-               pi1=None,
-               pi2=None,
-               verbose=0):
-        '''
-        
-        Parameters
-        ----------
-            function (default = 'gauss') : str or function
-                str in ['gauss','linear','fisher_zero_inflated_gaussian','gauss_kernel_mediane_per_variable'] for gauss kernel or linear kernel. 
-                function : kernel function specified by user
-
-            bandwidth (default = 'median') : str or float
-                str in ['median'] to use the median or a multiple of it as a bandwidth. 
-                float : value of the bandwidth
-
-            median_coef (default = 1) : float
-                multiple of the median to use as bandwidth if kernel == 'gauss' and bandwidth == 'median' 
-
-            pi1,pi2 (default = None) : None or str 
-                if function == 'fisher_zero_inflated_gaussian' : columns of the metadata containing 
-                the proportions of zero for the two samples   
-        Returns
-        ------- 
-        '''
-
-        if verbose >0:
-            s=f'- Define kernel function'
-            if verbose ==1:
-                s+=f' ({function})'
-            else:
-                s+=f'\n\tfunction : {function}'
-                if function == 'gauss':
-                    s+=f'\n\tbandwidth : {bandwidth}'
-                if bandwidth == 'median' and median_coef != 1:
-                    s+=f'\n\tmedian_coef : {median_coef}'
-                if kernel_name is not None:
-                    s+=f'\n\tkernel_name : {kernel_name}'
-            print(s)
-        
-        x,y = self.get_xy()
-        has_bandwidth = False
-
-        kernel_name = get_kernel_name(function=function,bandwidth=bandwidth,median_coef=median_coef) if kernel_name is None else kernel_name
-        if verbose>1:
-            print("kernel_name:",kernel_name)
-        if function == 'gauss':
-            has_bandwidth = True
-            if weights is not None:
-                if isinstance(weights,str):
-                    if weights in self.get_var():
-                        weights_ = self.get_var()[weights]
-                    elif weights in ['median','variance']:
-                        weights_=weights
-                    else: 
-                        print(f"kernel weights '{weights}' not recognized.")
-                else:
-                    weights_ = weights
-                kernel_,computed_bandwidth = gauss_kernel_weighted_variables(x=x,y=y,
-                                                                           weights=weights_,
-                                                                           weights_power=weights_power,
-                                                                           bandwidth=bandwidth,
-                                                                          median_coef=median_coef,
-                                                                          return_mediane=True,
-                                                                          verbose=verbose)
-
-            else:
-                kernel_,computed_bandwidth = gauss_kernel_mediane(x=x,y=y,      
-                                                bandwidth=bandwidth,  
-                                               median_coef=median_coef,
-                                               return_mediane=True,
-                                               verbose=verbose)
-
-
-
-        elif function == 'linear':
-            kernel_ = linear_kernel
-        elif function == 'fisher_zero_inflated_gaussian':
-            has_bandwidth = True
-            kernel_,computed_bandwidth = fisher_zero_inflated_gaussian_kernel(x=x,y=y,
-                                                                    pi1=pi1,pi2=pi2,
-                                                                    bandwidth=bandwidth,
-                                                                    median_coef=median_coef,
-                                                                    return_mediane=True,
-                                                                    verbose=verbose)
-        # elif function == 'gauss_kernel_mediane_per_variable':
-        #     has_bandwidth = True
-        #     kernel_,computed_bandwidth = gauss_kernel_mediane_per_variable(x=x,y=y,
-        #                                                                    bandwidth=bandwidth,
-        #                                                                   median_coef=median_coef,
-        #                                                                   return_mediane=True,
-        #                                                                   verbose=verbose)
-
-
-
-        else:
-            kernel_ = function
-
-
-        if verbose>1:
-            print("kernel",kernel_)
-        self.data[self.data_name]['kernel'] = kernel_
-        self.data[self.data_name]['kernel_name'] = kernel_name
-        if has_bandwidth:
-            self.data[self.data_name]['kernel_bandwidth'] = computed_bandwidth
-        self.has_kernel = True
-        self.kernel_params = init_kernel_params(function=function,
-                                                bandwidth=bandwidth,
-                                                median_coef=median_coef,
-                                                weights=weights,
-                                                weights_power=weights_power,
-                                                kernel_name=kernel_name,
-                                                pi1=pi1,pi2=pi2)
-
-    def get_kernel_params(self):
-        return(self.kernel_params.copy())
-
 
 
     def _update_dict_data(self,x,data_name,update_current_data_name=True): 
@@ -807,8 +689,8 @@ class Base:
         dict_nobs['ntot'] = sum(list(dict_nobs.values()))
         return(dict_nobs)
 
-    def get_ntot(self,landmarks=False):
-        dict_nobs = self.get_nobs(landmarks=landmarks)
+    def get_ntot(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None):
+        dict_nobs = self.get_nobs(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         return(dict_nobs['ntot'])
 
     def get_dataframe_of_means(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
@@ -954,13 +836,13 @@ class Base:
         Parameters
         ----------
             proj : str 
-                if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_unidirectional_mmd','proj_residuals']
+                if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_unidirectional_mmd','proj_orthogonal']
                     returns a dataframe containing the position of each cell on the corresponding axis.
                     - proj_kfda : discriminant axes 
                     - proj_kpca : principal components of the within group covariance
                     - proj_mmd : projection on the MMD-withess function (axis supported by the mean embeddings difference)
                     - proj_unidirectional_mmd : similar to proj_kpca with a different normalization
-                    - proj_residuals : (`name` has to be specified) projection on the principal components of the within group covariance computed on the space orthogonal to the discriminant axis. 
+                    - proj_orthogonal : (`name` has to be specified) projection on the principal components of the within group covariance computed on the space orthogonal to the discriminant axis. 
                 if proj in variables list (self.get_variables()):
                     returns the value of this variable for each observation
                 if proj in metadata (self.obs.columns)
@@ -986,8 +868,8 @@ class Base:
             df_proj = self.get_proj_mmd(name=name)
         elif proj == 'proj_unidirectional_mmd':
             df_proj = self.get_proj_unidirectional_mmd(name=name)
-        elif proj == 'proj_residuals':
-            df_proj = self.get_proj_residuals(name=name)
+        elif proj == 'proj_orthogonal':
+            df_proj = self.get_proj_orthogonal(name=name)
 
         elif proj in self.get_variables(data_name):
             # df_proj = pd.DataFrame(self.get_dataframe_of_all_data()[proj])
@@ -1033,13 +915,13 @@ class Base:
         else:
             print(f"proj unidirectional mmd '{name}' has not been computed yet")
 
-    def get_proj_residuals(self,name=None):
+    def get_proj_orthogonal(self,name=None):
         if name is None:
-            name = self.get_residuals_name()
-        if name in self.df_proj_residuals:
-            return(self.df_proj_residuals[name])
+            name = self.get_orthogonal_name()
+        if name in self.df_proj_orthogonal:
+            return(self.df_proj_orthogonal[name])
         else:
-            print(f"proj residuals '{name}' has not been computed yet")
+            print(f"proj orthogonal '{name}' has not been computed yet")
 
 
 
@@ -1140,7 +1022,7 @@ class Base:
         self.samples = samples
         if change_kernel:
             kernel = self.kernel_specification 
-            self.kernel(verbose=verbose,**kernel)
+            self.init_kernel(verbose=verbose,**kernel)
         
     def get_data_name_condition_samples_marked_obs(self):
         return(self.data_name,self.condition,self.samples,self.marked_obs_to_ignore)
@@ -1148,91 +1030,15 @@ class Base:
     def get_spev(self,slot='covw',t=None,center=None):
         """
         Return spectrum and eigenvectors.
-        slot in ['covw','anchors','residuals']
+        slot in ['covw','anchors','residuals','orthogonal]
         """
 
         spev_name = self.get_covw_spev_name() if slot=='covw' else \
                     self.get_anchors_name() if slot=='anchors' else \
-                    self.get_residuals_name(t=t,center=center)
+                    self.get_orthogonal_name(t=t,center=center)
         
         try:
             return(self.spev[slot][spev_name]['sp'],self.spev[slot][spev_name]['ev'])
         except KeyError:
             print(f'KeyError : spev {spev_name} not in {slot} {self.spev[slot].keys()}')
-                    
-    # Names 
-
-    def get_data_to_test_str(self,condition=None,samples=None,marked_obs_to_ignore=None):
-
-        dn = self.data_name
-        c,samples,mark = self.init_samples_condition_marked(condition=condition,
-                                           samples=samples,
-                                           marked_obs_to_ignore=marked_obs_to_ignore)
-
-        # si les conditions et samples peuvent être mis en entrées, cente_by aussi
-        smpl = '' if samples == 'all' else "".join(samples)
-        cb = '' if self.center_by is None else f'_cb_{self.center_by}'    
-        marking = '' if mark is None else f'_{mark}'
-        return(f'{dn}{c}{smpl}{cb}{marking}')
-
-    def get_model_str(self):
-        ny = self.nystrom
-        nys = 'ny' if self.nystrom else 'standard'
-        ab = f'_basis{self.anchor_basis}' if ny else ''
-        lm = f'_lm{self.landmark_method}_m{self.get_n_landmarks()}' if ny else ''
-        return(f'{nys}{lm}{ab}')
-
-    def get_landmarks_name(self):
-        dtn = self.get_data_to_test_str()
-
-
-        lm = self.landmark_method
-        n_landmarks = f'_m{self.get_n_landmarks()}'
-        
-        return(f'lm{lm}{n_landmarks}_{dtn}')
-
-    def get_kmeans_landmarks_name_for_sample(self,sample):
-        landmarks_name = self.get_landmarks_name()
-        return(f'{sample}_{landmarks_name}')
-
-
-    def get_anchors_name(self,):
-        dtn = self.get_data_to_test_str()
-
-        lm = self.landmark_method
-        ab = self.anchor_basis
-        n_landmarks = f'_m{self.get_n_landmarks()}'
-        # r = f'_r{self.r}' # je ne le mets pas car il change en fonction des abérations du spectre
-        return(f'lm{lm}{n_landmarks}_basis{ab}_{dtn}')
-
-    def get_covw_spev_name(self):
-        dtn = self.get_data_to_test_str()
-        mn = self.get_model_str()
-
-        return(f'{mn}_{dtn}')
-
-    def get_kfdat_name(self,condition=None,samples=None,marked_obs_to_ignore=None):
-        dtn = self.get_data_to_test_str(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        mn = self.get_model_str()
-
-        return(f'{mn}_{dtn}')
-
-    def get_residuals_name(self,t,center,condition=None,samples=None,marked_obs_to_ignore=None):
-        dtn = self.get_data_to_test_str(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        
-        mn = self.get_model_str()
-
-        c = center
-        return(f'{c}{t}_{mn}_{dtn}')
-        
-    def get_mmd_name(self):
-        dtn = self.get_data_to_test_str()
-        mn = self.get_model_str()
-        return(f'{mn}_{dtn}')
-
-    def get_corr_name(self,proj):
-        if proj in ['proj_kfda','proj_kpca']:
-            name = f"{proj.split(sep='_')[1]}_{self.get_kfdat_name()}"
-        else : 
-            print(f'the correlation with {proj} is not handled yet.')
-        return(name)
+   

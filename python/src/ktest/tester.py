@@ -24,12 +24,13 @@ from .plots_univariate import Plot_Univariate
 from .plots_summarized import Plot_Summarized
 from .permutation import Permutation
 from .correlation_operations import Correlations
-from .utils import init_kernel_params,init_test_params
- 
+from .hotelling_lawley import Hotelling_Lawley
+from .utils import init_test_params
+from .kernel_function import init_kernel_params
 
 # tracer l'evolution des corrélations par rapport aux gènes ordonnés
 
-class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
+class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_Lawley):
     """
     Ktest is a class that performs kernels tests such that MMD and the test based on Kernel Fisher Discriminant Analysis. 
     It also provides a range of visualisations based on the discrimination between two groups.  
@@ -126,13 +127,15 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
 
         self.add_data_to_Ktest_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata,verbose=verbose)
         self.set_test_data_info(data_name=data_name,condition=condition,samples=samples,change_kernel=False,verbose=verbose)
-        self.kernel(verbose=verbose,**kernel)
+        self.init_kernel(verbose=verbose,**kernel)
         self.kernel_specification = kernel
         self.set_test_params(verbose=verbose,**test_params)
         self.test_params_initial=test_params
         self.set_center_by(center_by=center_by,verbose=verbose)
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         
+
+    # Print outputs 
     def str_add_test_info(self,s,long=False):
 
         # if long:
@@ -200,22 +203,26 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         return(s)
 
     def str_add_multivariate_stat_and_pval(self,s,t):
-        pval = self.df_pval[self.get_pvalue_name()]
-        kfda = self.df_kfdat[self.get_kfdat_name()]
-        if t not in pval:
-            s+= f"\n\t p-value and statistic not computed for t={t}"
-        else:
-            pval=pval[t]
-            kfda=kfda[t]
-            if pval>.01:
-                s+=f"\n\tp-value({t}) = {pval:.2f}"
+        name_pval=self.get_pvalue_name()
+        name_kfdat = self.get_kfdat_name()
+        if name_pval in self.df_pval and name_kfdat in self.df_kfdat:
+            pval = self.df_pval[name_pval]
+            kfda = self.df_kfdat[name_kfdat]
+            if t not in pval:
+                s+= f"\n\t p-value and statistic not computed for t={t}"
             else:
-                s+=f"\n\tp-value({t}) = {pval:1.1e}"
-            if kfda<1000:
-                s+=f" (kfda={kfda:.2f})"
-            else :
-                s+=f" (kfda={kfda:.2e})"
-        
+                pval=pval[t]
+                kfda=kfda[t]
+                if pval>.01:
+                    s+=f"\n\tp-value({t}) = {pval:.2f}"
+                else:
+                    s+=f"\n\tp-value({t}) = {pval:1.1e}"
+                if kfda<1000:
+                    s+=f" (kfda={kfda:.2f})"
+                else :
+                    s+=f" (kfda={kfda:.2e})"
+        else:
+            s+='p-value and KFDA statistic not computed'        
         return(s)
 
     def str_add_multivariate_test_results(self,s,long=False,t=None,ts=[1,5,10],stat=None,permutation=None):
@@ -407,9 +414,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             self.initialize_kfdat(verbose=verbose) # nystrom and eigenvectors. 
             self.compute_kfdat(verbose=verbose) # stat 
             
-            # j'ai enlevé cette condition pour verifier que j'en ai plus besoin. 
-            # if (self.nystrom and self.has_anchors) or not self.nystrom:
-            #    self.compute_kfdat(verbose=verbose) # stat 
         return(kn)
 
     def mmd_statistic(self,shared_anchors=True,unbiaised=False,verbose=0):
@@ -522,7 +526,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         except KeyError:
             print(f"mmd name '{name}' not in dict_pval_mmd keys {self.dict_pval_mmd}")
 
-            
     def get_pvalue(self,
                     stat=None,
                     name=None,
@@ -569,7 +572,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             return(self.get_kfda())
         elif stat == 'mmd':
             return(self.get_mmd())
-
 
     def get_diagnostics(self,
                         t=None,
@@ -648,12 +650,11 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
         t = len(df) if t is None else t
         return(df[:t+1])
 
-
     def get_projections(self,
                         t,
                         discriminant_axis=False,
                         principal_components=False,
-                        residuals=False,
+                        orthogonal=False,
                         mmd=False,
                         unidirectional_mmd=False,
                         condition=None,
@@ -675,8 +676,8 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             principal_components (default = False) : bool
                 if True, add the cell projections on the principal components of the within group covariance to the output
 
-            residuals (default = False): bool
-                if True, add the cell projections on the residuals direction (orthogonal to the discriminant axis) to the output
+            orthogonal (default = False): bool
+                if True, add the cell projections on the orthogonal direction (orthogonal to the discriminant axis) to the output
 
             mmd (default = False) : bool
                 if True, add the cell projections on the  MMD-withess function (axis supported by the mean embeddings difference)
@@ -713,8 +714,8 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
             self.projections(np.max(t))
         if any([mmd,unidirectional_mmd]):
             self.projections_MMD(np.max(t))
-        if residuals:
-            [self.residuals(t=t) for t in ts_int]
+        if orthogonal:
+            [self.orthogonal(t=t) for t in ts_int]
 
 
         for projection,proj_str,token in zip(
@@ -730,16 +731,16 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation):
                     for t in ts:
                         df[f'{proj_str}_{t}'] = df_proj[t]
 
-        if residuals:
+        if orthogonal:
             if len(ts_int)==1:
-                residuals_name=self.get_residuals_name(t=ts_int[0],center='w')
-                df_proj = self.init_df_proj('proj_residuals',name=residuals_name)
-                df['residuals'] = df_proj['1']
+                orthogonal_name=self.get_orthogonal_name(t=ts_int[0],center='w')
+                df_proj = self.init_df_proj('proj_orthogonal',name=orthogonal_name)
+                df['orthogonal'] = df_proj['1']
             else:
                 for t in ts_int:
-                    residuals_name=self.get_residuals_name(t=t,center='w')
-                    df_proj = self.init_df_proj('proj_residuals',name=residuals_name)
-                    df[f'residuals_{t}'] = df_proj['1']
+                    orthogonal_name=self.get_orthogonal_name(t=t,center='w')
+                    df_proj = self.init_df_proj('proj_orthogonal',name=orthogonal_name)
+                    df[f'orthogonal_{t}'] = df_proj['1']
 
         if mmd:
             df = pd.concat([df,self.init_df_proj('proj_mmd')],axis=1)

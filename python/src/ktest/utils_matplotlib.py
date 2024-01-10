@@ -369,3 +369,13 @@ def scatter_2d(ax,data,c,dim1=0,dim2=1,s=10,equal=True,label=None,alpha=1):
     ax.scatter(data[:,dim1],data[:,dim2],c=c,s=s,label=label,alpha=alpha)
     if equal:
         ax.axis('equal')
+
+
+
+def plot_matrix(matrix,fig=None,ax=None):
+    n=len(matrix)//100
+    if fig is None:
+        fig,ax=plt.subplots(figsize=(n,n))
+
+    ax.matshow(matrix, cmap=plt.cm.Blues)
+    return(fig,ax) 
