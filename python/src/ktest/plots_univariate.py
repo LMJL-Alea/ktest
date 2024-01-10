@@ -42,9 +42,7 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
         for t in toi:
             ax.axvline(t,ls='--',alpha=.8)
         return(fig,axes)
-                   
-                   
-
+                                 
     def plot_density_of_variable(self,
                                  variable,
                                  fig=None,

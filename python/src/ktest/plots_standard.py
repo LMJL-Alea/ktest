@@ -1020,7 +1020,7 @@ class Plot_Standard(Statistics):
         return(fig,ax)
 
 
-    def plot_residuals(self,
+    def plot_orthogonal(self,
                         t=1,
                         center='w',
                         fig=None,
@@ -1039,20 +1039,20 @@ class Plot_Standard(Statistics):
 
         self.projections(t=t,condition=condition,samples=samples,
                         marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
-        self.residuals(t=t,center=center)
+        self.orthogonal(t=t,center=center)
 
         kfdat_name = self.get_kfdat_name(
                         condition=condition,
                         samples=samples,
                         marked_obs_to_ignore=marked_obs_to_ignore)
-        residuals_name = self.get_residuals_name(t=t,center=center)
+        orthogonal_name = self.get_orthogonal_name(t=t,center=center)
         
 
         fig,ax = self.scatter_proj(projection=[t,1],
                         xproj='proj_kfda',
-                        yproj='proj_residuals',
+                        yproj='proj_orthogonal',
                         xname=kfdat_name,
-                        yname=residuals_name,
+                        yname=orthogonal_name,
                         color=color,
                         marker=marker,
                         highlight=highlight,

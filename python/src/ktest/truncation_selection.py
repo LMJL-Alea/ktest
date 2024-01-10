@@ -1,4 +1,4 @@
-from .residuals import Residuals
+from .orthogonal import Orthogonal
 from torch import cat,tensor,float64
 import numpy as np
 from numpy import where
@@ -13,7 +13,7 @@ On choisit à terme la plus grande troncature qui contrôle cette erreur.
 """
 
 # A supprimer 
-class TruncationSelection(Residuals):
+class TruncationSelection(Orthogonal):
 
     def __init__(self):
         super(TruncationSelection,self).__init__()

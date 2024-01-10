@@ -87,8 +87,6 @@ class Pvalues:
             self.df_pval[kn] = kfda.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
             self.df_pval_contributions[kn] = kfda_contrib.apply(lambda x: chi2.sf(x[kn],int(x.name)),axis=1) 
 
-
-
     def compute_pvalue(self,
                     stat=None,
                     permutation=None,
@@ -124,9 +122,6 @@ class Pvalues:
                                     keep_permutation_statistics=keep_permutation_statistics,
                                     verbose=verbose)
 
-
-
-   
     def correct_BenjaminiHochberg_pval(self,t=20):
         """
         Correction of the p-values of df_pval according to Benjamini and Hochberg 1995 approach.

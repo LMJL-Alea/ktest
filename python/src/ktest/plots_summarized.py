@@ -130,29 +130,30 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
 
 
 
-    def what_if_we_ignored_list_of_obs(self,list_of_observations,list_name,t_errors=20,t_discriminant=None,t_residuals=None,nkpca=0):
+    def what_if_we_ignored_list_of_obs(self,list_of_observations,list_name,t_errors=20,t_discriminant=None,t_orthogonal=None,nkpca=0):
         
 
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=list_name)
         fig,axes = self.summary_plots_of_Ktest(title=list_name,
                                     t_errors=t_errors,
                                     t_discriminant=t_discriminant,
-                                    t_residuals=t_residuals,
+                                    t_orthogonal=t_orthogonal,
                                     nkpca=nkpca,
                                     highlight=list_of_observations)
         self.set_marked_obs_to_ignore()
 
         return(list_name,fig,axes)
 
-    def summary_plots_of_Ktest(self,title,t_errors=None,t_discriminant=None,t_residuals=None,t_kpca=None,t_nextPC=None,color=None,marker=None,highlight=None):
+    def summary_plots_of_Ktest(self,title,t_errors=None,t_discriminant=None,t_orthogonal=None,t_kpca=None,t_nextPC=None,color=None,marker=None,highlight=None):
+
         
         dict_t = {}
         dict_nt = {}
         
         errors = False if t_errors is None else True 
         ncols = errors
-        for t,tname in zip([t_discriminant,t_residuals,t_kpca,t_nextPC],
-                           ['discriminant','residuals','kpca','nextPC']):
+        for t,tname in zip([t_discriminant,t_orthogonal,t_kpca,t_nextPC],
+                           ['discriminant','orthogonal','kpca','nextPC']):
             dict_t[tname] = [t] if isinstance(t,int) else t
             dict_nt[tname] = False if t is None else len(t)
             ncols += False if t is None else len(t)
@@ -175,12 +176,12 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
                 self.hist_discriminant(t=t,fig=fig,ax=ax)
                 # self.density_proj(t = t,fig=fig,ax=ax)
                 ax.set_title(f'discriminant axis t={t}',fontsize=30)
-        if dict_nt['residuals']: 
-            for t in dict_t['residuals']:
+        if dict_nt['orthogonal']: 
+            for t in dict_t['orthogonal']:
                 ax = axes[i]
                 i+=1
-                self.residuals(t)
-                self.plot_residuals(t,fig=fig,ax=ax,color=color,marker=marker,highlight=highlight)
+                self.orthogonal(t)
+                self.plot_orthogonal(t,fig=fig,ax=ax,color=color,marker=marker,highlight=highlight)
 
         if dict_nt['kpca']:
             for t in dict_t['kpca']:

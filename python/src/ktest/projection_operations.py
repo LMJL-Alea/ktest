@@ -83,7 +83,6 @@ class ProjectionOps(KernelTrick):
             self.df_proj_kpca[proj_name] = pd.DataFrame(proj_kpca,index=index,columns=[str(t) for t in trunc])
         return(proj_name)
         
-
     def compute_proj_on_unidirectional_mmd(self,t=None,verbose=0):
         
         self.verbosity(function_name='compute_proj_on_eigenvectors',
@@ -140,7 +139,6 @@ class ProjectionOps(KernelTrick):
                     start=False,
                     verbose = verbose)
         return(proj)
-
 
     def projections_MMD(self,t=None,verbose=0):
         """ 

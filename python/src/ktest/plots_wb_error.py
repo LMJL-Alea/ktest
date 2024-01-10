@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from .residuals import Residuals
+from .orthogonal import Orthogonal
 # from .kernel_statistics import Statistics
 from .utils_plot import adjusted_xticks
 from torch import mv,dot,norm,ger,eye,diag,ones,diag,matmul,float64,isnan,sort,cat,tensor,sum,log
 from numpy import sqrt
 import torch
-class Plot_WBerrors(Residuals):
+class Plot_WBerrors(Orthogonal):
         
     def __init__(self):        
         super(Plot_WBerrors, self).__init__()
