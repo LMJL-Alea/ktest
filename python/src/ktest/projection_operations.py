@@ -81,39 +81,6 @@ class ProjectionOps(KernelTrick):
             self.df_proj_kpca[proj_name] = pd.DataFrame(proj_kpca,index=index,columns=[str(t) for t in trunc])
         return(proj_name)
         
-    def compute_proj_on_unidirectional_mmd(self,t=None,verbose=0):
-        
-        self.verbosity(function_name='compute_proj_on_eigenvectors',
-                    dict_of_variables={
-                    't':t,
-                    },
-                    start=True,
-                    verbose = verbose)
-                    
-        cov = self.approximation_cov
-        sp,ev = self.get_spev('covw')
-        
-        tmax = 200
-        t = tmax if (t is None and len(sp)>tmax) else len(sp) if (t is None or len(sp)<t) else t
-
-        pkm=self.compute_pkm()
-        upk=self.compute_upk(t)
-        n1,n2,n = self.get_n1n2n()
-
-        if cov == 'standard' or 'nystrom' in cov: 
-            proj = (mv(ev.T[:t],pkm)*upk).numpy()
-            # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
-
-
-        self.verbosity(function_name='compute_proj_on_eigenvectors',
-                                    dict_of_variables={
-                    't':t,
-                    },
-                    start=False,
-                    verbose = verbose)
-
-        return(proj,t)
-
     def compute_proj_on_MMD(self,verbose=0):
         
         self.verbosity(function_name='compute_proj_on_eigenvectors',
@@ -136,32 +103,25 @@ class ProjectionOps(KernelTrick):
                     verbose = verbose)
         return(proj)
 
-    def projections_MMD(self,t=None,verbose=0):
+    def projections_MMD(self,verbose=0):
         """ 
         Computes the vector of projection of the embeddings on the discriminant axis corresponding 
         to the MMD statistic with a truncation parameter equal to t and with no truncation and stores 
-        the results as column of the attribute `df_proj_mmd` et df_proj_unidirectional_mmd. 
+        the results as column of the attribute `df_proj_mmd`. 
         
         """
 
         mmd_name = self.get_mmd_name()
         
-        if mmd_name in self.df_proj_mmd and (mmd_name in self.df_proj_unidirectional_mmd and str(t) in self.df_proj_unidirectional_mmd[mmd_name]):
+        if mmd_name in self.df_proj_mmd:
             if verbose : 
                 print('Proj on MMD discriminant axis Already computed')
 
         else:
-            proj_unidirectional_mmd,t = self.compute_proj_on_unidirectional_mmd(t=t,verbose=verbose)
-            proj_unidirectional_mmd = proj_unidirectional_mmd.cumsum(axis=1)
             proj_mmd = self.compute_proj_on_MMD(verbose=verbose)
-            trunc = range(1,t+1) 
-        
             if mmd_name in self.df_proj_mmd:
                 print(f"écrasement de {mmd_name} dans df_proj_mmd")
-            if mmd_name in self.df_proj_unidirectional_mmd:
-                print(f"écrasement de {mmd_name} dans df_proj_unidirectional_mmd")
             self.df_proj_mmd[mmd_name] = pd.DataFrame(proj_mmd,index= self.get_index(in_dict=False),columns=['mmd'])
-            self.df_proj_unidirectional_mmd[mmd_name] = pd.DataFrame(proj_unidirectional_mmd,index= self.get_index(in_dict=False),columns=[str(t) for t in trunc])
         return(mmd_name)
 
 

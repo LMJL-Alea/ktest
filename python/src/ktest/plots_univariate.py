@@ -450,17 +450,17 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
 
     def plot_mmd_discriminant_of_expression_univariate(self,
                                                        variable,
-                                                       t,
                                                        color=None,
                                                        marker=None,
                                                        highlight=None,
                                                         highlight_label=None,
-                                                        previous_discriminant=False,
                                                 ):
 
         fig = plt.figure(figsize=(15,7.5),constrained_layout=True)
-        axd = fig.subplot_mosaic("AB\nCD",gridspec_kw=dict(height_ratios=[1, 2],width_ratios=[3,2]),)
-        yproj = 'proj_mmd' if t == 'mmd' else 'proj_unidirectional_mmd'
+        axd = fig.subplot_mosaic("AB\nCD",
+                                 gridspec_kw=dict(height_ratios=[1, 2],
+                                                  width_ratios=[3,2]),)
+        yproj = 'proj_mmd' 
 
         # Pval and errors 
     #     self.plot_pval_and_errors(fig=fig,ax=axd['B'],truncations_of_interest=[trunc],adjust=False)
@@ -472,17 +472,11 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
                           highlight=highlight,
                     highlight_label=highlight_label)
         
-        self.scatter_proj(projection=[variable,t],xproj=variable,yproj=yproj,yname=self.get_mmd_name(),
+        self.scatter_proj(projection=[variable,'mmd'],xproj=variable,yproj=yproj,yname=self.get_mmd_name(),
                         color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'])
-        if previous_discriminant and t>1:
-            self.scatter_proj(projection=[variable,t-1],xproj=variable,yproj='proj_kfda',yname=self.get_kfdat_name(),
-                        color=color,marker=marker,highlight=highlight,fig=fig,ax=axd['C'],
-                        alpha=.2,legend=False)
-        if t == 'mmd':
-            self.hist_mmd_discriminant(fig=fig,ax=axd['D'],orientation='horizontal')
-        else:
-            self.hist_unidirectional_mmd_discriminant(t,fig=fig,ax=axd['D'],orientation='horizontal')
-            
+        
+        self.hist_mmd_discriminant(fig=fig,ax=axd['D'],orientation='horizontal')
+
         axd['A'].legend([])
         axd['A'].set_xlabel('')
         axd['B'].set_xlabel('')
@@ -490,14 +484,14 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
     #     axd['B'].legend(fontsize=15)
         axd['C'].set_title('')
         axd['D'].legend([])
-        axd['D'].set_title(f'Discriminant t={t}',fontsize=30)
+        axd['D'].set_title(f'MMD axis',fontsize=30)
         axd['D'].set_ylabel('')
         axd['D'].sharey(axd['C'])
         #     axd['A'].set_title(f'{g} expression',fontsize=30)
         #     axd['B'].axhline(0,c='crimson',ls='--',alpha=.5,lw='2')
         #     axd['A'].legend(bbox_to_anchor=(.98,1.02),fontsize=30)
     #     pval = self.df_pval[self.get_kfdat_name()].loc[trunc]
-        title = f'{variable} DA{t}'
+        title = f'{variable} MMD'
     #     title += f'{pval:.1e}' if pval<0.01 else f'{pval:.2f}'
         fig.suptitle(title,fontsize=30,y=1.02)
         fig.tight_layout()

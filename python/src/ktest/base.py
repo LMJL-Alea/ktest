@@ -13,6 +13,113 @@ class Base(Names,Kernel_Function):
     def __init__(self,verbose=0):        
         super(Base, self).__init__()
 
+
+        ### Input data ###
+        self.data = {} 
+        # is a dict containing the data matrix, indexes, variables names and the kernel function
+        
+        self.input_params={}
+        # is a dict containing the parameters of the test to perform
+
+        self.obs = pd.DataFrame(columns=['sample'])
+        # is a pandas.DataFrame containing the meta information on the observations (cells)
+        # the rows are the observations and each column correspond to a meta information 
+
+        self.obs['sample'] = self.obs['sample'].astype('category')
+        # this column of `self.obs` is still empty, it is initialized to be 
+        # the default column containing the information on the groups to compare
+        
+        self.var = {}
+        # is a dict containing a pandas.DataFrame of meta information on the variables (genes)
+        # it is a dict because a specific dataframe is initialized for each key contained in 
+        # the `self.data` structure
+        # in the dataframes, the rows are the variables and each column is a meta information or 
+        # an output of the method. This dataframe is used to store the results of univariate tests. 
+
+        self.vard = {}
+        # is dict containing a dict for each variable, 
+        # it is used as an intermediate data structure before updating `self.var`
+        # as it is easier to update dicts than dataframes. 
+
+        self.hypotheses = {}
+        # is a dict containing the matrices of interest associated to 
+        # each general hypothesis that has been tested 
+
+
+        ### Output statistics ### 
+        
+        self.df_kfdat = pd.DataFrame()
+        self.df_pval = pd.DataFrame()
+        # are two Pandas.DataFrames containing the computed kfda statistics and
+        # associated asymptotic p-values (chi-square with T degree of freedom). The rows are the truncations and there is one 
+        # columns per test performed with specific parameters and samples. 
+
+        self.df_kfdat_contributions = pd.DataFrame()
+        self.df_pval_contributions = pd.DataFrame()
+        # are two pandas.DataFrames containing the unidirectional statistic 
+        # associated to each eigendirection of the within-group covariance 
+        # operator and associated asymptotic p-value (chi-square with one 
+        # degree of freedom for each direction), 
+        # `self.df_kfdat` is the cumulated sum of `self.df_kfdat_contributions`
+        
+        ## MMD statistic and p-value
+        self.dict_mmd = {}
+        self.dict_pval_mmd = {}
+        # is a dict where each entry has the key corresponding to a specific 
+        # set of parameters and the value is the associated MMD statistic
+        # and associated permutation p-value respectively. 
+
+        # Permutation statistics
+        self.df_kfdat_perm = {}
+        self.df_mmd_perm = pd.DataFrame()
+        # These data structures contain the KFDA and MMD statistics associated to 
+        # the permuted datasets that are used to estimate the quantile under H0 
+        # with a permutation approach. 
+
+        self.corr = {}     
+        # is a dict where each entry is a pandas.DataFrame containing 
+        # the correlations between the variables of interest with the 
+        # directions of interest in the RKHS. 
+        # These correlations are computed with functions stored in the file ./correlation_operations.py 
+
+        ## Coordinates of the projections  
+        self.df_proj_kfda = {} # on the discriminant axis  
+        self.df_proj_kpca = {} # on the eigendirections of the within-group covariance operator 
+        self.df_proj_mmd = {} # on the axis supported by \mu_1-\mu_2
+        self.df_proj_orthogonal = {} # on the axis orthogonal to the discriminant axis that maximizes the variance
+        self.df_proj_residuals = {} # on the eigendirections of the residual covariance operator of the kernel linear model
+        
+        # Eigenvectors
+        self.spev = {'covw':{},'anchors':{},'residuals':{},'orthogonal':{}} # dict containing every result of diagonalization
+        # les vecteurs propres sortant de eigsy sont rangés en colonnes
+
+        
+
+        ### Keys ###        
+        # All the information stored in ktest is organized with respect to key strings. 
+        # The keys stored in the following attributes correspond to the 'curent' info in use. 
+        # Most of theses keys are updated automatically through functions. 
+        self.univariate_name=None 
+        self.permutation_mmd_name=None
+        self.permutation_kfda_name=None
+        # name of the dataframe on which are encoded 
+        self.log2fc_data = None
+        # current key to access to the slot of interest in `self.data`
+        self.data_name = None
+        self.condition = 'sample'
+        self.samples = 'all'
+        self.marked_obs_to_ignore = None
+
+
+        # column of the metadata to use to center the data (désuet avec MANOVA)
+        self.center_by = None        
+        # for verbosity 
+        self.verbose=verbose
+        self.start_times = {}
+
+        self.current_hyp = None
+        
+        
         # tokens to assess global information on the ktest object :
         self.has_data = False # true if the ktest object contains data 
         self.has_landmarks = False # true if the nystrom landmarks have been determined
@@ -21,62 +128,6 @@ class Base(Names,Kernel_Function):
         self.has_kernel = False # true if the kernel function has been initiated (not used)
         self.has_kfda_statistic = False # true if the kfda statistic has been computed (not used)
 
-        # names encoding for tests performed with specific sets of parameters
-        self.univariate_name=None 
-        self.permutation_mmd_name=None
-        self.permutation_kfda_name=None
-        self.center_by = None        
-
-        # attributs initialisés 
-        self.data = {}
-        self.input_params={}
-        self.obs = pd.DataFrame(columns=['sample'])
-        self.obs['sample'] = self.obs['sample'].astype('category')
-        self.verbose=verbose
-        self.var = {}
-        self.vard = {}
-        
-        self.data_name = None
-        self.log2fc_data = None
-        self.condition = 'sample'
-        self.samples = 'all'
-        self.marked_obs_to_ignore = None
-        self.main_data=None
-
-        # Statistics 
-        self.df_kfdat = pd.DataFrame()
-        self.df_kfdat_contributions = pd.DataFrame()
-        self.dict_mmd = {}
-
-        # p-values
-        self.df_pval = pd.DataFrame()
-        self.df_pval_contributions = pd.DataFrame()
-        self.dict_pval_mmd = {}
-
-        # Permutation statistics
-        self.df_kfdat_perm = {}
-        self.df_mmd_perm = pd.DataFrame()
-
-        # Projections and Correlations
-        self.corr = {}     
-        self.df_proj_kfda = {}
-        self.df_proj_kpca = {}
-        self.df_proj_mmd = {}
-        self.df_proj_unidirectional_mmd = {}
-        self.df_proj_orthogonal = {}
-        self.df_proj_residuals = {}
-        
-        # Eigenvectors
-        self.spev = {'covw':{},'anchors':{},'residuals':{},'orthogonal':{}} # dict containing every result of diagonalization
-        # les vecteurs propres sortant de eigsy sont rangés en colonnes
-
-        # for verbosity 
-        self.start_times = {}
-
-        # For general hypothesis testing
-        self.hypotheses = {}
-        self.current_hyp = None
-        
 
     def set_test_params(self,
                     stat='kfda',
@@ -834,12 +885,11 @@ class Base(Names,Kernel_Function):
         Parameters
         ----------
             proj : str 
-                if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_unidirectional_mmd','proj_orthogonal']
+                if proj in ['proj_kfda','proj_kpca','proj_mmd','proj_orthogonal']
                     returns a dataframe containing the position of each cell on the corresponding axis.
                     - proj_kfda : discriminant axes 
                     - proj_kpca : principal components of the within group covariance
                     - proj_mmd : projection on the MMD-withess function (axis supported by the mean embeddings difference)
-                    - proj_unidirectional_mmd : similar to proj_kpca with a different normalization
                     - proj_orthogonal : (`name` has to be specified) projection on the principal components of the within group covariance computed on the space orthogonal to the discriminant axis. 
                 if proj in variables list (self.get_variables()):
                     returns the value of this variable for each observation
@@ -864,8 +914,6 @@ class Base(Names,Kernel_Function):
             df_proj = self.get_proj_kpca(name=name)
         elif proj == 'proj_mmd':
             df_proj = self.get_proj_mmd(name=name)
-        elif proj == 'proj_unidirectional_mmd':
-            df_proj = self.get_proj_unidirectional_mmd(name=name)
         elif proj == 'proj_orthogonal':
             df_proj = self.get_proj_orthogonal(name=name)
 
@@ -905,13 +953,6 @@ class Base(Names,Kernel_Function):
         else:
             print(f"proj mmd '{name}' has not been computed yet")
 
-    def get_proj_unidirectional_mmd(self,name=None):
-        if name is None:
-            name = self.get_mmd_name()
-        if name in self.df_proj_mmd:
-            return(self.df_proj_unidirectional_mmd[name])
-        else:
-            print(f"proj unidirectional mmd '{name}' has not been computed yet")
 
     def get_proj_orthogonal(self,name=None):
         if name is None:

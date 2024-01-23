@@ -854,30 +854,6 @@ class Plot_Standard(Statistics):
                                     highlight_label=highlight_label,
                                    )
         return(fig,ax)
-        
-    def hist_unidirectional_mmd_discriminant(self,
-                               t,
-                               color=None,
-                               fig=None,
-                               ax=None,
-                               show_conditions=True,
-                               orientation='vertical',
-                               highlight=None,
-                    highlight_label=None,
-                               legend_fontsize=15):
-        mmd_name = self.get_mmd_name()
-        fig,ax = self.density_proj(t=t,
-                                   proj='proj_unidirectional_mmd',
-                                   name=mmd_name,
-                                   orientation=orientation,
-                                   color=color,
-                                   fig=fig,
-                                   ax=ax,
-                                   show_conditions=show_conditions,
-                                   legend_fontsize=legend_fontsize,
-                                   highlight=highlight,
-                                   highlight_label=highlight_label)
-        return(fig,ax)
 
     def hist_pc(self,
                 t,

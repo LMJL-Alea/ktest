@@ -653,7 +653,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                         principal_components=False,
                         orthogonal=False,
                         mmd=False,
-                        unidirectional_mmd=False,
                         condition=None,
                         samples=None,
                         marked_obs_to_ignore=None,
@@ -709,16 +708,16 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         # computes the asked projections if necessary 
         if any([discriminant_axis,principal_components]):
             self.projections(np.max(t))
-        if any([mmd,unidirectional_mmd]):
-            self.projections_MMD(np.max(t))
+        if any([mmd]):
+            self.projections_MMD()
         if orthogonal:
             [self.orthogonal(t=t) for t in ts_int]
 
 
         for projection,proj_str,token in zip(
-                                            ['proj_kfda','proj_kpca','proj_unidirectional_mmd'],
-                                            ['discriminant_axis','kpca','unidirectional_mmd'],
-                                            [discriminant_axis,principal_components,unidirectional_mmd]):
+                                            ['proj_kfda','proj_kpca'],
+                                            ['discriminant_axis','kpca'],
+                                            [discriminant_axis,principal_components]):
 
             if token:
                 df_proj = self.init_df_proj(projection)
