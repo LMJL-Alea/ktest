@@ -12,18 +12,20 @@ class Base(Names,Kernel_Function):
 
     def __init__(self,verbose=0):        
         super(Base, self).__init__()
-        self.truncation = 10
-        self.center_by = None        
-        self.has_data = False 
-        self.has_model = False  
-        self.has_landmarks = False
-        self.has_anchors = False
-        self.has_kernel = False
-        self.has_kfda_statistic = False
-        self.univariate_name=None
+
+        # tokens to assess global information on the ktest object :
+        self.has_data = False # true if the ktest object contains data 
+        self.has_landmarks = False # true if the nystrom landmarks have been determined
+        self.has_anchors = False # true if the nystrom anchors have been determined
+        self.has_model = False # true if the model parameters have been initiated with function set_test_params (not used)
+        self.has_kernel = False # true if the kernel function has been initiated (not used)
+        self.has_kfda_statistic = False # true if the kfda statistic has been computed (not used)
+
+        # names encoding for tests performed with specific sets of parameters
+        self.univariate_name=None 
         self.permutation_mmd_name=None
         self.permutation_kfda_name=None
-        self.quantization_with_landmarks_possible = False
+        self.center_by = None        
 
         # attributs initialisés 
         self.data = {}
@@ -193,10 +195,6 @@ class Base(Names,Kernel_Function):
             }
         return(test_params)
                 
-    def set_truncation(self,t):
-        self.truncation=t
-
-
     def _update_dict_data(self,x,data_name,update_current_data_name=True): 
         '''
         Add the new data x to the torch.tensor of data `self.data[data_name]` after converting 
@@ -1024,8 +1022,13 @@ class Base(Names,Kernel_Function):
             kernel = self.kernel_specification 
             self.init_kernel(verbose=verbose,**kernel)
         
-    def get_data_name_condition_samples_marked_obs(self):
-        return(self.data_name,self.condition,self.samples,self.marked_obs_to_ignore)
+
+
+    def get_test_data_info(self):
+        return({'dataset':self.data_name,
+                'condition':self.condition,
+                'samples':self.samples,
+                'marked_obs_to_ignore':self.marked_obs_to_ignore})
         
     def get_spev(self,slot='covw',t=None,center=None):
         """

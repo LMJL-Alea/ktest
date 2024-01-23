@@ -4,6 +4,7 @@ import scipy as sc
 
 # Pour tout plein de distributions clé en main
 # https://docs.scipy.org/doc/numpy-1.15.0/reference/routines.random.html
+# P: Pas dans le main package
 
 """
 Génération de variables aléatoires multivariées pour des simulations. 

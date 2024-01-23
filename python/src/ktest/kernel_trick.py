@@ -45,8 +45,8 @@ class KernelTrick(GramMatrices):
             Lz = diag(Lz1**-1) # matrice diagonale des inverses des valeurs propres associées aux ancres. 
 
         # instantiation du vecteur de bi-centrage omega et de la matrice de centrage Pbi 
-        omega = self.compute_omega(quantization=(mmd=='quantization')) # vecteur de 1/n1 et de -1/n2 
-        Pbi = self.compute_covariance_centering_matrix(quantization=(cov=='quantization')) # matrice de centrage par block
+        omega = self.compute_omega() # vecteur de 1/n1 et de -1/n2 
+        Pbi = self.compute_covariance_centering_matrix() # matrice de centrage par block
         
         # instantiation de la matrice de passage des landmarks aux observations 
         # (ne sert pas que pour nystrom, aussi pour la statistique par quantification qu'on
@@ -71,46 +71,32 @@ class KernelTrick(GramMatrices):
                 pkm = mv(Pbi,mv(Kx,omega)) # le vecteur que renvoie cette fonction 
             # aucun avantage
             elif mmd == 'nystrom': 
-                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(landmarks=True)
                 # print(f'Pbi{Pbi.shape}Kxz{Kzx.T.shape}Pi{Pi.shape}Uz{Uz.shape}Lz{Lz.shape}omega{omega.shape}')
                 pkm = 1/n_landmarks * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
                 # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
-            # aucun avantage
-            elif mmd == 'quantization':
-                pkm = mv(Pbi,mv(Kzx.T,omega))
 
         if cov == 'nystrom1' and cov_anchors == 'shared':
             # aucun avantage
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(landmarks=True)
                 pkm = 1/n_landmarks**2 * mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
                 # pkm = mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
-            # aucun avantage
-            elif mmd == 'quantization':
-                Kz = self.compute_gram(landmarks=True)
-                pkm = 1/n_landmarks**2 * mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
-                # pkm = mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega))))))
         
         if cov == 'nystrom2' and cov_anchors == 'shared':
             # aucun avantage
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
-                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pi = self.compute_covariance_centering_matrix(landmarks=True)
                 pkm = 1/n_landmarks**3 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
                 # pkm = mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))))))
-            # aucun avantage
-            elif mmd == 'quantization': # pas à jour
-                # il pourrait y avoir la dichotomie anchres centrees ou non ici. 
-                Kz = self.compute_gram(landmarks=True)
-                pkm = 1/n_landmarks**3 * mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
-                # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
         if cov == 'nystrom3' and cov_anchors == 'shared':
             Lz,_ = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
             # print("statistics pkm: L-1 nan ",(torch.isnan(torch.diag(Lz12))))
-            Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+            Pi = self.compute_covariance_centering_matrix(landmarks=True)
             # cas nystrom 
             if mmd in ['standard','nystrom']: # c'est exactement la même stat  
                 
@@ -120,29 +106,9 @@ class KernelTrick(GramMatrices):
                 # print(f'in compute pkm: \n\t\
                 #    Lz12{Lz12}\n Uz{Uz}\n Kzx{Kzx}')
 
-            elif mmd == 'quantization': # pas à jour 
-                # il faut ajouter Pi ici . 
-                Kz = self.compute_gram(landmarks=True)
-                pkm = 1/n_landmarks**2 * mv(Lz12,mv(Uz.T,mv(Pi,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Pi,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))))
-                # pkm = mv(Lz12,mv(Uz.T,mv(Kzx,mv(Pbi,mv(Kzx.T,mv(Uz,mv(Lz,mv(Uz.T,mv(Kz,omega)))))))))
         
 
 
-        # aucun avantage 
-        if cov == 'quantization': # pas à jour 
-            A = self.compute_quantization_weights(power=1/2,sample='xy')
-            if mmd == 'standard':
-                pkm = mv(Pbi,mv(A,mv(Kzx,omega)))
-
-            elif mmd == 'nystrom':
-                Pi = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
-                Kz = self.compute_gram(landmarks=True)
-                pkm = 1/n_landmarks * mv(Pbi,mv(A,mv(Kz,mv(Uz,mv(Lz,mv(Uz.T,mv(Pi,mv(Kzx,omega))))))))
-
-            elif mmd == 'quantization':
-                Kz = self.compute_gram(landmarks=True)
-                pkm = mv(Pbi,mv(A,mv(Kz,omega)))
-        
         try:
             return(pkm) #
         except UnboundLocalError:
@@ -159,13 +125,12 @@ class KernelTrick(GramMatrices):
         """
 
         cov = self.approximation_cov
-        quantization = cov=='quantization'
         proj = False if (proj_condition is None and proj_samples is None) else True
 
 
         sp,ev = self.get_spev('covw')
 
-        Pbi = self.compute_covariance_centering_matrix(quantization=quantization,landmarks=False)
+        Pbi = self.compute_covariance_centering_matrix(landmarks=False)
 
         if 'nystrom' in cov: 
             Kzx = self.compute_kmn(condition=proj_condition,samples=proj_samples,marked_obs_to_ignore=proj_marked_obs_to_ignore)
@@ -192,10 +157,5 @@ class KernelTrick(GramMatrices):
         #     Lz1 = diag(Lz**-1)
         #     # print(f'r:{r} evt:{ev.T[:t].shape} Pbi{Pbi.shape} Kzx{Kzx.shape} Uz{Uz.shape} Lz{Lz.shape}  ')
         #     epk = 1/m*torch.linalg.multi_dot([ev.T[:t],Pbi,Kzx.T,Uz,Lz1,Uz.T,Kzx]).T
-        # # pas à jour 
-        # if cov == 'quantization':
-        #     Kzx = self.compute_kmn()
-        #     A_12 = self.compute_quantization_weights(power=1/2,sample='xy')
-        #     epk = torch.linalg.multi_dot([ev.T[:t],A_12,Pbi,Kzx]).T
 
         return(epk)

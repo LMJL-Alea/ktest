@@ -917,7 +917,7 @@ class Univariate:
     def get_ntested_variables(self,name=None,verbose=0):
         return(len(self.get_tested_variables(name=name,verbose=verbose)))
 
-    def get_pvals_univariate(self,t=None,name=None,corrected=True,verbose=0):
+    def get_pvals_univariate(self,t=10,name=None,corrected=True,verbose=0):
         """
         Returns the pandas.Series of pvalues.
 
@@ -938,8 +938,6 @@ class Univariate:
             The greater, the more verbose is the output.
         """
         
-        if t is None:
-            t = self.truncation
 
         tested = self.get_tested_variables(name,verbose=verbose)
         ntested = len(tested)
@@ -951,7 +949,7 @@ class Univariate:
             col = self.get_column_name_in_var(t=t,name=name,corrected=corrected,output='pval')
             return(var[col][var.index.isin(tested)].sort_values())
 
-    def get_kfda_univariate(self,t=None,name=None,verbose=0):
+    def get_kfda_univariate(self,t=10,name=None,verbose=0):
         """
         Returns the pandas.Series of pvalues.
 
@@ -972,8 +970,6 @@ class Univariate:
             The greater, the more verbose is the output.
         """
         
-        if t is None:
-            t = self.truncation
 
         tested = self.get_tested_variables(name,verbose=verbose)
         ntested = len(tested)
@@ -984,7 +980,7 @@ class Univariate:
             return(var[col][var.index.isin(tested)].sort_values())
         
 
-    def get_DE_genes(self,t=None,name=None,corrected=True,threshold=.05,verbose=0):
+    def get_DE_genes(self,t=10,name=None,corrected=True,threshold=.05,verbose=0):
         """
         Returns the pandas.Series of pvalues lower than 'threshold'.
 

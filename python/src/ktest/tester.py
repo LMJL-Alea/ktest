@@ -225,9 +225,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             s+='p-value and KFDA statistic not computed'        
         return(s)
 
-    def str_add_multivariate_test_results(self,s,long=False,t=None,ts=[1,5,10],stat=None,permutation=None):
-        if t is None:
-            t = self.truncation
+    def str_add_multivariate_test_results(self,s,long=False,t=10,ts=[1,5,10],stat=None,permutation=None):
         if long:
             s+='\n'        
 
@@ -263,9 +261,8 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                     s = self.str_add_multivariate_stat_and_pval(s,t)
         return(s)
 
-    def str_add_univariate_test_results(self,s,long=False,t=None,name=None,ntop=5,threshold=.05,log2fc=False):
-        if t is None:
-            t = self.truncation
+    def str_add_univariate_test_results(self,s,long=False,t=10,name=None,ntop=5,threshold=.05,log2fc=False):
+
         if long:
             s+='\n'
         if log2fc :

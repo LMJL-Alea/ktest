@@ -35,7 +35,7 @@ class Orthogonal(Statistics):
         
         n = self.get_ntot(landmarks=False)
         K = self.compute_gram()
-        omega = self.compute_omega(quantization=False)
+        omega = self.compute_omega()
         
         cov = self.approximation_cov
         L,U = self.get_spev('covw')
@@ -43,7 +43,7 @@ class Orthogonal(Statistics):
         Lt32 = diag(L[:t]**(-3/2))
         
         if cov == 'standard':
-            P = self.compute_covariance_centering_matrix(quantization=False,landmarks=False)
+            P = self.compute_covariance_centering_matrix(landmarks=False)
             qh = 1/n * mv(P,mv(Ut,mv(Lt32,mv(Ut.T,mv(K,omega)))))
 
         elif cov == 'nystrom3':
@@ -52,7 +52,7 @@ class Orthogonal(Statistics):
             n_landmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))   
-            P = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+            P = self.compute_covariance_centering_matrix(landmarks=True)
             Kmn = self.compute_kmn() 
 
             qh = 1/n_landmarks * mv(P,mv(Uz,mv(Lz12,mv(Ut,mv(Lt32,mv(Ut.T,mv(Lz12,mv(Uz.T,mv(P,mv(Kmn,omega))))))))))
@@ -119,7 +119,7 @@ class Orthogonal(Statistics):
             Jn = ones(nm, nm, dtype=float64)
             P = In - 1/nm * Jn
         elif center.lower() =='w':
-            P = self.compute_covariance_centering_matrix(quantization=False,landmarks=(cov=='nystrom3'))
+            P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom3'))
         P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
         
         if cov == 'standard': 
@@ -135,7 +135,7 @@ class Orthogonal(Statistics):
             n_landmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))  
-            Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+            Pz = self.compute_covariance_centering_matrix(landmarks=True)
             Kmn = self.compute_kmn() 
 
             if center.lower() in 'tw':
@@ -159,7 +159,7 @@ class Orthogonal(Statistics):
                 Jn = ones(nm, nm, dtype=float64)
                 P = In - 1/nm * Jn
             elif center.lower() =='w':
-                P = self.compute_covariance_centering_matrix(quantization=False,landmarks=(cov=='nystrom3'))
+                P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom3'))
             K_epsilon = self.compute_orthogonal_covariance(t,center=center)
             P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
             n = self.get_ntot(landmarks=False)
@@ -173,7 +173,7 @@ class Orthogonal(Statistics):
                 n_landmarks = self.get_ntot(landmarks=True)
                 Lz1,Uz = self.get_spev(slot='anchors')
                 Lz = diag(Lz1**-1)
-                Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pz = self.compute_covariance_centering_matrix(landmarks=True)
                 Kmn = self.compute_kmn() 
                 
                 if len(ev) != len(P):

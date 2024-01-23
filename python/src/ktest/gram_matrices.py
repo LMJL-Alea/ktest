@@ -57,6 +57,7 @@ class GramMatrices(CenteringOps):
     def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
                          y_landmarks=False,y_condition=None,y_samples=None,y_marked_obs_to_ignore=None,data_name=None
                         ):    
+        # P: Surement a supprimer 
         """
         Computes the matrix K(X_i,Y_i) where X_i and Y_i are two subsets of the observations contained in the data.
 
@@ -98,6 +99,7 @@ class GramMatrices(CenteringOps):
 
 
     def center_gram_matrix_with_respect_to_some_effects(self,K):
+        # P: Surement a supprimer 
         '''
         Faire ce calcul au moment de calculer la gram n'est pas optimal car il ajoute un produit de matrice
         qui peut être cher, surtout quand n est grand. 
@@ -180,8 +182,7 @@ class GramMatrices(CenteringOps):
             print(f'- Compute within covariance centered gram')
 
         # Instantiation de la matrice de centrage P 
-        quantization = approximation == 'quantization'
-        P = self.compute_covariance_centering_matrix(quantization=quantization,landmarks=False)
+        P = self.compute_covariance_centering_matrix(landmarks=False)
 
         # Ici n ne correspond pas au nombre d'observations total 
         # mais au nombre d'observations sur lequel est calculé la matrice, déterminé par 
@@ -197,27 +198,17 @@ class GramMatrices(CenteringOps):
             n_landmarks = dict_n_landmarks['ntot']
             anchor_name = self.get_anchors_name()
             
-        # plus utilisé 
-        # récupération des paramètres du modèle spécifique à l'approximation par quantization (infos sur les landmarks et les poids associés)    
-        # pas à jour
-        if approximation == 'quantization':
-            if self.quantization_with_landmarks_possible:
-                Kmm = self.compute_gram(landmarks=True)
-                A = self.compute_quantization_weights(sample=sample,power=.5)
-                Kw = 1/n * torch.linalg.multi_dot([P,A,Kmm,A,P])
-            else:
-                print("quantization impossible, you need to call 'compute_nystrom_landmarks' with landmark_method='kmeans'")
-
+       
 
         # plus utilisé, aucun gain de temps car matrice n x n 
-        elif approximation == 'nystrom1':
+        if approximation == 'nystrom1':
             # version brute mais a terme utiliser la svd ?? 
             if self.has_landmarks: 
                 Kmn = self.compute_kmn()
                 Lp,Up = self.get_spev(slot='anchors')
                 Lp_inv = torch.diag(Lp**(-1))
                 
-                Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pm = self.compute_covariance_centering_matrix(landmarks=True)
                 Kw = 1/(n*n_landmarks*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
                 
             else:
@@ -238,7 +229,7 @@ class GramMatrices(CenteringOps):
 
                 
                 
-                Pm = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+                Pm = self.compute_covariance_centering_matrix(landmarks=True)
                 # print(f'Lp_inv_12{Lp_inv_12.shape},Up{Up.shape},Pm{Pm.shape},Kmn{Kmn.shape}')
                 
                 

@@ -220,7 +220,6 @@ class NystromOps(OutliersOps,Verbosity):
                 self._update_index(n_landmarks,index=None,data_name=kmeans_landmarks_name)
                 self.obs[kmeans_landmarks_name] = pd.DataFrame(assignations,index=index)
 
-                self.quantization_with_landmarks_possible = True
                 
         self.has_landmarks= True
 
@@ -249,7 +248,7 @@ class NystromOps(OutliersOps,Verbosity):
             n_landmarks = self.get_n_landmarks()
             # m = self.get_ntot(landmarks=True)
             Km = self.compute_gram(landmarks=True)
-            P = self.compute_covariance_centering_matrix(quantization=False,landmarks=True,)
+            P = self.compute_covariance_centering_matrix(landmarks=True,)
             
             if verbose >2:
                 print(f'nystrom anchors : n_landmarks = {n_landmarks}, n_anchors = {n_anchors}, P:{len(P)}, Km:{len(Km)})')
@@ -273,22 +272,4 @@ class NystromOps(OutliersOps,Verbosity):
 
                 self.spev['anchors'][anchors_name] = {'sp':sp_anchors[:n_anchors],'ev':ev_anchors[:,:n_anchors]}
                 self.has_anchors=True
-
-
-    def compute_quantization_weights(self,power=1,sample='xy',diag=True):
-        if 'x' in sample:
-            a1 = torch.tensor(torch.bincount(self.xassignations),dtype=torch.float64)**power
-        if 'y' in sample:
-            a2 = torch.tensor(torch.bincount(self.yassignations),dtype=torch.float64)**power
-        
-        if diag:
-            if sample =='xy':
-                return(torch.diag(torch.cat((a1,a2))).double())
-            else:
-                return(torch.diag(a1).double() if sample =='x' else torch.diag(a2).double())
-        else:
-            if sample=='xy':
-                return(torch.cat(a1,a2))
-            else:    
-                return(a1 if sample =='x' else a2)
 

@@ -1,4 +1,3 @@
-from os import POSIX_FADV_SEQUENTIAL
 import matplotlib.patches as mpatches
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
@@ -12,8 +11,6 @@ from .kernel_statistics import Statistics
 # from functions import get_between_covariance_projection_error
 
 from adjustText import adjust_text
-
-
 from scipy.stats import chi2
 import numpy as np
 import torch
@@ -889,15 +886,21 @@ class Plot_Standard(Statistics):
                 ax=None,
                 show_conditions=True,
                 orientation='vertical',
+                alpha=.5,
                 legend_fontsize=15,
                 condition=None,
                 samples=None,
                 samples_colors=None,
                 highlight=None,
+                highlight_color=None,
+                highlight_marker='*',
+                highlight_linewidth=3,
                 highlight_label=None,
                 marked_obs_to_ignore=None,
+                hist_type='kde',
+                kde_bw=.2,
                 verbose=0):
-
+        
         self.projections(t=t,condition=condition,samples=samples,
                         marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
 
@@ -905,25 +908,29 @@ class Plot_Standard(Statistics):
                         condition=condition,
                         samples=samples,
                         marked_obs_to_ignore=marked_obs_to_ignore)
-
+        
         fig,ax = self.density_proj(
                         t,
                         proj='proj_kpca',
                         name=kfdat_name,
                         orientation=orientation,
                         color=color,
-                        fig=fig,
-                        ax=ax,
+                        alpha=alpha,
+                        fig=fig,ax=ax,
                         show_conditions=show_conditions,
                         legend_fontsize=legend_fontsize,
+                        highlight=highlight,
+                        highlight_color=highlight_color,
+                        highlight_linewidth=highlight_linewidth,
+                        highlight_label=highlight_label,
+                        highlight_marker=highlight_marker,
                         condition=condition,
                         samples=samples,
                         samples_colors=samples_colors,
-                        highlight=highlight,
-                    highlight_label=highlight_label,
-                        marked_obs_to_ignore=marked_obs_to_ignore)
-
-        
+                        marked_obs_to_ignore=marked_obs_to_ignore,
+                        hist_type=hist_type,
+                        kde_bw=kde_bw,
+                        )
         return(fig,ax)
 
 

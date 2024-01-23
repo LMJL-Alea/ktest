@@ -207,7 +207,7 @@ class CenteringOps(NystromOps):
 
         return Pw    
 
-    def compute_covariance_centering_matrix(self,quantization=False,landmarks=False):
+    def compute_covariance_centering_matrix(self,landmarks=False):
         """
         Computes a projection matrix usefull for the kernel trick. 
 
@@ -224,9 +224,6 @@ class CenteringOps(NystromOps):
             sample : string,
                 if sample = 'xy' : returns the bicentering matrix corresponding to the within group covariance operator
                 if sample = 'x' (resp. 'y') : returns the centering matrix corresponding to the covariance operator of sample 'x' (resp. 'y')
-            
-            quantization : boolean, 
-                if quantization is true, returns the centering matrix of the landmarks obtained for a quantification approach. (may be deprecated since nystrom works well better)
 
             landmarks : boolean, 
                 if landmarks is true, returns the centering matrix corresponding to the landmarks and not to the data. 
@@ -242,16 +239,11 @@ class CenteringOps(NystromOps):
         dict_nobs = self.get_nobs(landmarks=landmarks)
         n = dict_nobs['ntot']
         ab = self.anchor_basis.lower() if landmarks else 'w'
-
-        if quantization and not landmarks:
-            print('quantization not implemented yet')
-#                 a1 = self.compute_quantization_weights(sample='x',power=.5,diag=False)
-#                 Pn1 = (In1 - 1/n * torch.ger(a1,a1)) # a vérifier si c'est 1/n ou 1/n1
             
         P = compute_covariance_centering_matrix_(n,dict_nobs,ab)
         return(P)
 
-    def compute_omega(self,quantization=False):
+    def compute_omega(self):
         '''
         Returns the weights vector to compute a mean. 
         
@@ -262,12 +254,6 @@ class CenteringOps(NystromOps):
             if sample = 'y' : returns a vector of size n2 = len(self.y) full of 1/n2
             if sample = 'xy' : returns a vector of size n1 + n2 with n1 1/-n1 followed by n2 1/n2 to compute (\mu_2 - \mu_1) 
             
-
-            quantization : boolean,
-            if true, the landmarks should have been determined as the centers of a kmeans algorithm. 
-            each landmark is associated to a cluster containing m observations. 
-            the weight associated to this landmark is then m/ni whith ni = n1 or n2. 
-
         Returns
         ------- 
             omega : torch.tensor 
@@ -276,12 +262,9 @@ class CenteringOps(NystromOps):
 
         # Avant cette fonction était plus générique mais je ne l'utilise que pour le vecteur omega de deux groupes
         n1,n2,n = self.get_n1n2n()
-        if quantization:
-            return(torch.cat((-1/n1*torch.bincount(self.xassignations),1/n2*torch.bincount(self.yassignations))).double())
-        else:
-            m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
-            m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 
-            return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
+        m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
+        m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 
+        return(torch.cat((m_mu1, m_mu2), dim=0)) #.to(device)
 
         
         

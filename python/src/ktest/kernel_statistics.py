@@ -31,8 +31,8 @@ class Statistics(ProjectionOps):
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
         9 methods : 
-        approximation_cov in ['standard','nystrom1','quantization']
-        approximation_mmd in ['standard','nystrom','quantization']
+        approximation_cov in ['standard','nystrom1',]
+        approximation_mmd in ['standard','nystrom',]
         
         Stores the result as a column in the dataframe df_kfdat
 
@@ -157,7 +157,7 @@ class Statistics(ProjectionOps):
         # calcul de la statistique pour chaque troncature 
         pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
         n1,n2,n = self.get_n1n2n() # nombres d'observations dans les échantillons
-        exposant = 2 if cov in ['standard','nystrom1','quantization'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant' # l'exposant dépend du modèle
+        exposant = 2 if cov in ['standard','nystrom1'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant' # l'exposant dépend du modèle
         kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy() # calcule la contribution de chaque troncature 
         kfda = kfda_contributions.cumsum(axis=0) #somme les contributions pour avoir la stat correspondant à chaque troncature 
         
@@ -216,11 +216,6 @@ class Statistics(ProjectionOps):
         if verbose>0:
             nystr = 'with nystrom approximation' if self.nystrom else ''
             print(f'- Initialize kfdat {nystr}')
-        # la quantisation était la troisième approche après nystrom et standard mais je ne l'utilise plus car 
-        # son coût computationnel est faible mais ses performances le sont aussi. 
-        # cette approche a besoin d'avoir un poids associé aux landmarks pour savoir combien ils représentent d'observations. 
-        if 'quantization' in [cov,mmd] and not self.quantization_with_landmarks_possible: # besoin d'avoir des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks(verbose=verbose) 
 
         #calcul des landmarks et des ancres 
         if any([ny in [cov,mmd] for ny in ['nystrom','nystrom1','nystrom2','nystrom3']]):
@@ -243,7 +238,7 @@ class Statistics(ProjectionOps):
                             si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille n_anchors pour les deux echantillons
                             si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille n_anchors//2
                                         attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
-                    quantization : n_landmarks sont determines comme les centroides de l'algo kmeans 
+                     
         shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
         n_landmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
@@ -253,9 +248,6 @@ class Statistics(ProjectionOps):
 
         approx = self.approximation_mmd
 
-        if approx == 'quantization' and not self.quantization_with_landmarks_possible: # besoin des poids des ancres de kmeans en quantization
-            self.compute_nystrom_landmarks(verbose=verbose)
-        
         if approx == 'nystrom':
             if not self.has_landmarks:
                     self.compute_nystrom_landmarks(verbose=verbose)
@@ -282,7 +274,7 @@ class Statistics(ProjectionOps):
                 verbose = verbose)
 
         if approx == 'standard':
-            m = self.compute_omega(quantization=False)
+            m = self.compute_omega()
             K = self.compute_gram()
             if unbiaised:
                 K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
@@ -290,7 +282,7 @@ class Statistics(ProjectionOps):
         
         if approx == 'nystrom' and shared_anchors:
 
-            m = self.compute_omega(quantization=False)
+            m = self.compute_omega()
             Lp,Up = self.get_spev(slot='anchors')
             Lp12 = diag(Lp**-(1/2))
             Pm = self.compute_covariance_centering_matrix(landmarks=True)
@@ -301,8 +293,8 @@ class Statistics(ProjectionOps):
         if approx == 'nystrom' and not shared_anchors:
             # utile ? a mettre à jour
             a=0
-            # mx = self.compute_omega(sample='x',quantization=False)
-            # my = self.compute_omega(sample='y',quantization=False)
+            # mx = self.compute_omega(sample='x',)
+            # my = self.compute_omega(sample='y',)
             # Upx = self.spev['x']['anchors'][anchors_basis]['ev']
             # Upy = self.spev['y']['anchors'][anchors_basis]['ev']
             # Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
@@ -324,10 +316,6 @@ class Statistics(ProjectionOps):
             #     mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
             # mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
         
-        if approx == 'quantization':
-            mq = self.compute_omega(quantization=True)
-            Km = self.compute_gram(landmarks=True)
-            mmd = dot(mv(Km,mq),mq) **2
 
         mmd_name = self.get_mmd_name()
         

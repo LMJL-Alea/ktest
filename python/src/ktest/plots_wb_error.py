@@ -83,7 +83,7 @@ class Plot_WBerrors(Orthogonal):
             n_landmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
-            Pz = self.compute_covariance_centering_matrix(quantization=False,landmarks=True)
+            Pz = self.compute_covariance_centering_matrix(landmarks=True)
             Kzx = self.compute_kmn()
             # print(f'm{m},fv{fv.shape} Lz12 {Lz12.shape} Uz{Uz.shape} Pz {Pz.shape} Kzx {Kzx.shape} om {om.shape}')
             mmdt = (n_landmarks**(-1/2)* mv(fv.T,mv(Lz12,mv(Uz.T,mv(Pz,mv(Kzx,om)))))**2).cumsum(0)**(1/2) if cumul else \

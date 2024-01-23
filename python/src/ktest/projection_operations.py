@@ -36,8 +36,6 @@ class ProjectionOps(KernelTrick):
 
         if cov == 'standard' or 'nystrom' in cov:  
             proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
-        if cov == 'quantization':
-            proj = (sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).numpy()
 
 
         self.verbosity(function_name='compute_proj_on_eigenvectors',
@@ -105,8 +103,6 @@ class ProjectionOps(KernelTrick):
         if cov == 'standard' or 'nystrom' in cov: 
             proj = (mv(ev.T[:t],pkm)*upk).numpy()
             # proj = (n1*n2*n**-2*sp[:t]**(-3/2)*mv(ev.T[:t],pkm)*upk).cumsum(axis=1).numpy()
-        if cov == 'quantization':
-            proj = (mv(ev.T[:t],pkm)*upk).numpy()
 
 
         self.verbosity(function_name='compute_proj_on_eigenvectors',
@@ -127,7 +123,7 @@ class ProjectionOps(KernelTrick):
                     verbose = verbose)
         
         mmd = self.approximation_mmd            
-        m = self.compute_omega(quantization=(mmd=='quantization'))
+        m = self.compute_omega()
         if mmd == 'standard':
             K = self.compute_gram()
         
