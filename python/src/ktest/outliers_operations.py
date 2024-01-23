@@ -163,3 +163,10 @@ class OutliersOps(Base):
             for sample in samples:
                 meta[new_condition] = meta[new_condition].cat.remove_categories(sample)
         return(new_condition,new_sample)
+    
+
+    def make_groups_from_gene_presence(self,gene,data_name):
+
+        dfg = self.init_df_proj(proj=gene,data_name=data_name)
+        self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
+        self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')

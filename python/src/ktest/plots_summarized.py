@@ -52,9 +52,8 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
         if grid:
             ax.grid(alpha=.2)
 
-        n1,n2,n = self.get_n1n2n()
-        samples = self.get_samples_list()
-        ax.set_title(f'n{samples[0]}={n1} vs n{samples[1]}={n2}',fontsize=30)
+        nobs = self.get_nobs()
+        ax.set_title(f' vs '.join([f'n{k}={v}' for k,v in nobs.items() if k!='ntot']),fontsize=30)
 
         if marked_obs_to_ignore is not None:
             self.set_marked_obs_to_ignore()

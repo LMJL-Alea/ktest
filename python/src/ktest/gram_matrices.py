@@ -192,30 +192,11 @@ class GramMatrices(CenteringOps):
         n = dict_nobs['ntot']
 
         # récupération des paramètres du modèle spécifique à l'approximation de nystrom (infos sur les ancres)    
-        if 'nystrom' in approximation:
+        if approximation == 'nystrom':
             dict_n_landmarks = self.get_nobs(landmarks=True)
-
             n_landmarks = dict_n_landmarks['ntot']
-            anchor_name = self.get_anchors_name()
-            
-       
-
-        # plus utilisé, aucun gain de temps car matrice n x n 
-        if approximation == 'nystrom1':
-            # version brute mais a terme utiliser la svd ?? 
-            if self.has_landmarks: 
-                Kmn = self.compute_kmn()
-                Lp,Up = self.get_spev(slot='anchors')
-                Lp_inv = torch.diag(Lp**(-1))
-                
-                Pm = self.compute_covariance_centering_matrix(landmarks=True)
-                Kw = 1/(n*n_landmarks*2) * torch.linalg.multi_dot([P,Kmn.T,Pm,Up,Lp_inv,Up.T,Pm,Kmn,P])            
-                
-            else:
-                print("nystrom impossible, you need compute landmarks and/or anchors")
-        
-        # calcul de la matrice correspondant à l'approximation de nystrm. 
-        elif approximation in ['nystrom2','nystrom3']:
+           
+            # calcul de la matrice correspondant à l'approximation de nystrm. 
             if self.has_landmarks:
                 Kmn = self.compute_kmn()
 
@@ -239,16 +220,13 @@ class GramMatrices(CenteringOps):
                 # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)         
                 Kw = 1/(n*n_landmarks**2) * torch.linalg.multi_dot([Lp_inv_12,Up.T,Pm,Kmn,P,Kmn.T,Pm,Up,Lp_inv_12])  
             else:
-                print("nystrom new version impossible, you need compute landmarks and/or anchors")
+                print("nystrom impossible, you need compute landmarks and/or anchors")
                     
 
         # version standard 
         elif approximation == 'standard':
             K = self.compute_gram(landmarks=False)
             Kw = 1/n * torch.linalg.multi_dot([P,K,P])
-
-
-
         return Kw
 
     def diagonalize_within_covariance_centered_gram(self,approximation='standard',verbose=0):

@@ -31,7 +31,7 @@ class Statistics(ProjectionOps):
         """ 
         Computes the kfda truncated statistic of [Harchaoui 2009].
         9 methods : 
-        approximation_cov in ['standard','nystrom1',]
+        approximation_cov in ['standard','nystrom',]
         approximation_mmd in ['standard','nystrom',]
         
         Stores the result as a column in the dataframe df_kfdat
@@ -117,15 +117,6 @@ class Statistics(ProjectionOps):
         cov = self.approximation_cov # approximation de l'opérateur de covariance. 
         mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
         
-        # à un moment, j'ai exploré plusieurs façons de définir les ancres, 
-        # shared correspond à des ancres partagées pour les deux échantillons 
-        # et separated correspon à des ancres partagées entre les deux échantillons. 
-        # je n'ai jamais été au bout de cette démarche et ça n'apportait pas grand chose dans 
-        # les quelques simus qu'on a faites. A nettoyer. 
-        cov_anchors='shared' 
-        mmd_anchors='shared'
-
-
         # Récupération des vecteurs propres et valeurs propres calculés par la fonction de classe 
         # diagonalize_within_covariance_centered_gram 
         sp,ev = self.get_spev('covw')
@@ -143,8 +134,6 @@ class Statistics(ProjectionOps):
 
         # détermination de la troncature maximale à calculer 
         t = len(sp) if t is None else len(sp) if len(sp)<t else t # troncature maximale
-        
-        # fonction qui gère la verbosité de la fonction si verbose >0 
 
 
 
@@ -157,7 +146,7 @@ class Statistics(ProjectionOps):
         # calcul de la statistique pour chaque troncature 
         pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
         n1,n2,n = self.get_n1n2n() # nombres d'observations dans les échantillons
-        exposant = 2 if cov in ['standard','nystrom1'] else 3 if cov == 'nystrom2' else 1 if cov == 'nystrom3' else 'erreur exposant' # l'exposant dépend du modèle
+        exposant = 2 if cov=='standard' else 1 #if cov == 'nystrom' 
         kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy() # calcule la contribution de chaque troncature 
         kfda = kfda_contributions.cumsum(axis=0) #somme les contributions pour avoir la stat correspondant à chaque troncature 
         
@@ -183,7 +172,7 @@ class Statistics(ProjectionOps):
     def compute_kfdat_contrib(self,t):    
         
         sp,ev = self.get_spev('covw')
-        n1,n2,n = self.get_n1n2n() 
+        n = self.get_ntot() 
         
         pkom = self.compute_pkm()
         om = self.compute_omega()
@@ -218,8 +207,7 @@ class Statistics(ProjectionOps):
             print(f'- Initialize kfdat {nystr}')
 
         #calcul des landmarks et des ancres 
-        if any([ny in [cov,mmd] for ny in ['nystrom','nystrom1','nystrom2','nystrom3']]):
-            # print('nystrom detected')
+        if 'nystrom' in [cov,mmd]:
             self.compute_nystrom_landmarks(verbose=verbose)
             self.compute_nystrom_anchors(verbose=verbose) 
 
@@ -239,7 +227,6 @@ class Statistics(ProjectionOps):
                             si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille n_anchors//2
                                         attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
                      
-        shared_anchors : si approximation='nystrom' alors shared anchors determine si les ancres sont partagees ou non
         n_landmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
         verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
@@ -262,13 +249,12 @@ class Statistics(ProjectionOps):
                         assert(self.n_anchors is not None,"n_anchors not specified")
                         self.compute_nystrom_anchors(verbose=verbose)
  
-    def compute_mmd(self,unbiaised=False,shared_anchors=True,verbose=0):
+    def compute_mmd(self,unbiaised=False,verbose=0):
         
         approx = self.approximation_mmd
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
                                     'approximation':approx,
-                                    'shared_anchors':shared_anchors,
                                     },
                 start=True,
                 verbose = verbose)
@@ -280,7 +266,7 @@ class Statistics(ProjectionOps):
                 K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
             mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
         
-        if approx == 'nystrom' and shared_anchors:
+        if approx == 'nystrom':
 
             m = self.compute_omega()
             Lp,Up = self.get_spev(slot='anchors')
@@ -289,33 +275,6 @@ class Statistics(ProjectionOps):
             Kmn = self.compute_kmn()
             psi_m = mv(Lp12,mv(Up.T,mv(Pm,mv(Kmn,m))))
             mmd = dot(psi_m,psi_m)**2
-        
-        if approx == 'nystrom' and not shared_anchors:
-            # utile ? a mettre à jour
-            a=0
-            # mx = self.compute_omega(sample='x',)
-            # my = self.compute_omega(sample='y',)
-            # Upx = self.spev['x']['anchors'][anchors_basis]['ev']
-            # Upy = self.spev['y']['anchors'][anchors_basis]['ev']
-            # Lpx_inv2 = diag(self.spev['x']['anchors'][anchors_basis]['sp']**-(1/2))
-            # Lpy_inv2 = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-(1/2))
-            # Lpy_inv = diag(self.spev['y']['anchors'][anchors_basis]['sp']**-1)
-            # Pmx = self.compute_covariance_centering_matrix(sample='x',landmarks=True)
-            # Pmy = self.compute_covariance_centering_matrix(sample='y',landmarks=True)
-            # Kmnx = self.compute_kmn(sample='x')
-            # Kmny = self.compute_kmn(sample='y')
-            
-            # Km = self.compute_gram(sample='xy',landmarks=True)
-            # m1 = Kmnx.shape[0]
-            # m2 = Kmny.shape[0]
-            # Kmxmy = Km[:m1,m2:]
-
-            # psix_mx = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmnx,mx))))
-            # psiy_my = mv(Lpy_inv2,mv(Upy.T,mv(Pmy,mv(Kmny,my))))
-            # Cpsiy_my = mv(Lpx_inv2,mv(Upx.T,mv(Pmx,mv(Kmxmy,\
-            #     mv(Pmy,mv(Upy,mv(Lpy_inv,mv(Upy.T,mv(Pmy,mv(Kmny,my))))))))))
-            # mmd = dot(psix_mx,psix_mx)**2 + dot(psiy_my,psiy_my)**2 - 2*dot(psix_mx,Cpsiy_my)
-        
 
         mmd_name = self.get_mmd_name()
         
@@ -324,7 +283,6 @@ class Statistics(ProjectionOps):
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
                                     'approximation':approx,
-                                    'shared_anchors':shared_anchors,
                                     },
                 start=False,
                 verbose = verbose)

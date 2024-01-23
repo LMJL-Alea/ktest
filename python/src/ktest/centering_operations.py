@@ -260,7 +260,6 @@ class CenteringOps(NystromOps):
             a vector of size corresponding to the group of which we compute the mean. 
         '''
 
-        # Avant cette fonction était plus générique mais je ne l'utilise que pour le vecteur omega de deux groupes
         n1,n2,n = self.get_n1n2n()
         m_mu1    = -1/n1 * ones(n1, dtype=torch.float64) # , device=device)
         m_mu2    = 1/n2 * ones(n2, dtype=torch.float64) # , device=device) 

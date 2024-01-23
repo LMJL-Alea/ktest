@@ -46,7 +46,7 @@ class Orthogonal(Statistics):
             P = self.compute_covariance_centering_matrix(landmarks=False)
             qh = 1/n * mv(P,mv(Ut,mv(Lt32,mv(Ut.T,mv(K,omega)))))
 
-        elif cov == 'nystrom3':
+        elif cov == 'nystrom':
             # pas totalement sûr de cette partie 
 
             n_landmarks = self.get_ntot(landmarks=True)
@@ -76,7 +76,7 @@ class Orthogonal(Statistics):
         if cov == 'standard': 
             K  = self.compute_gram(landmarks=False)
             proj = mv(K,qh)/(dot(mv(K,qh),qh))**(1/2)
-        if cov == 'nystrom3':
+        if cov == 'nystrom':
             # Pas totalement sur de cette partie 
             # Fait à un moment ou c'était urgent 
             # il y a du nystrom dans le dénominateur ?
@@ -101,7 +101,7 @@ class Orthogonal(Statistics):
         if cov == 'standard':    
             K  = self.compute_gram()
             P_epsilon = In - matmul(ger(qh,qh),K)/dot(mv(K,qh),qh)
-        if cov == 'nystrom3':
+        if cov == 'nystrom':
             n_landmarks = self.get_ntot(landmarks=True)
             K  = self.compute_gram(landmarks=True)
             Kmn = self.compute_kmn()
@@ -112,14 +112,14 @@ class Orthogonal(Statistics):
     def compute_orthogonal_covariance(self,t=None,center = 'W'):
         
         cov = self.approximation_cov
-        nm = self.get_ntot(landmarks=(cov=='nystrom3'))
+        nm = self.get_ntot(landmarks=(cov=='nystrom'))
                 
         if center.lower() == 't':
             In = eye(nm, dtype=float64)
             Jn = ones(nm, nm, dtype=float64)
             P = In - 1/nm * Jn
         elif center.lower() =='w':
-            P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom3'))
+            P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom'))
         P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
         
         if cov == 'standard': 
@@ -129,7 +129,7 @@ class Orthogonal(Statistics):
                 K_epsilon = 1/n * torch.linalg.multi_dot([P,P_epsilon.T,K,P_epsilon,P])
             else :
                 K_epsilon = 1/n * torch.linalg.multi_dot([P_epsilon.T,K,P_epsilon])
-        if cov == 'nystrom3':
+        if cov == 'nystrom':
             
             n = self.get_ntot(landmarks=False)
             n_landmarks = self.get_ntot(landmarks=True)
@@ -153,13 +153,13 @@ class Orthogonal(Statistics):
         orthogonal_name = self.get_orthogonal_name(t=t,center=center)
         
         if orthogonal_name not in self.spev['orthogonal']:
-            nm = self.get_ntot(landmarks=(cov=='nystrom3'))
+            nm = self.get_ntot(landmarks=(cov=='nystrom'))
             if center.lower() == 't':
                 In = eye(nm, dtype=float64)
                 Jn = ones(nm, nm, dtype=float64)
                 P = In - 1/nm * Jn
             elif center.lower() =='w':
-                P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom3'))
+                P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom'))
             K_epsilon = self.compute_orthogonal_covariance(t,center=center)
             P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
             n = self.get_ntot(landmarks=False)
@@ -168,7 +168,7 @@ class Orthogonal(Statistics):
             L_12 = diag(sp**-(1/2))
             if cov == 'standard':
                 fv = 1/sqrt(n)* torch.linalg.multi_dot([P_epsilon,P,ev,L_12])
-            if cov == 'nystrom3':
+            if cov == 'nystrom':
                 anchors_name = self.get_anchors_name()
                 n_landmarks = self.get_ntot(landmarks=True)
                 Lz1,Uz = self.get_spev(slot='anchors')
@@ -195,7 +195,7 @@ class Orthogonal(Statistics):
             if cov == 'standard':
                 K = self.compute_gram()
                 proj_orthogonal = matmul(K,epsilon)
-            if cov == 'nystrom3':
+            if cov == 'nystrom':
                 Kmn = self.compute_kmn() 
                 proj_orthogonal = matmul(Kmn.T,epsilon)
 

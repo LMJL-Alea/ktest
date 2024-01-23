@@ -114,7 +114,7 @@ class Base(Names,Kernel_Function):
         # for verbosity 
         self.verbose=verbose
         self.start_times = {}
-        
+
         # tokens to assess global information on the ktest object :
         self.has_data = False # true if the ktest object contains data 
         self.has_landmarks = False # true if the nystrom landmarks have been determined
@@ -122,7 +122,6 @@ class Base(Names,Kernel_Function):
         self.has_model = False # true if the model parameters have been initiated with function set_test_params (not used)
         self.has_kernel = False # true if the kernel function has been initiated (not used)
         self.has_kfda_statistic = False # true if the kfda statistic has been computed (not used)
-
 
     def set_test_params(self,
                     stat='kfda',
@@ -200,7 +199,7 @@ class Base(Names,Kernel_Function):
                 self.n_anchors = n_anchors
                 self.landmark_method = landmark_method
                 self.anchor_basis = anchor_basis
-                self.approximation_cov = 'nystrom3'
+                self.approximation_cov = 'nystrom'
                 self.approximation_mmd = 'standard'
                 if self.has_data:
                     self.compute_nystrom_landmarks(verbose=verbose)
@@ -595,7 +594,6 @@ class Base(Names,Kernel_Function):
                 index_output = index_output.append(ooi)
         return(index_output) 
 
-
     def get_kmeans_landmarks(self,in_dict=True):
         
         condition = self.condition
@@ -610,7 +608,6 @@ class Base(Names,Kernel_Function):
             return(data)
         else:
             return(torch.cat(list(data.values())))
-
 
     def get_data(self,
                  landmarks=False,
@@ -716,7 +713,6 @@ class Base(Names,Kernel_Function):
 
         #     return(pd.DataFrame(x,i,v))
 
-
     def get_all_data(self,landmarks=False):
         if landmarks:
             print(f'get all data for landmarks is not mplemented yet')
@@ -748,8 +744,6 @@ class Base(Names,Kernel_Function):
             in_dict=True
         )
         return(pd.DataFrame({sample:ddf[sample].mean() for sample in ddf}))
-
-
 
     def get_variables(self,data_name=None):
         """
@@ -802,77 +796,6 @@ class Base(Names,Kernel_Function):
             print('more than 2 groups',[f'{k} ({len(v)})' for k,v in data.items()])
         return(list(data.values()))
 
-    # L sample 
-    def init_L_groups(self,data_list,data_name,sample_list=None,index_list=None,
-    variables=None,metadata_list=None,kernel='gauss_median',var_metadata=None):
-        '''
-        This function adds L dataset in the data_structure and name them according to
-        `sample_list`. 
-        It is used when performing L-sample test or kernel-MANOVA. 
-
-        Parameters
-        ----------
-            data_list : list of numpy.array, pandas.DataFrame, pandas.Series or torch.Tensor
-                A list of L tables of any type containing the data
-
-            data_name : str
-                The data structure to update in the dict of data `self.data`.
-                This name refers to the pretreatments and normalization steps applied to the data.
-
-            sample_list (default : None) : list of str
-                The names to refer to each sample.
-                If None, the samples are called 'x1', ... , 'xL'
-
-            index_list : list of list, pandas.index, iterable
-                a list of L lists of value indexes which refers to the observations. 
-
-            variables : list, pandas.index, iterable
-                a list of value indexes which refers to the variables.
-
-            metadata_list :  list of pandas.DataFrame
-                list of L tables of metadata
-
-            kernel : str
-                Refers to the kernel function to use for testing
-
-        Attributes Initialized
-        ---------- ----------- 
-            data : dict
-                this dict structure contains data informations for each data_name
-                    - 'X' : `torch.tensor` of data
-                    - 'p' : dimension of the data, number of variables
-                    - 'index' : `pandas.Index` of the observations
-                    - 'variables' : `pandas.Index` of the variables
-
-            obs: pandas.DataFrame
-                a structure containing every meta information of each observation
-
-            kernel : function
-                kernel function to be used
-
-        '''        
-        
-        L = len(data_list)
-        if index_list is None:
-            index_list = [None]*L
-        if metadata_list is None:
-            metadata_list = [None]*L
-        if sample_list is None:
-            sample_list = [f'x{l}' for l in range(1,L+1)]
-
-        for x,sample,index,metadata in zip(data_list,sample_list,index_list,metadata_list):
-            self.add_data_to_Ktest(x,sample,data_name,index,variables,metadata,var_metadata=var_metadata)
- 
-    def init_L_groups_from_dataframe(self,df_list,data_name,sample_list=None,metadata_list=None,kernel='gauss_median',var_metadata=None):
-        L = len(df_list)
-        if metadata_list is None:
-            metadata_list = [None]*L
-        if sample_list is None:
-            sample_list = [f'x{l}' for l in range(1,L+1)]
-        for df,sample,metadata in zip(df_list,sample_list,metadata_list):
-            self.add_data_to_Ktest_from_dataframe(df,sample,metadata,data_name,var_metadata=var_metadata)
-
-
     def init_df_proj(self,proj,name=None,data_name=None):
         '''
         Returns the desired dataframe  
@@ -923,7 +846,6 @@ class Base(Names,Kernel_Function):
 
         return(df_proj)
 
-
     def get_proj_kfda(self,name=None):
         if name is None:
             name = self.get_kfdat_name()
@@ -948,7 +870,6 @@ class Base(Names,Kernel_Function):
         else:
             print(f"proj mmd '{name}' has not been computed yet")
 
-
     def get_proj_orthogonal(self,name=None):
         if name is None:
             name = self.get_orthogonal_name()
@@ -956,14 +877,6 @@ class Base(Names,Kernel_Function):
             return(self.df_proj_orthogonal[name])
         else:
             print(f"proj orthogonal '{name}' has not been computed yet")
-
-
-
-    def make_groups_from_gene_presence(self,gene,data_name):
-
-        dfg = self.init_df_proj(proj=gene,data_name=data_name)
-        self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
-        self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')
 
     def set_marked_obs_to_ignore(self,marked_obs_to_ignore=None,verbose=0):
         if marked_obs_to_ignore is None:
@@ -1058,8 +971,6 @@ class Base(Names,Kernel_Function):
             kernel = self.kernel_specification 
             self.init_kernel(verbose=verbose,**kernel)
         
-
-
     def get_test_data_info(self):
         return({'dataset':self.data_name,
                 'condition':self.condition,

@@ -24,7 +24,6 @@ class ProjectionOps(KernelTrick):
                     start=True,
                     verbose = verbose)
                     
-        cov = self.approximation_cov
         sp,ev = self.get_spev('covw')
         
         tmax = 200
@@ -33,9 +32,7 @@ class ProjectionOps(KernelTrick):
         pkm=self.compute_pkm()
         upk=self.compute_upk(t,proj_condition=condition,proj_samples=samples,proj_marked_obs_to_ignore=marked_obs_to_ignore)
         n1,n2,n = self.get_n1n2n()
-
-        if cov == 'standard' or 'nystrom' in cov:  
-            proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
+        proj = (n1*n2*n**-2*sp[:t]**(-2)*mv(ev.T[:t],pkm)*upk).numpy()
 
 
         self.verbosity(function_name='compute_proj_on_eigenvectors',
