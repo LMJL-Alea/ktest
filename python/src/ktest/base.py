@@ -90,35 +90,30 @@ class Base(Names,Kernel_Function):
         self.df_proj_residuals = {} # on the eigendirections of the residual covariance operator of the kernel linear model
         
         # Eigenvectors
-        self.spev = {'covw':{},'anchors':{},'residuals':{},'orthogonal':{}} # dict containing every result of diagonalization
-        # les vecteurs propres sortant de eigsy sont rangés en colonnes
-
+        self.spev = {'covw':{},'anchors':{},'residuals':{},'orthogonal':{}} 
+        # is a dict containing every result of diagonalization 
+        # (spectrums 'sp' and eigenvectors 'ev')
+        # the eigenvectors are the columns of the matrix 'ev' and are computed with the function eigsy from apt
         
 
         ### Keys ###        
         # All the information stored in ktest is organized with respect to key strings. 
         # The keys stored in the following attributes correspond to the 'curent' info in use. 
         # Most of theses keys are updated automatically through functions. 
-        self.univariate_name=None 
+        self.data_name = None # current key to access to the slot of interest in `self.data`
+        self.condition = 'sample' # current column of the metadata `self.obs` containing the samples to compare
+        self.samples = 'all' # list of categories to compare from `self.obs[self.condition]`
+        self.current_hyp = None # current key associated to the dict `self.hypotheses`
+        self.log2fc_data = None # name of the dataframe on which are computed the log2 fold changes 
+        self.univariate_name=None # user-customized prefix on the files of univariate results
         self.permutation_mmd_name=None
         self.permutation_kfda_name=None
-        # name of the dataframe on which are encoded 
-        self.log2fc_data = None
-        # current key to access to the slot of interest in `self.data`
-        self.data_name = None
-        self.condition = 'sample'
-        self.samples = 'all'
         self.marked_obs_to_ignore = None
+        self.center_by = None # column of the metadata to use to center the data (désuet avec MANOVA)
 
-
-        # column of the metadata to use to center the data (désuet avec MANOVA)
-        self.center_by = None        
         # for verbosity 
         self.verbose=verbose
         self.start_times = {}
-
-        self.current_hyp = None
-        
         
         # tokens to assess global information on the ktest object :
         self.has_data = False # true if the ktest object contains data 
