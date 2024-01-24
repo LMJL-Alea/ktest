@@ -45,7 +45,7 @@ class Hotelling_Lawley:
             the columns of the metadata dataframe to take into account to define the design matrix 
 
         """
-        self.init_kernel(all_data=True)
+
         self.design_cols = design_cols
         self._init_design_matrix()
         self._init_XprimeX()
@@ -149,7 +149,7 @@ class Hotelling_Lawley:
 
     def _compute_residual_covariance(self):
         n = self.get_ntot(samples='all')
-        kernel = self.get_kernel(all_data=True)
+        kernel = self.get_kernel()
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) # to do : call self.compute_gram()
         Piperp = self.ProjImXorthogonal
@@ -183,7 +183,7 @@ class Hotelling_Lawley:
     def _compute_inner_products_thetai_ft(self):
         X = self.design
         XXinv = self.XXinv
-        kernel = self.get_kernel(all_data=True)
+        kernel = self.get_kernel()
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) 
         ev = self.spev['residuals']['ev']
@@ -225,7 +225,7 @@ class Hotelling_Lawley:
 
         """
         ev = self.spev['residuals']['ev']
-        kernel = self.get_kernel(all_data=True)
+        kernel = self.get_kernel()
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         index= self.get_index(in_dict=False,samples='all')
         K = kernel(Y,Y) 
@@ -299,7 +299,7 @@ class Hotelling_Lawley:
     
     def compute_Kdiscriminant(self,T,hypothesis_name=None):
         U = self.spev['residuals']['ev'] 
-        kernel = self.get_kernel(all_data=True)
+        kernel = self.get_kernel()
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) 
         R = self.compute_R(hypothesis_name)
@@ -321,7 +321,7 @@ class Hotelling_Lawley:
 
         ev = hyp['spev']['ev']
         U = self.spev['residuals']['ev']
-        kernel = self.get_kernel(all_data=True)
+        kernel = self.get_kernel()
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         index = self.get_index(in_dict=False,samples='all')
         K = kernel(Y,Y) 

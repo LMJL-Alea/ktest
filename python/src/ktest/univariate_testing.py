@@ -234,6 +234,15 @@ class Univariate:
             dict_zp[f'{s}_n'] = n
         return(dict_zp)
 
+    def get_zero_proportions_of_variable(self,variable):
+        """
+        Returns a dict of the ero proportions 
+        """
+        var = self.get_var()
+        sl = list(self.get_index().keys())
+        dict_zp = {sample:var[f'{sample}_pz'][variable] for sample in sl}
+        return(dict_zp)
+
     def add_zero_proportions_to_var(self,data_name=None):
         '''
         Fills the attribute var of the active dataset with columns corresponding to the 
@@ -308,31 +317,11 @@ class Univariate:
             self.update_var_from_dataframe(dffc)
             self.log2fc_data = data_name
 
-        # ancienne version
-        # def add_log2fc_to_var(self,data_name=None):
-        #     if data_name is not None:
-        #         current_data_name = self.data_name
-        #         self.data_name = data_name
-        #         dn = f'{data_name}_'
-        #     else :
-        #         dn = ''
-        #     dict_df = self.get_dataframes_of_data()
-        #     dfzp = pd.DataFrame()
-        #     for s,df in dict_df.items():
-        #         dfzp[f'{dn}{s}_mean'] = df.mean()
-        #     s1,s2 = dict_df.keys()
-        #     dfzp[f'{dn}log2fc_{s1}/{s2}'] = np.log(dfzp[f'{dn}{s1}_mean']/dfzp[f'{dn}{s2}_mean'])/np.log(2)
-        # #     print(dfzp)
-        #     if data_name is not None: 
-        #         self.data_name = current_data_name
-        #     self.update_var_from_dataframe(dfzp)
 
     def compute_log2fc_from_another_dataframe(self,df,data_name='raw'):
         
         # index = self.get_dataframe_of_all_data().index
         index = self.get_index(in_dict=False)
-        
-
         df = df[df.index.isin(index)]
         self.add_data_to_Ktest_from_dataframe(df,data_name=data_name,update_current_data_name=False)            
         self.add_log2fc_to_var(data_name=data_name)
@@ -343,14 +332,6 @@ class Univariate:
         var = self.get_var()
         return(var[col][variable])
 
-    def get_zero_proportions_of_variable(self,variable):
-        """
-        Returns a dict of the ero proportions 
-        """
-        var = self.get_var()
-        sl = list(self.get_index().keys())
-        dict_zp = {sample:var[f'{sample}_pz'][variable] for sample in sl}
-        return(dict_zp)
 
     def variable_eligible_for_univariate_testing(self,variable,zero_threshold=.85):
         """
@@ -494,6 +475,8 @@ class Univariate:
         if kernel is None:
             return(self.get_kernel_params())
         if kernel == 'fisher_zero_inflated_gaussian':
+            # P : this case should be reexamined because this kernel is not automatically
+            # set anymore. 
             kernel_params = self.get_kernel_params()
             kernel_params['function'] = kernel
             var = self.get_var()

@@ -98,13 +98,15 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             test_params : object specifying the test to execute
                 output of the function get_test_params()
 
-            kernel : object specifying the kernel function to use
-                output of the function init_kernel_params()
+            kernel : dict specifying the kernel function to use
+                output of the function `init_kernel_params` from ktest.kernel_function
 
             marked_obs_to_ignore (default = None) : str
                 column of the metadata containing booleans that are 
                 True if the observation should be ignored from the analysis 
-                and False otherwise.    
+                and False otherwise.   
+
+
         """
         
         super(Ktest,self).__init__()
