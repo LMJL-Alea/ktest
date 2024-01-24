@@ -12,7 +12,6 @@ from .projection_operations import ProjectionOps
 from .pvalues import Pvalues
 from .orthogonal import Orthogonal
 from .save_data import SaveData
-from .truncation_selection import TruncationSelection
 from .univariate_testing import Univariate
 
 # tag for import check in rktest

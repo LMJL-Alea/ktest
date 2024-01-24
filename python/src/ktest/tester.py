@@ -413,7 +413,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             
         return(kn)
 
-    def mmd_statistic(self,shared_anchors=True,unbiaised=False,verbose=0):
+    def mmd_statistic(self,unbiaised=False,verbose=0):
         """
         Compute the MMD statistic from scratch. 
         Compute every needed intermediate quantity. 
@@ -425,8 +425,8 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             if verbose : 
                 print(f'Statistic {mn} already computed')
         else:
-            self.initialize_mmd(shared_anchors=shared_anchors,verbose=verbose)
-            self.compute_mmd(shared_anchors=shared_anchors,unbiaised=unbiaised,verbose=0)
+            self.initialize_mmd(verbose=verbose)
+            self.compute_mmd(unbiaised=unbiaised,verbose=0)
         return(mn)
 
     def kpca(self,t=None,verbose=0):

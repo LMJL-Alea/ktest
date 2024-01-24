@@ -57,7 +57,6 @@ class GramMatrices(CenteringOps):
     def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
                          y_landmarks=False,y_condition=None,y_samples=None,y_marked_obs_to_ignore=None,data_name=None
                         ):    
-        # P: Surement a supprimer 
         """
         Computes the matrix K(X_i,Y_i) where X_i and Y_i are two subsets of the observations contained in the data.
 
@@ -150,7 +149,6 @@ class GramMatrices(CenteringOps):
 
     def center_kmn_matrix_with_respect_to_some_effects(self,kmn):
         '''
-        Cf commentaire dans center_gram_matrix_with_respect_to_some_effects 
         '''
         if self.center_by is None:
             return(kmn)

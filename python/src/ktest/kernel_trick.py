@@ -76,7 +76,9 @@ class KernelTrick(GramMatrices):
         except UnboundLocalError:
             print(f'UnboundLocalError: pkm was not computed for cov:{cov},mmd:{mmd}')
 
-    def compute_upk(self,t,proj_condition=None,proj_samples=None,proj_marked_obs_to_ignore=None):
+    def compute_upk(self,t,proj_condition=None,
+                    proj_samples=None,
+                    proj_marked_obs_to_ignore=None):
         """
         epk is an alias for the product ePK that appears when projecting the data on the discriminant axis. 
         This functions computes the corresponding block with respect to the model parameters. 

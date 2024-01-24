@@ -215,7 +215,7 @@ class Statistics(ProjectionOps):
         if (self.nystrom and self.has_anchors) or (not self.nystrom) :
             self.diagonalize_within_covariance_centered_gram(approximation=cov,verbose=verbose)
 
-    def initialize_mmd(self,shared_anchors=True,verbose=0):
+    def initialize_mmd(self,verbose=0):
 
         """
         Calculs preliminaires pour lancer le MMD.
@@ -223,9 +223,7 @@ class Statistics(ProjectionOps):
                     full : aucun calcul en amont puisque la Gram et m seront calcules dans mmd
                     nystrom : 
                             si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmark_method
-                            si shared_anchors = True, alors on calcule un seul jeu d'ancres de taille n_anchors pour les deux echantillons
-                            si shared_anchors = False, alors on determine un jeu d'ancre par echantillon de taille n_anchors//2
-                                        attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
+                            attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
                      
         n_landmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
@@ -239,15 +237,8 @@ class Statistics(ProjectionOps):
             if not self.has_landmarks:
                     self.compute_nystrom_landmarks(verbose=verbose)
             
-            if shared_anchors:
-                if self.get_anchors_name() not in self.spev['anchors']:
-                    self.compute_nystrom_anchors(verbose=verbose)
-            # pas à jour 
-            else:
-                for xy in 'xy':
-                    if 'anchors' not in self.spev[xy]:
-                        assert(self.n_anchors is not None,"n_anchors not specified")
-                        self.compute_nystrom_anchors(verbose=verbose)
+            if self.get_anchors_name() not in self.spev['anchors']:
+                self.compute_nystrom_anchors(verbose=verbose)
  
     def compute_mmd(self,unbiaised=False,verbose=0):
         

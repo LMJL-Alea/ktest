@@ -47,42 +47,74 @@ class Hotelling_Lawley:
         """
         self.init_kernel(all_data=True)
         self.design_cols = design_cols
-        self.init_design_matrix()
-        self.init_XprimeX()
-        self.init_XprimeXinv()
-        self.init_ProjImX()
-        self.init_ProjImXorthogonal()
-        self.diagonalize_residual_covariance()
+        self._init_design_matrix()
+        self._init_XprimeX()
+        self._init_XprimeXinv()
+        self._init_ProjImX()
+        self._init_ProjImXorthogonal()
+        self._diagonalize_residual_covariance()
 
     def set_hypothesis(self,L,hypothesis_name,Tmax):
+        '''
+        Updates the attribute `self.current_hyp` with `hypothesis_name` and 
+        appends an entry to the dict attribute `self.hypotheses` that is a dict 
+        stored at key `hypothesis_name` and containing the test matrix `L`, the 
+        truncation parameter `Tmax` ant the matrix A=L'(L(X'X)^{-}L')^{-})L, where
+        X is the design matrix and M^{-} stands for the pseudo inverse of matrix M.
+        A is computed through the function `self._init_L_LXXL_L()`
+
+        Parameters :
+        ------------
+            L : torch Tensor
+            The (l x p) test matrix where the l rows are the hypothesis to test 
+            and the p columns correspond to the p parameters of the kernel linear 
+            model. 
+
+            hypothesis_name : str
+            The name refering to the test matrix and truncation parameter 
+
+            Tmax : int 
+            The truncation parameter used to compute the test statistic and 
+            project on the discriminant directions
+        '''
         self.current_hyp = hypothesis_name
         hyp = self.hypotheses
         if hypothesis_name not in hyp:
             hyp[hypothesis_name] = {'L':L,'Tmax':Tmax}
-        self.init_L_LXXL_L(hypothesis_name)
+        self._init_L_LXXL_L(hypothesis_name)
         
-    def get_hyp(self,hypothesis_name=None):
+    def get_hypothesis(self,hypothesis_name=None):
+        ''''
+        Returns the dict associated to key `hypothesis_name` in the attribute 
+        `self.hypotheses`. Returns the dict associated to key `self.current_hyp`
+        when called with no parameter. 
+
+        Parameters : 
+        ------------
+            hypothesis_name : str (default = None) 
+            Key corresponding to the hypothesis of interest in `self.hypotheses`. 
+            This key should have been initialized through the function 
+            `self.set_hypothesis`
+        '''
         if hypothesis_name is None:
             if self.current_hyp is None:
-                print("You need to define an hypothesis with function 'set_hypothesis' first")
+                print("You need to define an hypothesis with function 'self.set_hypothesis' first")
             hypothesis_name = self.current_hyp
         return(self.hypotheses[hypothesis_name])
         
-
-
-    def init_design_matrix(self):
+    def _init_design_matrix(self):
         design_cols = self.design_cols
         explanatory = self.get_metadata(samples='all')[design_cols]
         data_index = self.get_index(in_dict=False,samples='all')
         design_matrix = pd.get_dummies(explanatory,columns=design_cols).loc[data_index].to_numpy()
         self.design = torch.tensor(design_matrix,dtype=torch.float64)[:,:]
     
-    def init_XprimeX(self):
+    def _init_XprimeX(self):
         X = self.design
         XX = torch.matmul(X.T,X)
         self.XX = XX
         
-    def init_XprimeXinv(self):
+    def _init_XprimeXinv(self):
         XX = self.XX
         sp,ev = ordered_eigsy(XX)
         non_zero = sp>10e-14
@@ -91,22 +123,22 @@ class Hotelling_Lawley:
         XXinv = torch.linalg.multi_dot([ev,torch.diag(sp**-1),ev.T])
         self.XXinv = XXinv
 
-    def init_ProjImX(self):
+    def _init_ProjImX(self):
         X = self.design
         XXinv = self.XXinv
         Pi = torch.linalg.multi_dot([X,XXinv,X.T])
         self.ProjImX = Pi
 
-    def init_ProjImXorthogonal(self):
+    def _init_ProjImXorthogonal(self):
         n = self.get_ntot(samples='all')
         Pi = self.ProjImX
         In = torch.eye(n)
         Piperp = In - Pi
         self.ProjImXorthogonal = Piperp
 
-    def init_L_LXXL_L(self,hypothesis_name=None):
+    def _init_L_LXXL_L(self,hypothesis_name=None):
 
-        hyp = self.get_hyp(hypothesis_name)
+        hyp = self.get_hypothesis(hypothesis_name)
         L = hyp['L']
         XXinv = self.XXinv
         LXXL = torch.linalg.multi_dot([L,XXinv,L.T])
@@ -115,7 +147,7 @@ class Hotelling_Lawley:
         hyp['A'] = A
         
 
-    def compute_residual_covariance(self):
+    def _compute_residual_covariance(self):
         n = self.get_ntot(samples='all')
         kernel = self.get_kernel(all_data=True)
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
@@ -124,7 +156,7 @@ class Hotelling_Lawley:
         Kresidual = 1/n * torch.linalg.multi_dot([Piperp,K,Piperp])
         return(Kresidual)
 
-    def diagonalize_residual_covariance(self):
+    def _diagonalize_residual_covariance(self):
         """
         S is the residal covariance operator 
         The eigenvalues \lambda of Kresiduals are the eigenvalues of S.
@@ -135,7 +167,7 @@ class Hotelling_Lawley:
         """
         Piperp = self.ProjImXorthogonal
 
-        Kresidual = self.compute_residual_covariance()
+        Kresidual = self._compute_residual_covariance()
         sp,ev = ordered_eigsy(Kresidual)
         n = self.get_ntot(samples='all')
         
@@ -148,7 +180,7 @@ class Hotelling_Lawley:
         self.spev['residuals']['ev'] = evnorm
 
         
-    def compute_inner_products_thetai_ft(self):
+    def _compute_inner_products_thetai_ft(self):
         X = self.design
         XXinv = self.XXinv
         kernel = self.get_kernel(all_data=True)
@@ -215,7 +247,6 @@ class Hotelling_Lawley:
         one_minus_hii = (1 - torch.diag(Pi))
         wi_by_one_minus_hii = XXX.T/one_minus_hii
         cook_coefs = torch.diag(torch.linalg.multi_dot([wi_by_one_minus_hii.T,XX,wi_by_one_minus_hii]))
-
         _,_,res = self.compute_diagnostics(Tmax=Tmax)
         torch_res = torch.tensor(res.to_numpy(),dtype=torch.float64)
 
@@ -234,7 +265,7 @@ class Hotelling_Lawley:
         """
         Grosse matrice facile a calculer inutile de la garder en mémoire
         """
-        hyp = self.get_hyp(hypothesis_name)
+        hyp = self.get_hypothesis(hypothesis_name)
 
         X = self.design
         XXinv = self.XXinv
@@ -245,13 +276,13 @@ class Hotelling_Lawley:
         
 
     def compute_kernel_Hotelling_Lawley_test_statistic(self,hypothesis_name=None):
-        hyp = self.get_hyp(hypothesis_name)
+        hyp = self.get_hypothesis(hypothesis_name)
 
         A = hyp['A']
         L = hyp['L']
         Tmax = hyp['Tmax']
 
-        K_theta = self.compute_inner_products_thetai_ft()
+        K_theta = self._compute_inner_products_thetai_ft()
         
 
         matrix = torch.linalg.multi_dot([K_theta.T,A,K_theta])
@@ -278,14 +309,14 @@ class Hotelling_Lawley:
         return(Kdiscriminant)
        
     def diagonalize_Kdiscriminant(self,T,hypothesis_name=None):
-        hyp = self.get_hyp(hypothesis_name)
+        hyp = self.get_hypothesis(hypothesis_name)
         Kdiscriminant = self.compute_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
         sp,ev = ordered_eigsy(Kdiscriminant)
         hyp['spev'] = {'sp':sp,'ev':ev}
 
     def compute_proj_on_discriminant_directions(self,T,hypothesis_name=None):
 
-        hyp = self.get_hyp(hypothesis_name)
+        hyp = self.get_hypothesis(hypothesis_name)
         self.diagonalize_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
 
         ev = hyp['spev']['ev']

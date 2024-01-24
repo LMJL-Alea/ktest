@@ -3,14 +3,13 @@ import numpy as np
 import pandas as pd
 
 from .plots_summarized import Plot_Summarized
-from .truncation_selection import TruncationSelection
 from .univariate_testing import Univariate
 
 from .utils_plot import init_plot_pvalue,text_truncations_of_interest
 from .utils_univariate import filter_genes_wrt_pval
 
 
-class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
+class Plot_Univariate(Plot_Summarized,Univariate):
 
     def visualize_univariate_test_CRCL(self,variable,vtest,column,patient=True,data_name='data',):
 
@@ -28,19 +27,9 @@ class Plot_Univariate(TruncationSelection,Plot_Summarized,Univariate):
             self.plot_density_of_variable(variable,data_name='counts',fig=fig,ax=ax)
             ax = axes[2]    
 
-        t1 = 1
-        # t50 = vtest.select_trunc_by_between_reconstruction_ratio(ratio=.5)
-        tr1 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='first')
-        tr2 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='second')
-        tr3 = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='third')
-        trm = vtest.select_trunc_by_between_reconstruction_ressaut(which_ressaut='max')
 
-        toi =[ t for t in [t1,tr1,tr2,tr3,trm] if t<100] 
-        vtest.plot_pval_and_errors(column,truncations_of_interest=toi,
-                            fig=fig,ax=ax)
+        vtest.plot_pval_and_errors(column,fig=fig,ax=ax)
         ax.set_xlim(0,20)
-        for t in toi:
-            ax.axvline(t,ls='--',alpha=.8)
         return(fig,axes)
                                  
     def plot_density_of_variable(self,

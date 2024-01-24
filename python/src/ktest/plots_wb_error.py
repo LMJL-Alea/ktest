@@ -130,7 +130,8 @@ class Plot_WBerrors(Orthogonal):
             return(fig,ax)
 
     def compute_explained_variability_per_condition(self,cumul=False,log=False,decreasing=False):
-        # Sur nystrom on pourrait se demander quelle est la part de la variabilité des conditions capturée par les ancres. 
+        # Sur nystrom on pourrait se demander quelle est la part de la variabilité
+        # des conditions capturée par les ancres. 
         
         n=self.get_ntot()    
         upk = self.compute_upk(n)
