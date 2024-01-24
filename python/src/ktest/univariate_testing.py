@@ -515,7 +515,6 @@ class Univariate:
             print(f'\tcondition : {self.condition}')
             print(f'\tsamples : {self.samples}')
             print(f'\ttest_params : {self.get_test_params()}')
-            print(f'\tcenter_by : {self.center_by}')
             print(f'\tkernel : {kernel} {kernel_info}')
             print(f'\tignore_zeros : {ignore_zeros}')
 
@@ -553,7 +552,6 @@ class Univariate:
                     samples=self.samples,
                     var_metadata=pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None,
                     test_params=test_params,
-                    center_by=self.center_by,
                     marked_obs_to_ignore=self.marked_obs_to_ignore,
                     kernel=kernel_params,
                     verbose=verbose

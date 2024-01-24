@@ -23,9 +23,6 @@ class GramMatrices(CenteringOps):
         The kernel used is the kernel stored in the attribute `kernel`. 
         ( The attribute `kernel` can be initialized with the method kernel() ) 
 
-        The computed Gram matrix is centered with respect to the attribute `center_by`.
-        ( The attribute `center_by` can be initialized with the method init_center_by())
-
         The Gram matrix is not stored in memory because it is usually large and fast to compute. 
 
         Parameters
@@ -42,7 +39,7 @@ class GramMatrices(CenteringOps):
         Returns
         -------
             K : torch.Tensor,
-                Gram matrix corresponding to the parameters centered with respect to the attribute `center_by`
+                Gram matrix of interest
         """
 
 
@@ -50,8 +47,6 @@ class GramMatrices(CenteringOps):
         kernel = self.data[self.data_name]['kernel']
         data = torch.cat([x for x in dict_data.values()],axis=0)
         K = kernel(data,data)
-        if not landmarks : 
-            K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
 
     def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
@@ -90,30 +85,9 @@ class GramMatrices(CenteringOps):
             data = torch.cat([x for x in dict_data.values()],axis=0)
             xy_data += [data]
         K = kernel(xy_data[0],xy_data[1])
-    # il faudrait faire une correction d'effet par côté, du rectangle, a voir le jour où j'en ai besoin pour le développer. 
-    # maj center_kmn_matrix_with_respect_to_some_effects en center_matrix_wrt_some_effects(left or right or both)
-    #     if not landmarks : 
-    #         K = self.center_gram_matrix_with_respect_to_some_effects(K)
         return(K)
 
 
-    def center_gram_matrix_with_respect_to_some_effects(self,K):
-        # P: Surement a supprimer 
-        '''
-        Faire ce calcul au moment de calculer la gram n'est pas optimal car il ajoute un produit de matrice
-        qui peut être cher, surtout quand n est grand. 
-        L'autre alternative plus optimale serait de calculer la matrice de centrage par effet à chaque fois 
-        qu'on a besoin de faire une opération sur la gram. Cette solution diminuerait le nombre d'opération 
-        mais augmenterait la complexité du code car il faudrait à chaque fois vérifier si on a un centrage à 
-        faire et écrire la version du calcul avec et sans centrage (pour éviter de multiplier inutilement par une 
-        matrice identité). 
-        '''
-
-        if self.center_by is None:
-            return(K)
-        else:
-            P = self.compute_centering_matrix_with_respect_to_some_effects()
-            return(torch.linalg.multi_dot([P,K,P]))
 
     def compute_kmn(self,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
         """
@@ -143,19 +117,9 @@ class GramMatrices(CenteringOps):
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)
 
         kmn = kernel(landmarks,data)        
-        kmn = self.center_kmn_matrix_with_respect_to_some_effects(kmn)
         return(kmn)
 
 
-    def center_kmn_matrix_with_respect_to_some_effects(self,kmn):
-        '''
-        '''
-        if self.center_by is None:
-            return(kmn)
-        else:
-            P = self.compute_centering_matrix_with_respect_to_some_effects()
-            return(torch.matmul(kmn,P))
-            # retutn(torch.linalg.multi_dot([K,P]))
 
     def compute_within_covariance_centered_gram(self,approximation='standard',verbose=0):
         """ 

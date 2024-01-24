@@ -49,7 +49,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                 n_permutations=500,
                 seed_permutation=0,
                 test_params=None,
-                center_by=None,
                 marked_obs_to_ignore=None,
                 kernel=None,
                 verbose=0):
@@ -102,9 +101,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             kernel : object specifying the kernel function to use
                 output of the function init_kernel_params()
 
-            center_by (default = None) : str
-                column of the metadata containing a categorial variable to regress 
-
             marked_obs_to_ignore (default = None) : str
                 column of the metadata containing booleans that are 
                 True if the observation should be ignored from the analysis 
@@ -131,7 +127,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         self.kernel_specification = kernel
         self.set_test_params(verbose=verbose,**test_params)
         self.test_params_initial=test_params
-        self.set_center_by(center_by=center_by,verbose=verbose)
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         
 
@@ -196,8 +191,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                 s=s[:-2]
                 s+=" and {assays[-1]}"
 
-            if self.center_by is not None:
-                s+=f"\nEmbeddings centered by {self.center_by}"
             if self.marked_obs_to_ignore is not None:
                 s+=f"\nIgnoring cells in {self.marked_obs_to_ignore}"
         return(s)

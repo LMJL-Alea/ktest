@@ -128,85 +128,6 @@ class CenteringOps(NystromOps):
     def __init__(self):
         super(CenteringOps,self).__init__()
 
-    def compute_centering_matrix_with_respect_to_some_effects(self):
-        '''
-        Computes the projection matrix corresponding to center the data with respect to the 
-        meta information of center_by. 
-        
-        For example, if we have some metadata on the datasets to compare, such as the patient 
-        of origin and the cell type, stored in the dataframe self.obs, we can model the data 
-        such that each embeding is :
-        
-        k_ijk = a + bi + cij + eijk
-        
-        where a is the global mean, bi is the effect of patient i, and cij is the effect of 
-        cell-type j of patient i, and eijk is a random noise specific to cell k in cell-type j in patient i. 
-
-        If the patient and cell-types info are stored in self.obs, then, the function return a centering matrix 
-        corresponding of center_by :
-            if center_by = 'patient', then the centered embeddings are cij + eijk
-            if center_by = 'celltype', then the centered embeddings are eijk
-        
-        One can retire the effect cij by substituting the center corresponding to 'cell-type' 
-        and adding the center corresponding to 'patient' with :
-            center_by = '#-celltype_+patient', then the centered embeddings are a + bi + eijk
-        The output matrix is such that P = In - Jcelltype + Jpatient 
-        where In is the Identity matrix, Jcelltype and Jpatient are the diagonal matrix corresponding to 
-        celltype and patient given by `compute_diag_Jn_by_n`. 
-
-
-        Parameters
-        ----------
-            self : Ktest, 
-            should contain a metadata dataframe self.obs
-
-            center_by (default = None) : str, 
-                either a column of self.obs or a combination of columns with the following syntax
-                - starts with '#' to specify that it is a combination of effects
-                - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
-                - the effects are separated by a '_'
-                exemple : '#-celltype_+patient'
-
-        Returns
-        ------- 
-            torch.tensor, the centering matrix corresponding to center_by
-        '''
-        
-        center_by = self.center_by
-        marked_obs_to_ignore = self.marked_obs_to_ignore
-        n = self.get_ntot()
-        Pw = eye(n,dtype = torch.float64)
-        obs = self.get_metadata()
-        # self.obs if marked_obs_to_ignore is None else self.obs[~self.obs[marked_obs_to_ignore]]
-
-        if center_by is None:
-            pass
-        
-        elif self.center_by[0] == '#':
-            for center_by in self.center_by[1:].split(sep='_'):
-                
-                operation,effect = center_by[0],center_by[1:]
-                col              = obs[effect].astype('category')
-                effectifs        = compute_effectifs(col)
-                diag_Jn          = compute_diag_Jn_by_n(effectifs)
-                diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)
-                
-                if operation == '-':
-                    Pw -= diag_Jn
-                elif operation == '+':
-                    Pw += diag_Jn
-
-        else:
-            effect           = self.center_by
-            col              = obs[effect].astype('category')
-            effectifs        = compute_effectifs(col)
-            diag_Jn          = compute_diag_Jn_by_n(effectifs)
-            diag_Jn          = permute_matrix_to_respect_index_order(diag_Jn,col)
-            
-            Pw -= diag_Jn
-
-        return Pw    
-
     def compute_covariance_centering_matrix(self,landmarks=False):
         """
         Computes a projection matrix usefull for the kernel trick. 
@@ -271,7 +192,6 @@ class CenteringOps(NystromOps):
 
 # Test application 
 # a = Ktest()
-# a.center_by = '#-cat_+sexe'
 # a.obs = pd.DataFrame({'cat':np.array([0,0,0,1,1,1,2,2,2])[[1,3,5,7,0,2,4,6,8]],
 #                      'sexe':np.array(['M','M','M','W','W','W','W','W','W',])[[1,3,5,7,0,2,4,6,8]]})
 # a.obs.index = range(9)

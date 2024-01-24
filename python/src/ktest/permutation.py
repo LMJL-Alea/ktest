@@ -28,7 +28,6 @@ class Permutation:
             samples=self.samples,
             nystrom=self.nystrom,
             test_params=self.test_params_initial,
-            center_by=self.center_by,
             marked_obs_to_ignore=self.marked_obs_to_ignore,
             verbose=verbose-1
         )

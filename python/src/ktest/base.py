@@ -109,7 +109,6 @@ class Base(Names,Kernel_Function):
         self.permutation_mmd_name=None
         self.permutation_kfda_name=None
         self.marked_obs_to_ignore = None
-        self.center_by = None # column of the metadata to use to center the data (désuet avec MANOVA)
 
         # for verbosity 
         self.verbose=verbose
@@ -888,35 +887,6 @@ class Base(Names,Kernel_Function):
         else:
             print(f"- marked_obs_to_ignore={marked_obs_to_ignore} is not recognised. \n\t Use function 'mark_observations' to mark observations")
             self.marked_obs_to_ignore = None
-
-    def set_center_by(self,center_by=None,verbose=0):
-        '''
-        Initializes the attribute `center_by` which allow to automatically center the data with respect 
-        to a stratification of the datasets informed in the meta information dataframe `obs`. 
-        This centering is independant from the centering applied to the data to compute statistic-related centerings. 
-        
-        Parameters
-        ----------
-            center_by (default = None) : None or str, 
-                if None, the attribute center_by is set to None 
-                and no centering will be done during the computations of the Gram matrix. 
-                else, either a column of self.obs or a combination of columns with the following syntax
-                - starts with '#' to specify that it is a combination of effects
-                - each effect should be a column of self.obs, preceded by '+' is the effect is added and '-' if the effect is retired. 
-                - the effects are separated by a '_'
-                exemple : '#-celltype_+patient'
-
-
-        Attributes Initialized
-        ---------- ----------- 
-            center_by : str,
-                is set to None if center_by is a string but the Ktest object doesn't have an `obs` dataframe. 
-
-        '''
-        if verbose>0:
-            if center_by is not None:
-                print(f"- Using '{center_by}' to center the embeddings in the feature space.")
-        self.center_by = center_by      
            
     def set_test_data_info(self,samples='all',condition=None,data_name=None,change_kernel=True,verbose=0):
         """

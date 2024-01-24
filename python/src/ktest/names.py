@@ -16,9 +16,8 @@ class Names:
 
         # si les conditions et samples peuvent être mis en entrées, cente_by aussi
         smpl = '' if samples == 'all' else "".join(samples)
-        cb = '' if self.center_by is None else f'_cb_{self.center_by}'    
         marking = '' if mark is None else f'_{mark}'
-        return(f'{dn}{c}{smpl}{cb}{marking}')
+        return(f'{dn}{c}{smpl}{marking}')
 
     def get_model_str(self):
         ny = self.nystrom
