@@ -82,7 +82,6 @@ class NystromOps(OutliersOps,Verbosity):
             self.init_anchor_basis(verbose)
             self.init_n_landmarks(verbose)
             self.init_n_anchors(verbose)
-                
             self.nystrom_initialized = True
     
     def compute_nystrom_landmarks(self,verbose=0):

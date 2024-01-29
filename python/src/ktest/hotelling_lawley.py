@@ -190,6 +190,76 @@ class Hotelling_Lawley:
         K_theta = torch.linalg.multi_dot([XXinv,X.T,K,ev])
         return(K_theta)
     
+        
+    def compute_D(self,hypothesis_name=None):
+        """
+        Grosse matrice facile a calculer inutile de la garder en mémoire
+        """
+        hyp = self.get_hypothesis(hypothesis_name)
+
+        X = self.design
+        XXinv = self.XXinv
+        A = hyp['A']
+        D = torch.linalg.multi_dot([X,XXinv,A,XXinv,X.T])
+        return(D)
+    
+        
+
+    def compute_kernel_Hotelling_Lawley_test_statistic(self,hypothesis_name=None):
+        hyp = self.get_hypothesis(hypothesis_name)
+
+        A = hyp['A']
+        L = hyp['L']
+        Tmax = hyp['Tmax']
+
+        K_theta = self._compute_inner_products_thetai_ft()
+        
+
+        matrix = torch.linalg.multi_dot([K_theta.T,A,K_theta])
+        stats = []
+        pvals = []
+        for t in range(1,Tmax):
+            stat = torch.trace(matrix[:t,:t]).item()
+            stats += [stat]
+            pvals += [chi2.sf(np.sum(stat),t*len(L))]
+
+        hyp['Hotellin-Lawley'] = stats
+        hyp['p-value'] = pvals
+
+    
+    def compute_Kdiscriminant(self,T,hypothesis_name=None):
+        U = self.spev['residuals']['ev'] 
+        kernel = self.get_kernel()
+        Y = self.get_data(in_dict=False,dataframe=False,samples='all')
+        K = kernel(Y,Y) 
+        D = self.compute_D(hypothesis_name)
+    #     print('T',T,'U',U.shape,'R',R.shape,'K',K.shape)
+
+        Kdiscriminant = torch.linalg.multi_dot([U[:,:T].T,K,D,K,U[:,:T]])
+        return(Kdiscriminant)
+       
+    def diagonalize_Kdiscriminant(self,T,hypothesis_name=None):
+        hyp = self.get_hypothesis(hypothesis_name)
+        Kdiscriminant = self.compute_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
+        sp,ev = ordered_eigsy(Kdiscriminant)
+        hyp['spev'] = {'sp':sp,'ev':ev}
+
+    def compute_proj_on_discriminant_directions(self,T,hypothesis_name=None):
+        if hypothesis_name is None:
+            hypothesis_name = self.current_hyp
+
+        hyp = self.get_hypothesis(hypothesis_name)
+        self.diagonalize_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
+
+        ev = hyp['spev']['ev']
+        U = self.spev['residuals']['ev']
+        kernel = self.get_kernel()
+        Y = self.get_data(in_dict=False,dataframe=False,samples='all')
+        index = self.get_index(in_dict=False,samples='all')
+        K = kernel(Y,Y) 
+        projections = torch.linalg.multi_dot([ev.T,U[:,:T].T,K])
+        self.df_proj_residuals[hypothesis_name] = pd.DataFrame(projections.T,index=index)
+
     def compute_diagnostics(self,Tmax=30):
         """
         The diagnostics are defined similarly to the diagnostic plot of the multivariate linear model. 
@@ -259,71 +329,3 @@ class Hotelling_Lawley:
         return(cook_distances)
         
 
-
-        
-    def compute_R(self,hypothesis_name=None):
-        """
-        Grosse matrice facile a calculer inutile de la garder en mémoire
-        """
-        hyp = self.get_hypothesis(hypothesis_name)
-
-        X = self.design
-        XXinv = self.XXinv
-        A = hyp['A']
-        R = torch.linalg.multi_dot([X,XXinv,A,XXinv,X.T])
-        return(R)
-    
-        
-
-    def compute_kernel_Hotelling_Lawley_test_statistic(self,hypothesis_name=None):
-        hyp = self.get_hypothesis(hypothesis_name)
-
-        A = hyp['A']
-        L = hyp['L']
-        Tmax = hyp['Tmax']
-
-        K_theta = self._compute_inner_products_thetai_ft()
-        
-
-        matrix = torch.linalg.multi_dot([K_theta.T,A,K_theta])
-        stats = []
-        pvals = []
-        for t in range(1,Tmax):
-            stat = torch.trace(matrix[:t,:t]).item()
-            stats += [stat]
-            pvals += [chi2.sf(np.sum(stat),t*len(L))]
-
-        hyp['Hotellin-Lawley'] = stats
-        hyp['p-value'] = pvals
-
-    
-    def compute_Kdiscriminant(self,T,hypothesis_name=None):
-        U = self.spev['residuals']['ev'] 
-        kernel = self.get_kernel()
-        Y = self.get_data(in_dict=False,dataframe=False,samples='all')
-        K = kernel(Y,Y) 
-        R = self.compute_R(hypothesis_name)
-    #     print('T',T,'U',U.shape,'R',R.shape,'K',K.shape)
-
-        Kdiscriminant = torch.linalg.multi_dot([U[:,:T].T,K,R,K,U[:,:T]])
-        return(Kdiscriminant)
-       
-    def diagonalize_Kdiscriminant(self,T,hypothesis_name=None):
-        hyp = self.get_hypothesis(hypothesis_name)
-        Kdiscriminant = self.compute_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
-        sp,ev = ordered_eigsy(Kdiscriminant)
-        hyp['spev'] = {'sp':sp,'ev':ev}
-
-    def compute_proj_on_discriminant_directions(self,T,hypothesis_name=None):
-
-        hyp = self.get_hypothesis(hypothesis_name)
-        self.diagonalize_Kdiscriminant(T=T,hypothesis_name=hypothesis_name)
-
-        ev = hyp['spev']['ev']
-        U = self.spev['residuals']['ev']
-        kernel = self.get_kernel()
-        Y = self.get_data(in_dict=False,dataframe=False,samples='all')
-        index = self.get_index(in_dict=False,samples='all')
-        K = kernel(Y,Y) 
-        projections = torch.linalg.multi_dot([ev.T,U[:,:T].T,K])
-        self.df_proj_residuals[hypothesis_name] = pd.DataFrame(projections.T,index=index)
