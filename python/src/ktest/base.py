@@ -10,7 +10,14 @@ from .kernel_function import Kernel_Function
 
 class Base(Names,Kernel_Function):
 
-    def __init__(self,verbose=0):        
+    def __init__(self):   
+        '''
+        Attributes initialized : 
+        ------------------------
+
+        
+
+        '''     
         super(Base, self).__init__()
 
 
@@ -111,7 +118,6 @@ class Base(Names,Kernel_Function):
         self.marked_obs_to_ignore = None
 
         # for verbosity 
-        self.verbose=verbose
         self.start_times = {}
 
         # tokens to assess global information on the ktest object :
@@ -669,49 +675,6 @@ class Base(Names,Kernel_Function):
 
         return(data)
     
-        # def get_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
-        
-        # if data_name is None:    
-        #     data_name = self.data_name
-    
-        # if landmarks and self.landmark_method =='kmeans':
-        #     dict_data = self.get_kmeans_landmarks()
-            
-        # else:
-        #     dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        #     if landmarks and self.landmark_method=='kmeans':
-        #         dict_data = {k:self.data[data_name]['X'] for k in dict_index.keys()}
-        #     else:
-        #         dict_data = {k:self.data[data_name]['X'][self.obs.index.isin(v),:] for k,v in dict_index.items()}
-        # return(dict_data)
-    
-
-        # def get_dataframes_of_data(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
-            
-        #     if data_name is None:
-        #         data_name = self.data_name
-
-        #     dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
-        #     dict_index = self.get_index(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        #     variables = self.data[data_name]['variables']
-
-        #     dict_df = {}
-        #     for s in dict_data.keys():
-        #         x,i,v = dict_data[s],dict_index[s],variables
-        #         dict_df[s] = pd.DataFrame(x,i,v)
-        #     return(dict_df)
-
-        # def get_dataframe_of_all_data(self,landmarks=False,data_name=None):
-        #     if data_name is None:
-        #         data_name = self.data_name
-        #     if landmarks:
-        #         print('Warning : this function is not implemented for landmarks yet')
-        #     x = self.data[data_name]['X']
-        #     i = self.obs.index
-        #     v = self.data[data_name]['variables']
-
-        #     return(pd.DataFrame(x,i,v))
-
     def get_all_data(self,landmarks=False):
         if landmarks:
             print(f'get all data for landmarks is not mplemented yet')
