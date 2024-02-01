@@ -7,6 +7,8 @@ On peut vouloir calculer la corrélation entre les variables d'origine et les di
 nos méthodes. Ces fonctions permettent de le faire simplement. 
 """
 class Correlations(Base):
+    def __init__(self,data,metadata=None,var_metadata=None):
+        super(Correlations,self).__init__(data,metadata=metadata,var_metadata=var_metadata)
 
     def compute_corr_proj_var(self,t=None,proj='proj_kfda',verbose=0): 
             # df_array,df_proj,csvfile,pathfile,trunc=range(1,60)):
@@ -17,7 +19,7 @@ class Correlations(Base):
                 start=True,
                 verbose = verbose)
         prefix_col = proj.split(sep='_')[1]
-        variables = self.get_variables()
+        variables = self.variables
         df_proj= self.init_df_proj(proj)
         t = 30 if t is None else t 
         # df = self.get_dataframe_of_all_data()

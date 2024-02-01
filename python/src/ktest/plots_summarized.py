@@ -9,8 +9,8 @@ from .dendrogram import Dendrogram
 
 class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
         
-    def __init__(self):        
-        super(Plot_Summarized, self).__init__()
+    # def __init__(self,data,obs=None,var=None,):        
+        # super(Plot_Summarized, self).__init__(data,obs=obs,var=var,)
 
 
     # reconstructions error 
@@ -193,7 +193,6 @@ class Plot_Summarized(Plot_Standard,Plot_WBerrors,Dendrogram):
                 ax = axes[i]
                 i+=1
                 self.plot_nextPC(t,fig=fig,ax=ax,color=color,marker=marker,highlight=highlight)
-            # self.scatter_projs(projections=[[i*2+1,i*2+2] for i in range(nkpca)],xproj='proj_kpca',fig=fig,axes=axes[i:],color=color)
         fig.tight_layout()
         return(fig,axes)
                 

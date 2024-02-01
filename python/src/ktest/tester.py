@@ -26,7 +26,7 @@ from .permutation import Permutation
 from .correlation_operations import Correlations
 from .hotelling_lawley import Hotelling_Lawley
 from .utils import init_test_params
-from .kernel_function import init_kernel_params
+
 
 # tracer l'evolution des corrélations par rapport aux gènes ordonnés
 
@@ -38,21 +38,26 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
 
     def __init__(self,
                 data,
-                metadata,
-                condition,
-                data_name='data',
-                samples='all',
+                metadata=None,
                 var_metadata=None,
+                condition=None,
+                samples='all',
                 stat='kfda',
                 nystrom=False,
+                n_landmarks=None,
+                n_anchors=None,
+                landmark_method='random',
+                anchor_basis='w',
                 permutation=False,
                 n_permutations=500,
-                seed_permutation=0,
-                test_params=None,
+                seed_permutation=20231124,
                 marked_obs_to_ignore=None,
                 kernel=None,
+                kernel_function='gauss',
+                kernel_bandwidth='median',
+                kernel_median_coef=1,
+                kernel_name=None,
                 verbose=0):
-
         """
         Generate a Ktest object and compute specified comparison
 
@@ -67,8 +72,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             condition : str
                 column of the metadata dataframe containing the labels to test
 
-            data_name (default = 'data'): str 
-                Name of the data (examples : counts, normalized)
 
             samples (default = 'all') : str or iterable of str
                 'all' : test the two categories contained in column condition (does not work for more than two yet)
@@ -95,11 +98,37 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
             nystrom (default = False) : boolean
                 if True, the test_params nystrom is set to True with default parameters
 
-            test_params : object specifying the test to execute
-                output of the function get_test_params()
+            n_landmarks (default = None) : int
+                number of landmarks for the nystrom method
 
-            kernel : dict specifying the kernel function to use
-                output of the function `init_kernel_params` from ktest.kernel_function
+            n_anchors (default = None) : int
+                number of anchors for the nystrom method
+            
+            landmark_method (default = 'random') : str in ['random','kmeans']
+                method used to determine the landmarks 
+
+            anchor_basis (default = 'w') : str in ['k','s','w']
+                covariance operator of the landmarks of which the anchors
+                are the eigenvalues    
+                    
+            kernel_function (default = 'gauss') : function or str in ['gauss','linear','fisher_zero_inflated_gaussian','gauss_kernel_mediane_per_variable'] 
+                if str : specifies the kernel function
+                if function : kernel function specified by user
+
+            kernel_bandwidth (default = 'median') : 'median' or float
+                value of the bandwidth for kernels using a bandwidth
+                if 'median' : the bandwidth will be set as the median or a multiple of it is
+                    according to the value of parameter `median_coef`
+                if float : value of the bandwidth
+
+            kernel_median_coef (default = 1) : float
+                multiple of the median to use as bandwidth if bandwidth=='median' 
+                
+            kernel name (default = None) : str
+                The name of the kernel function specified by the call of the function.
+                if None : the kernel name is automatically generated through the function
+                get_kernel_name 
+
 
             marked_obs_to_ignore (default = None) : str
                 column of the metadata containing booleans that are 
@@ -109,27 +138,28 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
 
         """
         
-        super(Ktest,self).__init__()
+        super(Ktest,self).__init__(data,metadata=metadata,var_metadata=var_metadata,)
         
-        if kernel is None:
-            kernel = init_kernel_params()
-
-        if test_params is None:
-            test_params = init_test_params(
-                                stat=stat,
-                                nystrom=nystrom,
-                                permutation=permutation,
-                                n_permutations=n_permutations,
-                                seed_permutation=seed_permutation,
-                                )
+        self.set_test_params(stat=stat,
+                       nystrom = nystrom,
+                       n_landmarks = n_landmarks,
+                       n_anchors = n_anchors,
+                       landmark_method = landmark_method,
+                       anchor_basis = anchor_basis,
+                       permutation = permutation,
+                       n_permutations = n_permutations,
+                       seed_permutation = seed_permutation)
 
 
-        self.add_data_to_Ktest_from_dataframe(data,metadata,data_name=data_name,var_metadata=var_metadata,verbose=verbose)
-        self.set_test_data_info(data_name=data_name,condition=condition,samples=samples,change_kernel=False,verbose=verbose)
-        self.init_kernel(verbose=verbose,**kernel)
-        self.kernel_specification = kernel
-        self.set_test_params(verbose=verbose,**test_params)
-        self.test_params_initial=test_params
+        self.set_test_data_info(condition=condition,samples=samples,change_kernel=False,verbose=verbose)
+        self.init_kernel(
+                function=kernel_function,
+                bandwidth=kernel_bandwidth,
+                median_coef=kernel_median_coef,
+                kernel_name=kernel_name,
+                verbose=verbose)
+        
+
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
         
 
@@ -139,24 +169,23 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         # if long:
         #     s+=f'\n'
 
-        tp = self.get_test_params()
-        stat = tp['stat']
-        ny = tp['nystrom']
+        stat = self.stat
+        ny = self.nystrom 
         s+=f'\nTest statistic : {stat}'
         
         if ny: 
-            s+= f" with the nystrom approximation ({tp['n_anchors']} anchors)"
+            s+= f" with the nystrom approximation ({self.n_anchors} anchors)"
 
             if long:
-                s += f"\n\t{tp['n_landmarks']} landmarks"
-                lm = tp['landmark_method']
-                ab = tp['anchor_basis']
+                s += f"\n\t{self.n_landmarks_initial} landmarks"
+                lm = self.landmark_method
+                ab = self.anchor_basis
                 if lm == 'random':
                     s += f" (determined through random sampling)"
                 if lm == 'kmeans':
                     s += f" (determined as kmeans centroids of each group)"
                 
-                s += f"\n\t{tp['n_anchors']} anchors"
+                s += f"\n\t{self.n_anchors} anchors"
                 if ab == 'w':
                     s += " (the eigenvectors of the within group covariance operator of the landmarks)"
                 elif ab == 'k':
@@ -167,15 +196,14 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
 
     def str_add_data_info(self,s,long=False):
 
-        nfeatures = self.data[self.data_name]['p']
+        nvar = self.nvar
         nobs = self.get_ntot()
-        nassays = len(self.data)
         dn = self.get_nobs()
         dn.pop('ntot')
 
         # if long:
         #     s+='\n'
-        s+=f"\n{nfeatures} features accros {nobs} observations within {nassays} assays (active : {self.data_name})"
+        s+=f"\n{nvar} features accros {nobs} observations"
         s+= f"\nComparison : "
         for k,n in list(dn.items())[:-1]:
             s+=f"{k} ({n} obs), "
@@ -186,14 +214,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         
 
         if long:
-            if len(self.data)>1:
-                assays = list(self.data.keys())
-                s+= f"\nAssays : "
-                for assay in assays[:-1]:
-                    s+= "{self.data_name}, "
-                s=s[:-2]
-                s+=" and {assays[-1]}"
-
             if self.marked_obs_to_ignore is not None:
                 s+=f"\nIgnoring cells in {self.marked_obs_to_ignore}"
         return(s)
@@ -262,7 +282,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         if long:
             s+='\n'
         if log2fc :
-            if self.log2fc_data is None :
+            if not self.log2fc_computed :
                 if self.it_is_possible_to_compute_log2fc():
                     self.add_log2fc_to_var()
                 else:
@@ -270,7 +290,7 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
 
         s+='\n___Univariate tests results___'
         ntested = self.get_ntested_variables()
-        nvar = self.get_nvariables()
+        nvar = self.nvar
         if ntested == 0:
             s+=f'\nUnivariate test not performed yet, run ktest.univariate_test()'
         else:
@@ -767,23 +787,5 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                                     samples=samples,
                                     marked_obs_to_ignore=marked_obs_to_ignore,
                                     in_dict=in_dict))
-
-
-
-def ktest_from_xy(x,y,names='xy',kernel=None):
-    if kernel is None:
-        kernel = init_kernel_params()
-    x = pd.DataFrame(x,columns = [str(i) for i in range(x.shape[1])])
-    y = pd.DataFrame(y,columns = [str(i) for i in range(x.shape[1])])
-    data = pd.concat([x,y])
-    metadata = pd.DataFrame([names[0]]*len(x)+[names[1]]*len(y),columns=['condition'])
-    t = Ktest(
-            data,
-            metadata,
-            data_name='data',
-            condition='condition',    
-            kernel=kernel,)
-    return(t)
-
 
 

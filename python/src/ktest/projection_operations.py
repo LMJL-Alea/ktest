@@ -12,8 +12,8 @@ projection nécessite de nombreux calculs intermédiaires, elle a été encodée
 
 class ProjectionOps(KernelTrick):
 
-    def __init__(self):
-        super(ProjectionOps,self).__init__()
+    # def __init__(self,data,obs=None,var=None):
+    #     super(ProjectionOps,self).__init__(data,obs=obs,var=var)
 
     def compute_proj_on_eigenvectors(self,t=None,condition=None,samples=None,marked_obs_to_ignore=None,verbose=0):
         
@@ -85,10 +85,10 @@ class ProjectionOps(KernelTrick):
                     },
                     start=True,
                     verbose = verbose)
-        
-        mmd = self.approximation_mmd            
+        # cas nystrom non traité 
+        nystrom = self.nystrom
         m = self.compute_omega()
-        if mmd == 'standard':
+        if not nystrom :
             K = self.compute_gram()
         
         proj = torch.matmul(K,m)

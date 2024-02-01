@@ -24,12 +24,21 @@ class Permutation:
             data= self.get_data(dataframe=True,in_dict=False),
             metadata=metadata_perm,
             condition = self.condition,
-            data_name=f'{self.data_name}_perm_seed{seed}_',
             samples=self.samples,
-            nystrom=self.nystrom,
-            test_params=self.test_params_initial,
+            stat = self.stat,
+            nystrom = self.nystrom,
+            n_landmarks = self.n_landmarks_initial,
+            n_anchors = self.n_anchors,
+            landmark_method = self.landmark_method,
+            anchor_basis = self.anchor_basis,
             marked_obs_to_ignore=self.marked_obs_to_ignore,
-            verbose=verbose-1
+            verbose=verbose-1,
+
+            kernel=self.kernel,
+            kernel_function=self.kernel_function,
+            kernel_bandwidth=self.kernel_bandwidth,
+            kernel_median_coef=self.kernel_median_coef,
+            kernel_name=self.kernel_name,
         )
         return(kt_perm)
 

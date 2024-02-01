@@ -16,8 +16,8 @@ Ces fonctions déterminent permettent de déterminer les landmarks puis les ancr
 de la méthode de nystrom. 
 """
 class NystromOps(OutliersOps,Verbosity):
-    def __init__(self):
-        super(NystromOps,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(NystromOps,self).__init__(data,obs=obs,var=var,)
 
     def init_landmark_method(self,verbose=0):
         if self.landmark_method is None:
@@ -45,7 +45,7 @@ class NystromOps(OutliersOps,Verbosity):
                     print("\tn_landmarks not specified, by default, n_landmarks = (n1+n2)//10 (less than 500 obs)")
 
         try:
-            n_landmarks = self.get_n_landmarks(verbose=verbose)
+            n_landmarks = self.get_n_landmarks()
             if n_landmarks != self.n_landmarks_initial:
                 if verbose>1:
                     print(f"\tReduced from {self.n_landmarks_initial} to {n_landmarks} landmarks for proportion issues")
@@ -103,11 +103,11 @@ class NystromOps(OutliersOps,Verbosity):
 
             print(s)
         if self.landmark_method == 'kmeans':
-            self.compute_nystrom_landmarks_kmeans(verbose=verbose)
+            self.compute_nystrom_landmarks_kmeans()
         elif self.landmark_method == 'random':
             self.compute_nystrom_landmarks_random(verbose=verbose)
 
-    def get_n_landmarks(self,verbose=0):
+    def get_n_landmarks(self):
         return(sum(self.get_dict_n_landmarks().values()))
 
     def get_dict_n_landmarks(self,verbose=0):
@@ -190,8 +190,12 @@ class NystromOps(OutliersOps,Verbosity):
                                     marking_name=f'{sample}_{landmarks_name}')
         self.has_landmarks= True
 
-    def compute_nystrom_landmarks_kmeans(self,verbose=0):
-        # a new dataset containing the centroïds is added to self.data 
+    def compute_nystrom_landmarks_kmeans(self):
+        '''
+        Computes the kmeans centroïds to use as landmarks in the nystrom method.
+        Do not compute them again if already done.
+        Seed specification to be added. 
+        '''
 
         dict_index = self.get_index(landmarks=False)
         dict_nobs  =  self.get_nobs(landmarks=False)
@@ -204,22 +208,16 @@ class NystromOps(OutliersOps,Verbosity):
         
         # determine kmeans centroids and assignations
         for sample in dict_data.keys():
-            # determine centroids
+            # determine centroids if not already done 
             kmeans_landmarks_name = self.get_kmeans_landmarks_name_for_sample(sample=sample)
-            if kmeans_landmarks_name in self.data:
-                print(f'kmeans landmarks {kmeans_landmarks_name} already computed')
-            else:
+            if kmeans_landmarks_name not in self.kmeans_landmarks:
                 x,index,n_landmarks = dict_data[sample],dict_index[sample],dict_n_landmarks[sample]
                 assignations,landmarks = kmeans(X=x, num_clusters=n_landmarks, distance='euclidean', tqdm_flag=False) #cuda:0')
                 landmarks = landmarks.double()
                 # save results 
                 kmeans_landmarks_name = self.get_kmeans_landmarks_name_for_sample(sample=sample)
-
-                self._update_dict_data(landmarks,kmeans_landmarks_name,False)
-                self._update_index(n_landmarks,index=None,data_name=kmeans_landmarks_name)
+                self.kmeans_landmarks[kmeans_landmarks_name] = landmarks
                 self.obs[kmeans_landmarks_name] = pd.DataFrame(assignations,index=index)
-
-                
         self.has_landmarks= True
 
     def compute_nystrom_anchors(self,verbose=0):

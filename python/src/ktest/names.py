@@ -9,7 +9,6 @@ class Names:
 
     def get_data_to_test_str(self,condition=None,samples=None,marked_obs_to_ignore=None):
 
-        dn = self.data_name
         c,samples,mark = self.init_samples_condition_marked(condition=condition,
                                            samples=samples,
                                            marked_obs_to_ignore=marked_obs_to_ignore)
@@ -17,7 +16,7 @@ class Names:
         # si les conditions et samples peuvent être mis en entrées, cente_by aussi
         smpl = '' if samples == 'all' else "".join(samples)
         marking = '' if mark is None else f'_{mark}'
-        return(f'{dn}{c}{smpl}{marking}')
+        return(f'{c}{smpl}{marking}')
 
     def get_model_str(self):
         ny = self.nystrom

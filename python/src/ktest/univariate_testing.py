@@ -35,7 +35,7 @@ class Univariate:
                         verbose=0):
         """
         Perform univariate testing or Differential Expression Analysis on each variable.
-        The results are stored in the var dataframe accessible through `ktest.get_var()`
+        The results are stored in the var dataframe accessible through `ktest.var`
         and saved in `save_path` if specified. 
         The results stored are the kfda statistics and p-values associated to each truncation present in
         `truncations_of_interest`. 
@@ -187,8 +187,8 @@ class Univariate:
                                     verbose=0):
 
         col = self.get_column_name_in_var(name=name,output='univariate')
-        var = self.get_var()
-        vard = self.get_vard()
+        var = self.var
+        vard = self.vard
 
         if col in var and var[col][variable]==1:
             if verbose>1:
@@ -238,12 +238,12 @@ class Univariate:
         """
         Returns a dict of the ero proportions 
         """
-        var = self.get_var()
+        var = self.var
         sl = list(self.get_index().keys())
         dict_zp = {sample:var[f'{sample}_pz'][variable] for sample in sl}
         return(dict_zp)
 
-    def add_zero_proportions_to_var(self,data_name=None):
+    def add_zero_proportions_to_var(self):
         '''
         Fills the attribute var of the active dataset with columns corresponding to the 
         zero information of the variables with respect to the tested conditions. 
@@ -258,15 +258,9 @@ class Univariate:
                 - 's_pct_expression' : proportion of non-zero of the variables in the sample 
                 - 's_mean' : mean expression of the variables in the sample. 
         '''
-        if data_name is None:
-            data_name = self.data_name
 
-        # dict_df = self.get_dataframes_of_data(data_name=data_name)
-        dict_df = self.get_data(data_name=data_name,
-                                in_dict=True,dataframe=True)
-        dfa = self.get_data(data_name=data_name,
-                                 in_dict=False,
-                                 dataframe=True)
+        dict_df = self.get_data(in_dict=True,dataframe=True)
+        dfa = self.get_data(in_dict=False,dataframe=True)
         dfzp = pd.DataFrame()
         sl = self.get_samples_list()
         for s in sl:
@@ -284,52 +278,34 @@ class Univariate:
         
         self.update_var_from_dataframe(dfzp)
     
-    def it_is_possible_to_compute_log2fc(self,data_name=None):
-        # df = self.get_dataframe_of_all_data(data_name)
-        df = self.get_data(data_name=data_name,
-                           in_dict=False,
-                           dataframe=True)
+    def it_is_possible_to_compute_log2fc(self):
+        df = self.get_data(in_dict=False,dataframe=True)
         npositive = (df>=0).sum().sum()
         ntotal = df.shape[0]*df.shape[1]
         return(npositive == ntotal)
 
-    def add_log2fc_to_var(self,data_name=None):
+    def add_log2fc_to_var(self):
 
-        if data_name is None:
-            data_name = self.data_name
+        if self.it_is_possible_to_compute_log2fc():
 
-        if self.it_is_possible_to_compute_log2fc(data_name):
-
-            # dfs = self.get_dataframes_of_data (data_name=data_name)   
-            dfs = self.get_data(data_name=data_name,
-                                dataframe=True,
-                                in_dict=True)  
+            dfs = self.get_data(dataframe=True,in_dict=True)  
             s1,s2 = dfs.keys()
             dffc = pd.DataFrame()
             cols = []
 
             for sample,df in dfs.items():
-                col = f'{data_name}_{sample}_mean'
+                col = f'{sample}_mean'
                 cols += [col]
                 dffc[col] = df.mean()
             log2fc = np.log(dffc[cols[0]]/dffc[cols[1]])/np.log(2)
-            dffc[f'{data_name}_log2fc_{s1}/{s2}'] = log2fc
+            dffc[f'log2fc_{s1}/{s2}'] = log2fc
             self.update_var_from_dataframe(dffc)
-            self.log2fc_data = data_name
-
-
-    def compute_log2fc_from_another_dataframe(self,df,data_name='raw'):
-        
-        # index = self.get_dataframe_of_all_data().index
-        index = self.get_index(in_dict=False)
-        df = df[df.index.isin(index)]
-        self.add_data_to_Ktest_from_dataframe(df,data_name=data_name,update_current_data_name=False)            
-        self.add_log2fc_to_var(data_name=data_name)
+            self.log2fc_computed = True
 
     def get_log2fc_of_variable(self,variable):
         s1,s2 = self.get_samples_list()
-        col = f'{self.log2fc_data}_log2fc_{s1}/{s2}'
-        var = self.get_var()
+        col = f'log2fc_{s1}/{s2}'
+        var = self.var
         return(var[col][variable])
 
 
@@ -382,7 +358,7 @@ class Univariate:
 
         sl = list(self.get_index().keys())
         dfe = pd.DataFrame()
-        var = self.get_var()
+        var = self.var
         for s in sl:
             dfe[f'{s}_eligible'] = var[f'{s}_pz']<=max_dropout 
         dfe[f'eligible'] = (dfe[f'{sl[0]}_eligible']) | (dfe[f'{sl[1]}_eligible'])
@@ -405,7 +381,7 @@ class Univariate:
         """
 
         cs = list(self.get_index().keys())
-        var = self.get_var()
+        var = self.var
         n = self.get_ntot()
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
@@ -427,12 +403,10 @@ class Univariate:
         df = self.get_data(in_dict=False,dataframe=True)
         return(df.var().sort_values(ascending=False)[:k].index)
  
-    def get_genes_presents_in_more_than_k_cells(self,k=3,data_name=None):
-        if data_name is None:
-            data_name = self.data_name
+    def get_genes_presents_in_more_than_k_cells(self,k=3):
 
         cs = list(self.get_data().keys())
-        var = self.get_var(data_name)
+        var = self.var
         n = self.get_ntot()
         var['ncells_expressed'] = n - (var[f'{cs[0]}_nz'] + var[f'{cs[1]}_nz'])
         return(var[var['ncells_expressed']>=k].index)
@@ -471,20 +445,22 @@ class Univariate:
 
         return(data,meta)
        
-    def initialize_univariate_kernel(self,variable,kernel,kernel_info):
-        if kernel is None:
-            return(self.get_kernel_params())
-        if kernel == 'fisher_zero_inflated_gaussian':
-            # P : this case should be reexamined because this kernel is not automatically
-            # set anymore. 
-            kernel_params = self.get_kernel_params()
-            kernel_params['function'] = kernel
-            var = self.get_var()
-            kernel_params['pi1'] = var[kernel_info[0]][variable]
-            kernel_params['pi2'] = var[kernel_info[1]][variable]
-            return(kernel_params)
-        else:
-            return(kernel)
+    # Ne pas supprimer tant que le papier n'est pas accepté
+    # def initialize_univariate_kernel(self,variable,kernel,kernel_info):
+    #     if kernel is None:
+    #         return(self.get_kernel_params())
+    #     if kernel == 'fisher_zero_inflated_gaussian':
+    #         # P : je garde cette structure en attendant la review de notre papier 
+    #         # car je risque d'en avoir besoin pour refaire tourner des simulation.  
+            
+    #         kernel_params = self.get_kernel_params()
+    #         kernel_params['function'] = kernel
+    #         var = self.var
+    #         kernel_params['pi1'] = var[kernel_info[0]][variable]
+    #         kernel_params['pi2'] = var[kernel_info[1]][variable]
+    #         return(kernel_params)
+    #     else:
+    #         return(kernel)
 
 
     def ktest_for_one_variable(self,variable,kernel=None,kernel_info=None,inform_var=True,ignore_zeros=False,verbose=0):
@@ -494,19 +470,16 @@ class Univariate:
         if verbose >0:
             print(f'- Defining ktest for variable {variable}')
         if verbose >1:
-            print(f'\tdata_name : {self.data_name}')
             print(f'\tcondition : {self.condition}')
             print(f'\tsamples : {self.samples}')
-            print(f'\ttest_params : {self.get_test_params()}')
+            print(f'\ttest_params : {self._get_test_params()}')
             print(f'\tkernel : {kernel} {kernel_info}')
             print(f'\tignore_zeros : {ignore_zeros}')
 
-        # Initialize univariate Ktest with common covariance 
-        # var_metadata = pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None
-
-        kernel_params = self.initialize_univariate_kernel(variable,kernel,kernel_info)
-        if verbose>1:
-            print(kernel_params)
+        # Ne pas supprimer tant que le papier n'est pas accepté
+        # kernel_params = self.initialize_univariate_kernel(variable,kernel,kernel_info)
+        # if verbose>1:
+        #     print(kernel_params)
         data = self.init_df_proj(variable)
         meta = self.obs.copy()
         data =  data.loc[data.index[data.index.get_indexer(meta.index)]]
@@ -514,13 +487,12 @@ class Univariate:
         # # init_df_proj(variable)
         # meta = self.get_metadata(in_dict=False).copy()
         
-        test_params=self.test_params_initial.copy()
-        
+        nystrom = self.nystrom
         if ignore_zeros:
             data,meta = self.get_data_and_metadata_with_ignored_zeros(variable,verbose=verbose)
             n_nz = len(data)
-            if n_nz < 300 and test_params['nystrom'] == True: 
-                test_params['nystrom'] = False
+            if n_nz < 300 and nystrom: 
+                nystrom = False
                 if verbose >0:
                     print(f'\tNot using nystrom because <300 non-zero observations')
 
@@ -530,15 +502,23 @@ class Univariate:
         t = Ktest(
                     data =data,
                     metadata =meta,
-                    data_name=  self.data_name,
+                    var_metadata=pd.DataFrame(self.var.loc[variable]).T if inform_var else None,
                     condition= self.condition,
                     samples=self.samples,
-                    var_metadata=pd.DataFrame(self.get_var().loc[variable]).T if inform_var else None,
-                    test_params=test_params,
                     marked_obs_to_ignore=self.marked_obs_to_ignore,
-                    kernel=kernel_params,
-                    verbose=verbose
-                    )
+                    verbose=verbose,
+                    nystrom=nystrom,
+                    stat = self.stat,
+                    n_landmarks = self.n_landmarks_initial,
+                    n_anchors = self.n_anchors,
+                    landmark_method = self.landmark_method,
+                    anchor_basis = self.anchor_basis,
+                    kernel=self.kernel,
+                    kernel_function=self.kernel_function,
+                    kernel_bandwidth=self.kernel_bandwidth,
+                    kernel_median_coef=self.kernel_median_coef,
+                    kernel_name=self.kernel_name,
+        )
         return(t)
 
     def compute_univariate_kfda(self,variable,kernel=None,kernel_info=None,ignore_zeros=False,verbose=0):
@@ -567,7 +547,7 @@ class Univariate:
         if verbose >0:
             print('- Add results univariate kfda in vard')
         
-        vard = self.get_vard()
+        vard = self.vard
         not_tested = vtest.df_kfdat.empty
         ### stat and pvals 
         if not_tested:
@@ -635,8 +615,8 @@ class Univariate:
                     print(f'\tdir: {save_path} \n\tfile: {file_name} ')
                 
     def update_var_from_vard(self,verbose=0):
-        self.update_var_from_dataframe(pd.DataFrame(self.get_vard()).T,verbose=verbose)
-        self.initialize_vard()
+        self.update_var_from_dataframe(pd.DataFrame(self.vard).T,verbose=verbose)
+        self.vard = {v:{} for v in self.variables }
 
     def save_univariate_results(self,save_path,name,overwrite=False,verbose=0):
         """
@@ -689,9 +669,9 @@ class Univariate:
 
         
         """
-        var = self.get_var()
+        var = self.var
         col = self.get_column_name_in_var(name=name,output='univariate')
-        variables = self.get_variables()
+        variables = self.variables
 
         if variables_to_test is None:
             fromto[1] = len(variables) if fromto[1]==-1 else fromto[1]      
@@ -745,20 +725,19 @@ class Univariate:
                 assert(a_['v'] == v)
                 for key,value in a_.items():
                     if key != 'v':
-                        vard = self.get_vard()
+                        vard = self.vard
                         vard[v][key] = value
 
     def save_univariate_test_results_in_var(self,path,name=None,verbose=0):
         if name is None:
             name = self.univariate_name
-        dn = self.data_name
         print(f'- Saving univariate test results of {name} in \n\tdir: {path}')   
-        for cu in self.var[dn].columns:
+        for cu in self.var.columns:
             if 'univariate' in cu and name in cu:
 
                 dname = cu.split(sep='_univariate')[0]
-                cols = [c for c in self.var[dn].columns if f'{dname}_' in c]
-                df = self.var[dn][cols]
+                cols = [c for c in self.var.columns if f'{dname}_' in c]
+                df = self.var[cols]
                 df = df[df[cu]==True]
                 if verbose>0:
                     print(f'\tfile:{cu}.csv ({df.shape})')
@@ -782,7 +761,7 @@ class Univariate:
             for corrected in [True,False]:
                 corr_str = 'BHc' if corrected else ''
                 pval_col = f'{name}_{kfdat_name}_t{t}_pval{corr_str}'
-                pvals = self.var[self.data_name][f'{pval_col}']
+                pvals = self.var[f'{pval_col}']
                 pvals = filter_genes_wrt_pval(pvals,threshold=.05)
                 print(pval_col,len(pvals))
                 dict_rejected[f'{pval_col}'] = pvals
@@ -794,18 +773,18 @@ class Univariate:
         kfdat_name = self.get_kfdat_name()
         corr_str = 'BHc' if corrected else ''
         pval_col = f'{name}_{kfdat_name}_t{tname}_pval{corr_str}'
-        pvals = self.get_var()[f'{pval_col}']
+        pvals = self.var[f'{pval_col}']
         pvals = filter_genes_wrt_pval(pvals,threshold=threshold)
         df_output = pd.DataFrame()
         df_output['pvals'] = pvals
         if tname.isdigit():
             df_output['trunc'] = int(tname)
         else:
-            df_output['trunc'] = self.get_var()[f'{name}_{kfdat_name}_t{tname}_t']
+            df_output['trunc'] = self.var[f'{name}_{kfdat_name}_t{tname}_t']
         return(df_output)
         
     def get_tested_variables(self,name=None,verbose=0):
-        var = self.get_var()
+        var = self.var
         col = self.get_column_name_in_var(name=name,output='univariate')
         
         if col not in var:
@@ -816,7 +795,7 @@ class Univariate:
         else:
             var_tested = var[var[col]==1].index
             ntested = len(var_tested)
-            nvar = self.get_nvariables()
+            nvar = self.nvar
             if verbose>0:
                 if ntested != nvar:
                     print(f'Warning : only {ntested} variables were tested out of {nvar}')
@@ -853,7 +832,7 @@ class Univariate:
         if ntested>0:
             if corrected :
                 self.correct_BenjaminiHochberg_pval_univariate(t=t,name=name,verbose=verbose)
-            var = self.get_var()
+            var = self.var
             col = self.get_column_name_in_var(t=t,name=name,corrected=corrected,output='pval')
             return(var[col][var.index.isin(tested)].sort_values())
 
@@ -883,7 +862,7 @@ class Univariate:
         ntested = len(tested)
         
         if ntested>0:
-            var = self.get_var()
+            var = self.var
             col = self.get_column_name_in_var(t=t,name=name,output='kfda')
             return(var[col][var.index.isin(tested)].sort_values())
         
@@ -933,7 +912,7 @@ class Univariate:
         return(col)
             
     def get_corrected_variables(self,t,name=None,verbose=0):
-        var = self.get_var()
+        var = self.var
         col = self.get_column_name_in_var(t=t,name=name,output='corrected')
         
         if col not in var:
@@ -958,7 +937,7 @@ class Univariate:
                         verbose=0):
         
         ncorrected = self.get_ncorrected_variables(t=t,name=name,verbose=verbose)
-        nvar = self.get_nvariables()
+        nvar = self.nvar
         if ncorrected == nvar:
             if verbose:
                 print(f'All the {nvar} variables are already corrected for multiple testing')
@@ -970,7 +949,7 @@ class Univariate:
                                                 name=name,
                                                 output='pval') 
 
-            pval = self.var[self.data_name][col]
+            pval = self.var[col]
             pval = pval if focus is None else pval[pval.index.isin(focus)]
             pval = pval[~pval.index.isin(exceptions)]
             pval = pval[~pval.isna()]
@@ -979,7 +958,7 @@ class Univariate:
             if ngenes_to_correct > ncorrected:
                 if verbose >0:
                     print(f"- Updating corrected pvals with {ngenes_to_correct - ncorrected} tested variables out of {ngenes_to_correct}.")
-                dfc = pd.DataFrame(index=self.get_variables())
+                dfc = pd.DataFrame(index=self.variables)
                 dfc[col+'BHc'] = correct_BenjaminiHochberg_pval_of_dfcolumn(pval)
                 colc = self.get_column_name_in_var(t=t,name=name,output='corrected')
 
