@@ -2,14 +2,48 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from .tester import Ktest
-from .kernel_function import init_kernel_params
 import numpy as np
 from sklearn.cluster import KMeans
 from .utils_matplotlib import custom_boxplot,custom_histogram
-# pyktest 
-# get_mmd_name -> condition sample data_name
-# orthogonal -> condition sample data_name
-# modif les titres et noms d'axes dans les fonctions de plot 
+
+
+def init_kernel_params(function='gauss',
+                       bandwidth='median',
+                       median_coef=1,
+                       kernel_name=None,
+                       ):
+    """
+    Returns a dict containing the parameters that specify the kernel function to compute.
+    
+    Parameters : 
+    ------------
+        function (default = 'gauss') : function or str in ['gauss','linear','fisher_zero_inflated_gaussian','gauss_kernel_mediane_per_variable'] 
+            if str : specifies the kernel function
+            if function : kernel function specified by user
+
+        bandwidth (default = 'median') : 'median' or float
+            value of the bandwidth for kernels using a bandwidth
+            if 'median' : the bandwidth will be set as the median or a multiple of it is
+                according to the value of parameter `median_coef`
+            if float : value of the bandwidth
+
+        median_coef (default = 1) : float
+            multiple of the median to use as bandwidth if bandwidth=='median' 
+
+        kernel name (default = None) : str
+            The name of the kernel function specified by the call of the function.
+            if None : the kernel name is automatically generated through the function
+            get_kernel_name 
+
+    """
+    return(
+        {'function':function,
+            'bandwidth':bandwidth,
+            'median_coef':median_coef,
+            'kernel_name':kernel_name,
+            }
+    )
+
 
 def get_meta_from_df(df):
     meta = pd.DataFrame()
@@ -36,13 +70,11 @@ def get_Ktest_from_df_and_comparaison(df,comparaison,name,kernel=None,nystrom=Fa
     
     t = Ktest(
                 data,
-                metadata.copy(),
-                data_name=f'{name}_{cstr}',
+                obs = metadata.copy(),
                 condition=condition,
                 nystrom=nystrom,
                 center_by=center_by,
                 kernel=kernel,
-                        # df:data,meta:metadata,data_name,condition:test_condition,df_var:var_metadata,
                         # test:test_params,viz:removed
                 )
     t.multivariate_test()
@@ -177,7 +209,6 @@ def get_dict_ktests_outliers_vs_each_condition(df,outliers_list,outliers_name):
         metaoutvscond = pd.concat([metaout,metar])
         toutvscondition = Ktest(data=dfoutvscond,
                                 metadata=metaoutvscond.copy(),
-                                data_name=f'{outliers_name}_{condition}',
                                 condition='population',
                                 nystrom=False,
                                 center_by=None,)
@@ -204,7 +235,6 @@ def get_dict_ktests_condition_vs_each_other_condition(df,condition_of_interest='
             tout = Ktest(
                         data=dfout,
                         metadata=metaout.copy(),
-                        data_name=f'{condition_of_interest}_{condition}',
                         condition='population',
                         nystrom=False,
                         center_by=None,)
@@ -228,7 +258,6 @@ def get_ktest_outliers_vs_all(df,outliers_list,outliers_name):
     toutvsothers = Ktest(
                     data=dfoutvsothers,
                     metadata=metaoutvsothers.copy(),
-                    data_name=f'{outliers_name}_all_other_cells',
                     condition='population',
                     nystrom=False,
                     center_by=None,)
@@ -500,7 +529,7 @@ def cluster_genes_from_condition(self,condition,n_clusters,colors = {'0H':'xkcd:
     
     dfm = dfm.rename(columns={c:f'{c}_{condition}' for c in dfm.columns},inplace=False)
     self.update_var_from_dataframe(dfm)
-    var = self.get_var()
+    var = self.var
 
     col_cluster = f'kmeans_{condition}_nc{n_clusters}'
     var[col_cluster]=kmeans.labels_
@@ -682,7 +711,7 @@ def density_of_pvalues(self,condition,samples,clusters,t=3,log=False,
     self.univariate_test(verbose=1)
     
     pv = self.get_pvals_univariate(t=t,corrected=True)
-    cl = self.get_var()[clusters]
+    cl = self.var[clusters]
     
     df = pd.concat([pv,cl],axis=1)
     df.columns=['pval','cluster']

@@ -17,8 +17,8 @@ Les résidus pour la troncature t sont définis comme les directions
         ####
 class Orthogonal(Statistics): 
 
-    def __init__(self):
-        super(Orthogonal,self).__init__()
+    # def __init__(self,data,obs=None,var=None):
+    #     super(Orthogonal,self).__init__(data,obs=obs,var=var)
 
 
     def compute_discriminant_axis_qh(self,t):
@@ -37,27 +37,22 @@ class Orthogonal(Statistics):
         K = self.compute_gram()
         omega = self.compute_omega()
         
-        cov = self.approximation_cov
+        nystrom = self.nystrom
         L,U = self.get_spev('covw')
         Ut = U[:,:t]
         Lt32 = diag(L[:t]**(-3/2))
         
-        if cov == 'standard':
-            P = self.compute_covariance_centering_matrix(landmarks=False)
-            qh = 1/n * mv(P,mv(Ut,mv(Lt32,mv(Ut.T,mv(K,omega)))))
-
-        elif cov == 'nystrom':
+        if nystrom:
             # pas totalement sûr de cette partie 
-
             n_landmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))   
             P = self.compute_covariance_centering_matrix(landmarks=True)
             Kmn = self.compute_kmn() 
-
             qh = 1/n_landmarks * mv(P,mv(Uz,mv(Lz12,mv(Ut,mv(Lt32,mv(Ut.T,mv(Lz12,mv(Uz.T,mv(P,mv(Kmn,omega))))))))))
         else:
-            print(f'approximation {cov} not computed yet for orthogonal')
+            P = self.compute_covariance_centering_matrix(landmarks=False)
+            qh = 1/n * mv(P,mv(Ut,mv(Lt32,mv(Ut.T,mv(K,omega)))))
         return(qh)
 
     def project_on_discriminant_axis(self,t=None):
@@ -69,14 +64,10 @@ class Orthogonal(Statistics):
 
         equivalent à proj_kfda ? 
         '''
-
-        cov = self.approximation_cov
+        nystrom = self.nystrom
         qh = self.compute_discriminant_axis_qh(t=t)
         
-        if cov == 'standard': 
-            K  = self.compute_gram(landmarks=False)
-            proj = mv(K,qh)/(dot(mv(K,qh),qh))**(1/2)
-        if cov == 'nystrom':
+        if nystrom:
             # Pas totalement sur de cette partie 
             # Fait à un moment ou c'était urgent 
             # il y a du nystrom dans le dénominateur ?
@@ -85,6 +76,9 @@ class Orthogonal(Statistics):
             Kmn = self.compute_kmn() 
             proj = mv(Kmn.T,qh)/(dot(mv(K,qh),qh))**(1/2)
             
+        else: 
+            K  = self.compute_gram(landmarks=False)
+            proj = mv(K,qh)/(dot(mv(K,qh),qh))**(1/2)
         return(proj)
 
     def compute_proj_on_discriminant_orthogonal(self,t=None):
@@ -92,44 +86,37 @@ class Orthogonal(Statistics):
         Compute P_\epsilon which is such that kx P_\epsilon = \epsilon = kx - hh^tkx
          \epsilon is the orthogonal of the observation, orthogonal to the discriminant axis.  
         '''
-        cov = self.approximation_cov
+        nystrom = self.nystrom
         n = self.get_ntot(landmarks=False)
         
         qh = self.compute_discriminant_axis_qh(t=t)
         In = eye(n,dtype=float64)
             
-        if cov == 'standard':    
-            K  = self.compute_gram()
-            P_epsilon = In - matmul(ger(qh,qh),K)/dot(mv(K,qh),qh)
-        if cov == 'nystrom':
+        if nystrom:
             n_landmarks = self.get_ntot(landmarks=True)
             K  = self.compute_gram(landmarks=True)
             Kmn = self.compute_kmn()
             P_epsilon = In[:n_landmarks] - matmul(ger(qh,qh),Kmn)/dot(mv(K,qh),qh)
+        else:
+            K  = self.compute_gram()
+            P_epsilon = In - matmul(ger(qh,qh),K)/dot(mv(K,qh),qh)
 
         return(P_epsilon)
 
     def compute_orthogonal_covariance(self,t=None,center = 'W'):
         
-        cov = self.approximation_cov
-        nm = self.get_ntot(landmarks=(cov=='nystrom'))
+        nystrom = self.nystrom
+        nm = self.get_ntot(landmarks=nystrom)
                 
         if center.lower() == 't':
             In = eye(nm, dtype=float64)
             Jn = ones(nm, nm, dtype=float64)
             P = In - 1/nm * Jn
         elif center.lower() =='w':
-            P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom'))
+            P = self.compute_covariance_centering_matrix(landmarks=nystrom)
         P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
         
-        if cov == 'standard': 
-            n = self.get_ntot(landmarks=False)
-            K = self.compute_gram()
-            if center.lower() in 'tw':
-                K_epsilon = 1/n * torch.linalg.multi_dot([P,P_epsilon.T,K,P_epsilon,P])
-            else :
-                K_epsilon = 1/n * torch.linalg.multi_dot([P_epsilon.T,K,P_epsilon])
-        if cov == 'nystrom':
+        if nystrom:
             
             n = self.get_ntot(landmarks=False)
             n_landmarks = self.get_ntot(landmarks=True)
@@ -144,31 +131,37 @@ class Orthogonal(Statistics):
             else : 
                 K_epsilon = 1/(n*n_landmarks) * torch.linalg.multi_dot([Lz12,Uz.T,Pz,Kmn,P_epsilon.T,P_epsilon,
                 Kmn.T,Pz,Uz,Lz12])
+        else:
+            n = self.get_ntot(landmarks=False)
+            K = self.compute_gram()
+            if center.lower() in 'tw':
+                K_epsilon = 1/n * torch.linalg.multi_dot([P,P_epsilon.T,K,P_epsilon,P])
+            else :
+                K_epsilon = 1/n * torch.linalg.multi_dot([P_epsilon.T,K,P_epsilon])
         return(K_epsilon)
 
     def diagonalize_orthogonal_covariance(self,t,center='W'):
 
-        cov = self.approximation_cov    
+        nystrom=self.nystrom
         
         orthogonal_name = self.get_orthogonal_name(t=t,center=center)
         
         if orthogonal_name not in self.spev['orthogonal']:
-            nm = self.get_ntot(landmarks=(cov=='nystrom'))
+            nm = self.get_ntot(landmarks=nystrom)
             if center.lower() == 't':
                 In = eye(nm, dtype=float64)
                 Jn = ones(nm, nm, dtype=float64)
                 P = In - 1/nm * Jn
             elif center.lower() =='w':
-                P = self.compute_covariance_centering_matrix(landmarks=(cov=='nystrom'))
+                P = self.compute_covariance_centering_matrix(landmarks=nystrom)
             K_epsilon = self.compute_orthogonal_covariance(t,center=center)
             P_epsilon = self.compute_proj_on_discriminant_orthogonal(t)
             n = self.get_ntot(landmarks=False)
 
             sp,ev = ordered_eigsy(K_epsilon)
             L_12 = diag(sp**-(1/2))
-            if cov == 'standard':
-                fv = 1/sqrt(n)* torch.linalg.multi_dot([P_epsilon,P,ev,L_12])
-            if cov == 'nystrom':
+            
+            if nystrom:
                 anchors_name = self.get_anchors_name()
                 n_landmarks = self.get_ntot(landmarks=True)
                 Lz1,Uz = self.get_spev(slot='anchors')
@@ -179,25 +172,26 @@ class Orthogonal(Statistics):
                 if len(ev) != len(P):
                     P = P[:,:len(ev)]
                 fv = 1/sqrt(n) * 1/n_landmarks * torch.linalg.multi_dot([Pz,Uz,Lz,Uz.T,Kmn,P_epsilon.T,P,ev,L_12])
+            else:
+                fv = 1/sqrt(n)* torch.linalg.multi_dot([P_epsilon,P,ev,L_12])
             self.spev['orthogonal'][orthogonal_name] = {'sp':sp,'ev':fv}
             return(orthogonal_name)
             
     def proj_orthogonal(self,t,ndirections=10,center='w'):
 
-        cov = self.approximation_cov    
-        
+        nystrom = self.nystrom
         orthogonal_name = self.get_orthogonal_name(t=t,center=center,)
         
         if orthogonal_name not in self.df_proj_orthogonal:
             _,Ures = self.get_spev('orthogonal',t=t,center=center)
             epsilon = Ures[:,:ndirections]
 
-            if cov == 'standard':
-                K = self.compute_gram()
-                proj_orthogonal = matmul(K,epsilon)
-            if cov == 'nystrom':
+            if nystrom:
                 Kmn = self.compute_kmn() 
                 proj_orthogonal = matmul(Kmn.T,epsilon)
+            else:
+                K = self.compute_gram()
+                proj_orthogonal = matmul(K,epsilon)
 
             index = self.get_index(in_dict=False)
             if proj_orthogonal.shape[1] == ndirections:

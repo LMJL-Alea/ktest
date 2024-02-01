@@ -9,8 +9,8 @@ from numpy import sqrt
 import torch
 class Plot_WBerrors(Orthogonal):
         
-    def __init__(self):        
-        super(Plot_WBerrors, self).__init__()
+    # def __init__(self,data,obs=None,var=None):        
+    #     super(Plot_WBerrors, self).__init__(data,obs=obs,var=var)
 
     # Visualizations considérées comme pertinentes
 
@@ -70,16 +70,16 @@ class Plot_WBerrors(Orthogonal):
             The projection error of (\mu_2- \mu_1) as a percentage. 
         '''
         
-        cov = self.approximation_cov
+        nystrom = self.nystrom
         n = self.get_ntot(landmarks=False)
         sp,ev = self.get_spev('covw')  
         sp12 = sp**(-1/2)
         ev,sp12 = ev[:,~isnan(sp12)],sp12[~isnan(sp12)]
-        fv    = n**(-1/2)*sp12*ev if cov == 'standard' else ev         
+        fv    = ev if nystrom else n**(-1/2)*sp12*ev          
         # K = self.compute_gram(landmarks=False)
         om = self.compute_omega()
         
-        if cov != 'standard':
+        if nystrom:
             n_landmarks = self.get_ntot(landmarks=True)
             Lz,Uz = self.get_spev(slot='anchors')
             Lz12 = diag(Lz**-(1/2))
@@ -132,10 +132,10 @@ class Plot_WBerrors(Orthogonal):
     def compute_explained_variability_per_condition(self,cumul=False,log=False,decreasing=False):
         # Sur nystrom on pourrait se demander quelle est la part de la variabilité
         # des conditions capturée par les ancres. 
-        
+        nystrom = self.nystrom
         n=self.get_ntot()    
         upk = self.compute_upk(n)
-        if 'nystrom' in self.approximation_cov:
+        if nystrom:
             upk = upk[:,:-1]
         dfepk = pd.DataFrame(upk,index=self.get_index(in_dict=False),columns=[str(t) for t in range(upk.shape[1])])
         

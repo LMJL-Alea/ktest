@@ -31,7 +31,7 @@ def boxplot_of_zp_per_nreject(self,dfpvals,threshold=.05,verbose=0):
     return(fig,ax)
     
 def compute_df_zp_per_nreject(self,dfpvals,threshold=.05,verbose=0):
-    var = self.get_var()
+    var = self.var
     nc = len(dfpvals.columns)
     gs = compute_dict_of_genes_by_nrejects_from_dfpvals(dfpvals=dfpvals,
                                                        threshold=threshold,
@@ -101,7 +101,7 @@ def print_characteristics_of_deg_per_method_rejecting_them(self,dfpvals,goi,thre
     rejectors = group_deg_per_method_rejecting_them(dfpvals=dfpvals,
                                                     goi=goi,
                                                     threshold=threshold)
-    var = self.get_var()
+    var = self.var
     for i,de in enumerate(rejectors.keys()):
         genes= rejectors[de]
         varg = var[var.index.isin(genes)][['var','pz']]

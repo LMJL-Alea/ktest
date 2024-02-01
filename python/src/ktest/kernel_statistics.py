@@ -18,8 +18,8 @@ Les fonctions initialize_kfdat et kfdat font simplement appel a plusieurs foncti
 
 class Statistics(ProjectionOps):
 
-    def __init__(self):
-        super(Statistics,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(Statistics,self).__init__(data,obs=obs,var=var,)
 
 
     def get_trace(self):
@@ -113,9 +113,9 @@ class Statistics(ProjectionOps):
         
         if verbose >0: 
             print('- Compute kfda statistic') 
-        # récupération des paramètres du modèle dans les attributs 
-        cov = self.approximation_cov # approximation de l'opérateur de covariance. 
-        mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
+        
+        
+        nystrom = self.nystrom
         
         # Récupération des vecteurs propres et valeurs propres calculés par la fonction de classe 
         # diagonalize_within_covariance_centered_gram 
@@ -146,7 +146,7 @@ class Statistics(ProjectionOps):
         # calcul de la statistique pour chaque troncature 
         pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
         n1,n2,n = self.get_n1n2n() # nombres d'observations dans les échantillons
-        exposant = 2 if cov=='standard' else 1 #if cov == 'nystrom' 
+        exposant = 1 if nystrom else 2 
         kfda_contributions = ((n1*n2)/(n**exposant*sp[:t]**exposant)*mv(ev.T[:t],pkm)**2).numpy() # calcule la contribution de chaque troncature 
         kfda = kfda_contributions.cumsum(axis=0) #somme les contributions pour avoir la stat correspondant à chaque troncature 
         
@@ -161,8 +161,6 @@ class Statistics(ProjectionOps):
             self.df_kfdat[kfdat_name] = pd.Series(kfda,index=trunc)
             self.df_kfdat_contributions[kfdat_name] = pd.Series(kfda_contributions,index=trunc)
 
-        self.has_kfda_statistic = True        
-        # appel de la fonction verbosity qui va afficher le temps qu'ont pris les calculs
 
         
         # les valeurs de la statistique ont été stockées dans une colonne de la dataframe df_kfdat. 
@@ -189,7 +187,7 @@ class Statistics(ProjectionOps):
 
         return(xp,yspnorm,ypnorm)
     
-    def initialize_kfdat(self,verbose=0,**kwargs):
+    def initialize_kfdat(self,verbose=0):
         """
         This function prepares the computation of the kfda statistic by precomputing everithing that 
         should be needed. 
@@ -198,22 +196,22 @@ class Statistics(ProjectionOps):
 
         """
         
-        # récupération des paramètres du modèle dans les attributs 
-        cov = self.approximation_cov # approximation de l'opérateur de covariance. 
-        mmd = self.approximation_mmd # approximation du vecteur mu2 - mu1 
-        # nystrom n'est pas autorisé si l'un des dataset a moins de 100 observations. 
+        nystrom = self.nystrom
+        approximation = 'nystrom' if nystrom else 'standard'
+
         if verbose>0:
             nystr = 'with nystrom approximation' if self.nystrom else ''
             print(f'- Initialize kfdat {nystr}')
 
         #calcul des landmarks et des ancres 
-        if 'nystrom' in [cov,mmd]:
+        if nystrom:
             self.compute_nystrom_landmarks(verbose=verbose)
             self.compute_nystrom_anchors(verbose=verbose) 
 
         # diagonalisation de la matrice d'intérêt pour calculer la statistique 
         if (self.nystrom and self.has_anchors) or (not self.nystrom) :
-            self.diagonalize_within_covariance_centered_gram(approximation=cov,verbose=verbose)
+            self.diagonalize_within_covariance_centered_gram(approximation=approximation,
+                                                             verbose=verbose)
 
     def initialize_mmd(self,verbose=0):
 
@@ -225,15 +223,13 @@ class Statistics(ProjectionOps):
                             si il n'y a pas de landmarks deja calcules, on calcule nloandmarks avec la methode landmark_method
                             attention : le parametre n_anchors est divise par 2 pour avoir le meme nombre total d'ancres, risque de poser probleme si les donnees sont desequilibrees
                      
-        n_landmarks : nombre de landmarks a calculer si approximation='nystrom' ou 'kmeans'
+        n_landmarks : nombre de landmarks a calculer si `self.nystrom` is `True`
         landmark_method : dans ['random','kmeans'] methode de choix des landmarks
         verbose : booleen, vrai si les methodes appellees renvoies des infos sur ce qui se passe.  
         """
-            # verbose -1 au lieu de verbose ? 
 
-        approx = self.approximation_mmd
-
-        if approx == 'nystrom':
+        nystrom = self.nystrom
+        if nystrom:
             if not self.has_landmarks:
                     self.compute_nystrom_landmarks(verbose=verbose)
             
@@ -242,22 +238,14 @@ class Statistics(ProjectionOps):
  
     def compute_mmd(self,unbiaised=False,verbose=0):
         
-        approx = self.approximation_mmd
+        nystrom = self.nystrom
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
-                                    'approximation':approx,
                                     },
                 start=True,
                 verbose = verbose)
 
-        if approx == 'standard':
-            m = self.compute_omega()
-            K = self.compute_gram()
-            if unbiaised:
-                K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
-            mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
-        
-        if approx == 'nystrom':
+        if nystrom:
 
             m = self.compute_omega()
             Lp,Up = self.get_spev(slot='anchors')
@@ -267,13 +255,20 @@ class Statistics(ProjectionOps):
             psi_m = mv(Lp12,mv(Up.T,mv(Pm,mv(Kmn,m))))
             mmd = dot(psi_m,psi_m)**2
 
+        else:
+            m = self.compute_omega()
+            K = self.compute_gram()
+            if unbiaised:
+                K.masked_fill_(torch.eye(K.shape[0],K.shape[0]).byte(), 0)
+            mmd = dot(mv(K,m),m)**2 #je crois qu'il n'y a pas besoin de carré
+        
+
         mmd_name = self.get_mmd_name()
         
         self.dict_mmd[mmd_name] = mmd.item()
         
         self.verbosity(function_name='compute_mmd',
                 dict_of_variables={'unbiaised':unbiaised,
-                                    'approximation':approx,
                                     },
                 start=False,
                 verbose = verbose)

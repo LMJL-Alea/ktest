@@ -11,20 +11,20 @@ from .utils_univariate import filter_genes_wrt_pval
 
 class Plot_Univariate(Plot_Summarized,Univariate):
 
-    def visualize_univariate_test_CRCL(self,variable,vtest,column,patient=True,data_name='data',):
+    def visualize_univariate_test_CRCL(self,variable,vtest,column,patient=True):
 
         fig,axes = plt.subplots(ncols=3,figsize=(22,7))
         
         ax = axes[0]
-        self. _of_variable(variable,data_name=data_name,fig=fig,ax=ax)
+        self. _of_variable(variable,fig=fig,ax=ax)
         
         if patient:
             ax = axes[1]
-            self.plot_density_of_variable(variable,data_name=data_name,fig=fig,ax=ax,color='patient')
+            self.plot_density_of_variable(variable,fig=fig,ax=ax,color='patient')
             ax = axes[2]
         else:
             ax = axes[1]    
-            self.plot_density_of_variable(variable,data_name='counts',fig=fig,ax=ax)
+            self.plot_density_of_variable(variable,fig=fig,ax=ax)
             ax = axes[2]    
 
 
@@ -254,7 +254,7 @@ class Plot_Univariate(Plot_Summarized,Univariate):
     def scatter_2variables(self,v1,v2,fig=None,ax=None,color=None,marker=None,highlight=None,show_conditions=True,text=False,alpha=.8,legend=True,legend_fontsize=15):
         if fig is None:
             fig,ax = plt.subplots(figsize=(7,7))
-        if v1 in self.get_variables() and v2 in self.get_variables():
+        if v1 in self.variables and v2 in self.variables:
             self.scatter_proj(projection=[v1,v2],xproj=v1,yproj=v2,fig=fig,ax=ax,
                         color=color,marker=marker,highlight=highlight,
                         show_conditions=show_conditions,text=text,alpha=alpha,
@@ -276,7 +276,7 @@ class Plot_Univariate(Plot_Summarized,Univariate):
             for i,vi in enumerate(variables):
                 for j,vj in enumerate(variables):
                     ax = axes[i,j]
-                    if vi != vj and vi in self.get_variables() and vj in self.get_variables():
+                    if vi != vj and vi in self.variables and vj in self.variables:
                         self.scatter_2variables(vi,vj,fig=fig,ax=ax,
                         color=color,marker=marker,highlight=highlight,
                         show_conditions=show_conditions,text=text,alpha=alpha,
@@ -296,12 +296,12 @@ class Plot_Univariate(Plot_Summarized,Univariate):
             self.plot_pvalue_of_variable(variable=variable,name=name,t=t,fig=fig,ax=ax,truncations_of_interest=truncations_of_interest,adjust=adjust,)
         
         if var:
-            errW = [1]+[self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='errW')][variable] \
+            errW = [1]+[self.var[self.get_column_name_in_var(t=trunc,name=name,output='errW')][variable] \
                 for trunc in range(1,t)]
             ax.plot(range(t),errW,label='w-variability')
         
         if diff:
-            errB = [1]+[self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='errB')][variable] \
+            errB = [1]+[self.var[self.get_column_name_in_var(t=trunc,name=name,output='errB')][variable] \
                 for trunc in range(1,t)]
             ax.plot(range(t),errB,label='difference')
         
@@ -320,7 +320,7 @@ class Plot_Univariate(Plot_Summarized,Univariate):
             fig,ax = plt.subplots(figsize=(12,6))
         fig,ax = init_plot_pvalue(fig=fig,ax=ax,t=t)
 
-        pval = [self.get_var()[self.get_column_name_in_var(t=trunc,name=name,output='pval',corrected=corrected)][variable] \
+        pval = [self.var[self.get_column_name_in_var(t=trunc,name=name,output='pval',corrected=corrected)][variable] \
             for trunc in range(1,t)]
         label = f'{variable} p-value' if label is None else label
         ax.plot(range(1,t),pval,label=label,color=color,ls=ls)
@@ -606,7 +606,7 @@ class Plot_Univariate(Plot_Summarized,Univariate):
         col = self.get_column_name_in_var(t=t,corrected=corrected,name=name,output='pval') 
         
         zpval_str = '= 0' if zero_pvals else '>0'
-        var = self.get_var()
+        var = self.var
         BH_str = 'after correction' if corrected else ''
 
         if corrected and col not in var:
@@ -691,10 +691,10 @@ class Plot_Univariate(Plot_Summarized,Univariate):
                 for tpval in range(1,tpvalmax+1):
                     col = self.get_column_name_in_var(t=t,corrected=True,name=name,output='pval') 
                     # pval_name = f'{prefix}_{self.get_kfdat_name()}_t{tpval}_pvalBHc'
-                    if col not in self.get_var().columns:
+                    if col not in self.var.columns:
                         self.correct_BenjaminiHochberg_pval_univariate(t=t,name=name)
                             # var_prefix=pval_name[:-8])
-                    dout[f't{tpval}'] = -np.log(self.get_var()[col][g]+1)/np.log(10)
+                    dout[f't{tpval}'] = -np.log(self.var[col][g]+1)/np.log(10)
                 out += [dout]
 
             dfout = pd.DataFrame(out,index=corr.index)
@@ -717,9 +717,9 @@ class Plot_Univariate(Plot_Summarized,Univariate):
         for tpval,ax in zip(range(1,tpvalmax+1),axes):
             
             col = self.get_column_name_in_var(t=t,corrected=True,name=name,output='pval') 
-            if col not in self.get_var().columns:
+            if col not in self.var.columns:
                 self.correct_BenjaminiHochberg_pval_univariate(t,name)
-            pval = self.get_var()[col]
+            pval = self.var[col]
             pval = pval.sort_values()
 
             out = []
@@ -744,64 +744,6 @@ class Plot_Univariate(Plot_Summarized,Univariate):
         fig.tight_layout()
         plt.show()
         return(fig,axes)
-    # def volcano_plot(self,var_prefix,color=None,exceptions=[],focus=None,zero_pvals=False,fig=None,ax=None,BH=False,threshold=1):
-    #     # quand la stat est trop grande, la fonction chi2 de scipy.stat renvoie une pval nulle
-    #     # on ne peut pas placer ces gènes dans le volcano plot alors ils ont leur propre graphe
-
-    #     if fig is None:
-    #         fig,ax = plt.subplots(figsize=(9,15))
-
-    #     BH_str = 'BHc' if BH else ''
-    #     zpval_str = '= 0' if zero_pvals else '>0'
-    #     dn = self.data_name
-
-    #     pval_name = f'{var_prefix}_pval{BH_str}' 
-    #     pval = filter_genes_wrt_pval(self.var[dn][pval_name],exceptions,focus,zero_pvals,threshold)
-    #     print(f'{var_prefix} ngenes with pvals {BH_str} {zpval_str}: {len(pval)}')
-    #     genes = []
-    #     if len(pval) != 0:
-    #         kfda = self.var[dn][f'{var_prefix}_kfda']
-    #         errB = self.var[dn][f'{var_prefix}_errB']
-    #         kfda = kfda[kfda.index.isin(pval.index)]
-    #         errB = errB[errB.index.isin(pval.index)]
-
-    #         logkfda = np.log(kfda)
-
-    #         xlim = (logkfda.min()-1,logkfda.max()+1)
-    # #             c = self.color_volcano_plot(var_prefix,pval.index,color=color)
-
-    #         if zero_pvals:
-    #     #         print('zero')
-    #             ax.set_title(f'{var_prefix} \ng enes strongly rejected',fontsize=30)
-    #             ax.set_xlabel(f'log(kfda)',fontsize=20)
-    #             ax.set_ylabel(f'errB',fontsize=20)
-
-    #             for g in pval.index.tolist():
-    #     #             print(g,logkfda[g],errB[g],c[g])
-    #                 ax.text(logkfda[g],errB[g],g)#,color=c[g])
-    #                 ax.set_xlim(xlim)
-    #                 ax.set_ylim(0,1)
-    #                 genes += [g]
-
-
-    #         else:
-    #     #         print('nz')
-    #             ax.set_title(f'{var_prefix}\n non zero pvals',fontsize=30)
-    #             ax.set_xlabel(f'log(kfda)',fontsize=20)
-    #             ax.set_ylabel(f'-log(pval)',fontsize=20)
-    #             logpval = -np.log(pval)
-
-
-    #             for g in pval.index.tolist():
-    #     #             print(g,logkfda[g],logpval[g],c[g])
-    #                 ax.text(logkfda[g],logpval[g],g)#,color=c[g])
-    #                 ax.set_xlim(xlim)
-    #                 ax.set_ylim(0,logpval.max()*1.1)
-    #                 genes += [g]
-
-
-    #     return(genes,fig,ax)
-
 
     def volcano_plot_zero_pvals_and_non_zero_pvals(self,var_prefix,color_nz='errB',color_z='t',
                                                 exceptions=[],focus=None,BH=False,threshold=1):

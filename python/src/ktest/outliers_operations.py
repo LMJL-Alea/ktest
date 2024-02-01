@@ -26,8 +26,8 @@ def select_observations_in_df_from_nobs(df,nobs,orientation):
 
 class OutliersOps(Base):
     
-    def __init__(self):
-        super(OutliersOps,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(OutliersOps,self).__init__(data,obs=obs,var=var,)
 
 
     def select_observations_from_condition(self,threshold=None,nobs=None,proj='proj_kfda',already_marked_obs_to_consider=None,t='1',orientation='>',sample=None):
@@ -37,7 +37,7 @@ class OutliersOps(Base):
         
         if proj in ['proj_kfda','proj_kpca']:
             column_in_dataframe = self.get_kfdat_name()
-        elif proj in self.get_variables():
+        elif proj in self.variables:
             column_in_dataframe=None
         else:
             print(proj,'not implemented yet in determine outliers from condition')
@@ -165,8 +165,8 @@ class OutliersOps(Base):
         return(new_condition,new_sample)
     
 
-    def make_groups_from_gene_presence(self,gene,data_name):
+    def make_groups_from_gene_presence(self,gene):
 
-        dfg = self.init_df_proj(proj=gene,data_name=data_name)
+        dfg = self.init_df_proj(proj=gene)
         self.obs[f'pop{gene}'] = (dfg[gene]>=1).map({True: f'{gene}+', False: f'{gene}-'})
         self.obs[f'pop{gene}'] = self.obs[f'pop{gene}'].astype('category')

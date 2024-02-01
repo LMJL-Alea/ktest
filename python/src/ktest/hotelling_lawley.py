@@ -149,7 +149,7 @@ class Hotelling_Lawley:
 
     def _compute_residual_covariance(self):
         n = self.get_ntot(samples='all')
-        kernel = self.get_kernel()
+        kernel = self.kernel
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) # to do : call self.compute_gram()
         Piperp = self.ProjImXorthogonal
@@ -183,7 +183,7 @@ class Hotelling_Lawley:
     def _compute_inner_products_thetai_ft(self):
         X = self.design
         XXinv = self.XXinv
-        kernel = self.get_kernel()
+        kernel = self.kernel
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) 
         ev = self.spev['residuals']['ev']
@@ -229,7 +229,7 @@ class Hotelling_Lawley:
     
     def compute_Kdiscriminant(self,T,hypothesis_name=None):
         U = self.spev['residuals']['ev'] 
-        kernel = self.get_kernel()
+        kernel = self.kernel
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         K = kernel(Y,Y) 
         D = self.compute_D(hypothesis_name)
@@ -253,7 +253,7 @@ class Hotelling_Lawley:
 
         ev = hyp['spev']['ev']
         U = self.spev['residuals']['ev']
-        kernel = self.get_kernel()
+        kernel = self.kernel
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         index = self.get_index(in_dict=False,samples='all')
         K = kernel(Y,Y) 
@@ -295,7 +295,7 @@ class Hotelling_Lawley:
 
         """
         ev = self.spev['residuals']['ev']
-        kernel = self.get_kernel()
+        kernel = self.kernel
         Y = self.get_data(in_dict=False,dataframe=False,samples='all')
         index= self.get_index(in_dict=False,samples='all')
         K = kernel(Y,Y) 

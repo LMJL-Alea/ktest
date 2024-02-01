@@ -21,8 +21,8 @@ from torch import mv,dot,sum,cat,tensor,float64
 
 class Plot_Standard(Statistics):
 
-    def __init__(self):
-        super(Plot_Standard,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(Plot_Standard,self).__init__(data,obs=obs,var=var,)
 
 
 
@@ -169,7 +169,7 @@ class Plot_Standard(Statistics):
         return(fig,ax)
 
     def get_axis_label(self,proj,t):
-        label = proj if proj in self.get_variables() else \
+        label = proj if proj in self.variables else \
                  t if proj=='obs' else \
                  f'DA{t}' if proj == 'proj_kfda' else \
                  f'PC{t}' if proj == 'proj_kpca' else \
@@ -305,306 +305,6 @@ class Plot_Standard(Statistics):
         # fig.tight_layout()
         return(fig,ax)
         
-    def get_plot_properties(self,
-                    marker=None,
-                    color=None,
-                    show_conditions=True,
-                    labels='CT',
-                    legend=True,
-                    condition=None,
-                    samples=None,
-                    marked_obs_to_ignore=None,
-                    marker_list = None,
-                    big_marker_list = ['o','X','P','D','v','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s'],
-                    color_list = None
-                        #color_list,marker_list,big_marker_list,show_conditions
-                        ):
-        if color_list is None:
-            color_list = ['xkcd:cerulean',
-                          'xkcd:light orange',
-                          'xkcd:grass green',
-                          'xkcd:cerise',
-                          'xkcd:mocha',
-                          'xkcd:greeny blue',
-                          'xkcd:vibrant blue',
-                          'xkcd:candy pink',
-                          'xkcd:lavender',
-                          'xkcd:pale green',
-                          'xkcd:peach',
-                          'xkcd:goldenrod',
-                          'xkcd:mahogany',
-                          'xkcd:terra cotta',
-                          'xkcd:acid green',
-                          'xkcd:teal blue',
-                          'xkcd:dusty pink',
-                          'xkcd:pinky red'
-                          ]
-        if marker_list is None:
-            marker_list = ['.','x','+','d','1','*',(4,1,0),(4,1,45),(7,1,0),(20,1,0),'s']
-        properties = {}
-        variables = self.get_variables()
-        marked_obs_to_ignore = self.marked_obs_to_ignore if marked_obs_to_ignore is None else marked_obs_to_ignore
-        
-        dict_index = self.get_index(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        dict_data = self.get_data(condition=condition,
-                                  samples=samples,
-                                  marked_obs_to_ignore=marked_obs_to_ignore,
-                                  in_dict=True,
-                                  dataframe=True)
-        samples_list = self.get_samples_list(condition,samples) 
-        
-        color_list = color_list if len(color_list)>=len(samples_list) else [None]*len(samples_list)   
-        if isinstance(color_list,dict): 
-            color_list = [color_list[k] for k in samples_list]
-        coef_bins = 3
-        if marker is None and color is None : 
-            # print("plot properties marker is None and color is None")
-            for i,k in enumerate(samples_list):
-
-                ipop = dict_index[k]
-                lab = f'{k}({len(ipop)})' if legend else None
-                bins = coef_bins*int(np.floor(np.sqrt(len(ipop))))
-                m = marker_list[i]
-                c = color_list[i]
-                bm = big_marker_list[i]
-
-                properties[k] = {'index':ipop,
-                                 'plot_args':{'marker':m,'c':c},
-                                 'mean_plot_args':{'marker':bm,'label':lab,'color':c},
-                                 'hist_args':{'bins':bins,'label':lab}
-                }
-                if c is not None:
-                    properties[k]['hist_args']['color']=c
-        
-        elif isinstance(color,str) and marker is None:
-            # print("plot properties isinstance(color,str) and marker is None")
-            if color in list(variables):
-                # print("color in list(variables)")
-
-                for i,k in enumerate(samples_list):
-                    
-                    ipop = dict_index[k]
-                    n = len(ipop)
-                    df = dict_data[k]
-                    c = df[color]
-                    cm = color_list[i]
-                    lab = f'{k}({n})' if legend else None
-                    m = marker_list[i]
-                    bm = big_marker_list[i]
-                    properties[k] = {'index':ipop,
-                                    'plot_args':{'marker':m,'c':c},
-                                    'mean_plot_args':{'marker':bm,'label':lab,'color':cm},
-                                    }
-
-            elif color in list(self.obs.columns):
-                # print("color in list(variables)")
-                if self.obs[color].dtype == 'category':
-                    for i,pop in enumerate(self.obs[color].cat.categories):
-                        if show_conditions: 
-                            for j,k in enumerate(samples_list):
-
-                                ipop = self.obs.loc[self.obs[color]==pop].index
-                                n = len(ipop)
-                                ipop = ipop[ipop.isin(dict_index[k])]
-
-                                m = marker_list[j%len(marker_list)]
-                                mean_m = big_marker_list[j%len(big_marker_list)]
-                                c = color_list[(j)%len(color_list)]
-                                if marked_obs_to_ignore is not None:
-                                    obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                    ipop = ipop[~ipop.isin(obs_to_ignore)]
-                                lab = f'{k} {pop} ({n})' if legend else None
-                                bins = coef_bins*int(np.floor(np.sqrt(n)))
-                                properties[f'{pop}{k}'] = {'index':ipop,
-                                                    'plot_args':{'marker':m},
-                                                    'mean_plot_args':{'marker':mean_m,'label':lab},
-                                                    'hist_args':{'bins':bins,'label':lab,'color':c}}
-
-                            
-        
-                        else:
-                            # print('not show conditions')
-
-                            ipop = self.obs.loc[self.obs[color]==pop].index
-                            if marked_obs_to_ignore is not None:
-                                obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                ipop = ipop[~ipop.isin(obs_to_ignore)]
-
-                            lab = f'{pop} ({len(ipop)})' if legend else None
-                            bins=coef_bins*int(np.floor(np.sqrt(len(ipop))))
-                            c = color_list[i]
-                            properties[pop] = {'index':ipop,
-                                            'plot_args':{'marker':'.','c':None},
-                                            'mean_plot_args':{'marker':'o','label':lab,'color':c},
-                                            'hist_args':{'bins':bins,'label':lab,'color':c}}
-
-                            
-                else: # pour une info numérique 
-                    # print(f'{color} is not categorical in obs')
-                    for i,k in enumerate(samples_list):
-
-                        m = marker_list[i%len(marker_list)]
-                        mean_m = big_marker_list[i%len(big_marker_list)]
-                        
-
-                        ipop = dict_index[k]
-                        n = len(ipop)
-                        if marked_obs_to_ignore is not None:
-                            obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                            ipop = ipop[~ipop.isin(obs_to_ignore)]
-                        c = self.obs.loc[self.obs.index.isin(ipop)][color]
-                        lab = f'{k}({n})' if legend else None
-                        properties[k] = {'index':ipop,
-                                        'plot_args':{'c':c,'marker':m},
-                                        'mean_plot_args':{'marker':mean_m,'label':lab}}
-
-
-                        
-        elif color is None and isinstance(marker,str):
-            print('color is None and marker is specified : this case is not treated yet')
-        
-        elif isinstance(color,str) and isinstance(marker,str):
-            if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
-                if color in list(variables):
-                    print('variable')
-                    x,y = self.get_xy()
-
-                    for im,popm in enumerate(self.obs[marker].cat.categories):
-                        
-                        m = marker_list[im%len(marker_list)]
-                        mean_m = big_marker_list[im%len(big_marker_list)]
-                        
-                        ipopx = self.obs.loc[self.obs[marker]==popm].loc[self.obs['sample']=='x'].index
-                        ipopy = self.obs.loc[self.obs[marker]==popm].loc[self.obs['sample']=='y'].index
-                        
-                        if marked_obs_to_ignore is not None:
-                            obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                            ipopx = ipopx[~ipopx.isin(obs_to_ignore)]
-                            ipopy = ipopy[~ipopy.isin(obs_to_ignore)]
-
-
-                        maskx = self.get_xy_index(sample='x').isin(ipopx)
-                        masky = self.get_xy_index(sample='y').isin(ipopy)
-                        
-                        cx = x[maskx,variables.get_loc(color)]
-                        cy = y[masky,variables.get_loc(color)]
-                        
-                        labx = f'{labels[0]} {popm} ({len(ipopx)})' if legend else None
-                        laby = f'{labels[1]} {popm} ({len(ipopy)})' if legend else None
-
-                    properties['x']  = {'index':ipopx,
-                                        'plot_args':{'marker':m,'c':cx},
-                                        'mean_plot_args':{'marker':mean_m,'color':color_list[popm],'label':labx}}
-                    properties['y']  = {'index':ipopy,
-                                        'plot_args':{'marker':m,'c':cy},
-                                        'mean_plot_args':{'marker':mean_m,'color':color_list[popm],'label':laby}}
-
-                elif color in list(self.obs.columns):
-                    print('in obs')
-                    if self.obs[color].dtype == 'category':
-                        for popc in self.obs[color].cat.categories:
-                            for im,popm in enumerate(self.obs[marker].cat.categories):
-                                
-                                m = marker_list[im%len(marker_list)]
-                                mean_m = big_marker_list[im%len(big_marker_list)]
-                                
-                                if show_conditions: 
-                                    ipopx = self.obs.loc[self.obs[color]==popc]\
-                                                    .loc[self.obs['sample']=='x']\
-                                                    .loc[self.obs[marker]==popm].index
-                                    
-                                    ipopy = self.obs.loc[self.obs[color]==popc]\
-                                                    .loc[self.obs['sample']=='y']\
-                                                    .loc[self.obs[marker]==popm].index
-                                    if marked_obs_to_ignore is not None:
-                                        obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                        ipopx = ipopx[~ipopx.isin(obs_to_ignore)]
-                                        ipopy = ipopy[~ipopy.isin(obs_to_ignore)]
-                                    labx = f'{labels[0]} {popc} {popm} ({len(ipopx)})' if legend else None
-                                    laby = f'{labels[1]} {popc} {popm} ({len(ipopy)})' if legend else None
-
-                                    properties[f'{popc}{popm}x'] = {
-                                        'index':ipopx,
-                                        'plot_args':{'marker':m},
-                                        'mean_plot_args':{'marker':mean_m,'label':labx}}
-                                    properties[f'{popc}{popm}y'] = {
-                                        'index':ipopy,
-                                        'plot_args':{'marker':m},
-                                        'mean_plot_args':{'marker':mean_m,'label':laby}}
-                                
-                                else:
-                                    ipop = self.obs.loc[self.obs[color]==popc].loc[self.obs[marker]==popm].index
-                                    
-                                    if marked_obs_to_ignore is not None:
-                                        obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                        ipop = ipop[~ipop.isin(obs_to_ignore)]
-                                    
-                                    lab = f'{popc} {popm} ({len(ipop)})' if legend else None
-                                    properties[f'{popc}{popm}'] = {'index':ipop,
-                                                                'plot_args':{'marker':m},
-                                                                'mean_plot_args':{'marker':mean_m,'label':lab}}
-
-
-                    
-                    else: # pour une info numérique 
-                        for im,popm in enumerate(self.obs[marker].cat.categories):
-
-                            m = marker_list[im%len(marker_list)]
-                            mean_m = big_marker_list[im%len(big_marker_list)]
-
-                            if show_conditions:
-
-                                ipopx = self.obs.loc[self.obs['sample']=='x']\
-                                                .loc[self.obs[marker]==popm].index
-
-                                ipopy = self.obs.loc[self.obs['sample']=='y']\
-                                                .loc[self.obs[marker]==popm].index
-                                            
-                                if marked_obs_to_ignore is not None:
-                                    obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                    ipopx = ipopx[~ipopx.isin(obs_to_ignore)]
-                                    ipopy = ipopy[~ipopy.isin(obs_to_ignore)]
-
-                                cx = self.obs.loc[self.obs.index.isin(ipopx)][color]
-                                cy = self.obs.loc[self.obs.index.isin(ipopy)][color]
-
-                                labx = f'{labels[0]} {popm} ({len(ipopx)})' if legend else None
-                                laby = f'{labels[1]} {popm} ({len(ipopy)})' if legend else None
-                                            
-                                properties[f'{popm}x'] = {
-                                    'index':ipopx,
-                                    'plot_args':{'c':cx,'marker':m,},
-                                    'mean_plot_args':{'marker':mean_m,'color':cx_,'label':labx}}
-                                properties[f'{popm}y'] = {
-                                    'index':ipopy,
-                                    'plot_args':{'c':cy,'marker':m,},
-                                    'mean_plot_args':{'marker':mean_m,'color':cy_,'label':laby}}
-
-                            else:
-                                ipop = self.obs.loc[self.obs[marker]==popm].index
-                                
-                                if marked_obs_to_ignore is not None:
-                                    obs_to_ignore = self.obs[self.obs[marked_obs_to_ignore]].index
-                                    ipop = ipop[~ipop.isin(obs_to_ignore)]
-
-                                c = self.obs.loc[self.obs.index.isin(ipop)][color]
-                                
-                                lab = f'{popm} ({len(ipop)})' if legend else None
-
-                                properties[f'{popm}'] = {'index':ipop,
-                                                        'plot_args':{'c':c,'marker':m,},
-                                                        'mean_plot_args':{'marker':mean_m,'label':lab}}
-                                
-                                
-            else:
-                print(f"{marker} is not in self.obs or is not categorical, \
-                use self.obs['{marker}'] = self.obs['{marker}'].astype('category')")
-            
-        else:
-
-                print(f'{color} and {marker} not found in obs and variables')
-
-        return(properties)
 
     def scatter_proj(self,
                      projection,
@@ -632,6 +332,9 @@ class Plot_Standard(Statistics):
         # labels = self.get_samples_list(condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
+        
+        self.projections(t=np.max(projection),condition=condition,samples=samples,
+                        marked_obs_to_ignore=marked_obs_to_ignore)
 
         p1,p2 = projection
         yproj = xproj if yproj is None else yproj
@@ -715,50 +418,7 @@ class Plot_Standard(Statistics):
 
 
 
-
-    def init_axes_projs(self,fig,axes,projections,suptitle,kfda,kfda_ylim,t,kfda_title,spectrum,spectrum_label):
-        if axes is None:
-            rows=1;cols=len(projections) + kfda + spectrum
-            fig,axes = plt.subplots(nrows=rows,ncols=cols,figsize=(6*cols,6*rows))
-        if suptitle is not None:
-            fig.suptitle(suptitle,fontsize=50,y=1.04)
-        if kfda:
-            
-            #params a ajouter si besoin ? 
-            # columns=None,asymp_ls='--',asymp_c = 'crimson',title=None,title_fontsize=40,mean=False,mean_label='mean',mean_color = 'xkcd: indigo')
-            self.plot_kfdat(fig=fig,ax = axes[0],ylim=kfda_ylim,t = t,title=kfda_title)
-            axes = axes[1:]
-        if spectrum:
-            self.plot_spectrum(fig=fig,ax=axes[0],t=t,title='spectrum',label=spectrum_label)
-            axes = axes[1:]
-        return(fig,axes)
-
-
-    def density_projs(self,fig=None,axes=None,proj='proj_kpca',name=None,projections=range(1,10),suptitle=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,show_conditions=True,highlight=None):
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=projections,suptitle=suptitle,kfda=kfda,
-                                        kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
-        if not isinstance(axes,np.ndarray):
-            axes = [axes]
-        for ax,t in zip(axes,projections):
-            self.density_proj(t=t,proj=proj,name=name,fig=fig,ax=ax,show_conditions=show_conditions,highlight=highlight)
-        fig.tight_layout()
-        return(fig,axes)
-
-    def scatter_projs(self,fig=None,axes=None,xproj='proj_kpca',yproj=None,xname=None,yname=None,projections=[(i*2,i*2+1) for i in range(4)],suptitle=None,
-                        highlight=None,color=None,marker=None,kfda=False,kfda_ylim=None,t=None,kfda_title=None,spectrum=False,spectrum_label=None,iterate_over='projections',show_conditions=True):
-        to_iterate = projections if iterate_over == 'projections' else color
-        fig,axes = self.init_axes_projs(fig=fig,axes=axes,projections=to_iterate,suptitle=suptitle,kfda=kfda,
-                                        kfda_ylim=kfda_ylim,t=t,kfda_title=kfda_title,spectrum=spectrum,spectrum_label=spectrum_label)
-        if not isinstance(axes,np.ndarray):
-            axes = [axes]
-        for ax,obj in zip(axes,to_iterate):
-            if iterate_over == 'projections':
-                self.scatter_proj(obj,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=color,marker=marker,fig=fig,ax=ax,show_conditions=show_conditions)
-            elif iterate_over == 'color':
-                self.scatter_proj(projections,xproj=xproj,yproj=yproj,xname=xname,yname=yname,highlight=highlight,color=obj,marker=marker,fig=fig,ax=ax,show_conditions=show_conditions)
-        fig.tight_layout()
-        return(fig,axes)
-    
+   
     def plot_correlation_proj_var(self,fig=None,ax=None,name=None,nvar=30,projections=range(1,10),title=None,prefix_col=''):
         if name is None:
             name = self.get_names()['correlations'][0]
@@ -1231,7 +891,7 @@ class Plot_Standard(Statistics):
                 index_to_plot['pop'] = {'index':all_index,'popm':'popm','popc':'popc'}
 
         elif isinstance(color,str) and marker is None:
-            if color in list(self.get_variables()):
+            if color in list(self.variables):
                 if show_conditions:
                     for pop,pop_index in index.items():
                         index_to_plot[pop] = {'index':pop_index,'popm':pop,'popc':pop}
@@ -1269,7 +929,7 @@ class Plot_Standard(Statistics):
 
         elif isinstance(color,str) and isinstance(marker,str):
             if marker in list(self.obs.columns) and self.obs[marker].dtype == 'category':
-                if color in list(self.get_variables()):                    
+                if color in list(self.variables):                    
                     for popm in self.obs[marker].cat.categories:  
                         popm_index = self.obs.loc[self.obs[marker]==popm].index
                         if show_conditions: 
@@ -1390,7 +1050,7 @@ class Plot_Standard(Statistics):
             nc = len(color_list)
             color_dict={}
             mean_color_dict={}
-            variables = self.get_variables()
+            variables = self.variables
             
             samples_list = self.get_samples_list(condition,samples) 
             

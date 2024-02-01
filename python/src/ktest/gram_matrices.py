@@ -13,8 +13,8 @@ diagonalisation.
 """
 class GramMatrices(CenteringOps):
 
-    def __init__(self):
-        super(GramMatrices,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(GramMatrices,self).__init__(data,obs=obs,var=var,)
 
     def compute_gram(self,landmarks=False,condition=None,samples=None,marked_obs_to_ignore=None): 
         """
@@ -44,14 +44,20 @@ class GramMatrices(CenteringOps):
 
 
         dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
-        kernel = self.data[self.data_name]['kernel']
+        kernel = self.kernel
         data = torch.cat([x for x in dict_data.values()],axis=0)
         K = kernel(data,data)
         return(K)
 
-    def compute_rectangle_gram(self,x_landmarks=False,x_condition=None,x_samples=None,x_marked_obs_to_ignore=None,
-                         y_landmarks=False,y_condition=None,y_samples=None,y_marked_obs_to_ignore=None,data_name=None
-                        ):    
+    def compute_rectangle_gram(self,
+                               x_landmarks=False,
+                               x_condition=None,
+                               x_samples=None,
+                               x_marked_obs_to_ignore=None,
+                               y_landmarks=False,
+                               y_condition=None,
+                               y_samples=None,
+                               y_marked_obs_to_ignore=None):    
         """
         Computes the matrix K(X_i,Y_i) where X_i and Y_i are two subsets of the observations contained in the data.
 
@@ -69,19 +75,15 @@ class GramMatrices(CenteringOps):
             x_marked_obs_to_ignore, y_marked_obs_to_ignore (default = None): str
                     Column of the metadata specifying the observations to ignore
         
-            data_name (default = ktest.data_name): str
-                    Assay to use
         """
         
-        if data_name is None:
-            data_name = self.data_name
         xy_data = []
         for landmarks,condition,samples,marked_obs_to_ignore in zip([x_landmarks,y_landmarks],
                                                                     [x_condition,y_condition],
                                                                     [x_samples,y_samples],
                                                                     [x_marked_obs_to_ignore,y_marked_obs_to_ignore]):
-            dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
-            kernel = self.data[data_name]['kernel']
+            dict_data = self.get_data(landmarks=landmarks,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+            kernel = self.kernel
             data = torch.cat([x for x in dict_data.values()],axis=0)
             xy_data += [data]
         K = kernel(xy_data[0],xy_data[1])
@@ -89,7 +91,7 @@ class GramMatrices(CenteringOps):
 
 
 
-    def compute_kmn(self,condition=None,samples=None,marked_obs_to_ignore=None,data_name=None):
+    def compute_kmn(self,condition=None,samples=None,marked_obs_to_ignore=None):
         """
         Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix
 
@@ -107,11 +109,9 @@ class GramMatrices(CenteringOps):
 
         """
         assert(self.has_landmarks)
-        if data_name is None:
-            data_name = self.data_name
-        dict_data = self.get_data(landmarks=False,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore,data_name=data_name)
-        dict_landmarks = self.get_data(landmarks=True,data_name=data_name)
-        kernel = self.data[data_name]['kernel']
+        dict_data = self.get_data(landmarks=False,condition=condition,samples=samples,marked_obs_to_ignore=marked_obs_to_ignore)
+        dict_landmarks = self.get_data(landmarks=True)
+        kernel = self.kernel
 
         data = torch.cat([x for x in dict_data.values()],axis=0)
         landmarks = torch.cat([x for x in dict_landmarks.values()],axis=0)

@@ -125,8 +125,8 @@ def compute_covariance_centering_matrix_(n,dict_nobs,ab):
 
 class CenteringOps(NystromOps):
 
-    def __init__(self):
-        super(CenteringOps,self).__init__()
+    # def __init__(self,data,obs=None,var=None,):
+    #     super(CenteringOps,self).__init__(data,obs=obs,var=var,)
 
     def compute_covariance_centering_matrix(self,landmarks=False):
         """

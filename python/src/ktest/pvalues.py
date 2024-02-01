@@ -70,8 +70,8 @@ def parallel_BH_correction(dict_of_df_pval,stat,t=20,n_jobs=6):
 
 class Pvalues:
         
-    def __init__(self):        
-        super(Pvalues, self).__init__()
+    # def __init__(self):        
+    #     super(Pvalues, self).__init__()
 
     def compute_kfda_asymptotic_pvalue(self):
         """

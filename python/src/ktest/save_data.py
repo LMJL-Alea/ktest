@@ -2,8 +2,8 @@ import pandas as pd
 # P: Pas dans le main package
 class SaveData:
 
-    def __init__(self):        
-        super(SaveData, self).__init__()
+    # def __init__(self):
+    #     super(SaveData, self).__init__()
 
     def load_kfdat(self,path):
         df = pd.read_csv(path,header=0,index_col=0)
