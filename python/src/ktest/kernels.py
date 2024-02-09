@@ -67,6 +67,32 @@ def mediane(x, y=None,verbose=0):
     else:
         return dtot.median()
 
+def quantile(x, y=None,q=.5,verbose=0):
+    """
+    Computes the median 
+    """
+    x=torch_transformator(x)
+    y=torch_transformator(y)
+    
+    dxx = distances(x)
+    if y == None:
+        return dxx.quantile(q=q)
+    dyy = distances(y)
+    dxy = distances(x,y)
+    dyx = dxy.t()
+    dtot = torch.cat((torch.cat((dxx,dxy),dim=1),
+                      torch.cat((dyx,dyy),dim=1)),dim=0)
+    quantile = dtot.quantile(q=q)
+    if quantile == 0: 
+        if verbose>0 :
+            print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+        mean = dtot.mean()
+        if mean == 0 : 
+            print('warning: all your dataset is null')
+        return mean
+    else:
+        return quantile
+
 def gauss_kernel(x, y, sigma=1):
     """
     Computes the standard Gaussian kernel k(x,y)=exp(- ||x-y||**2 / (2 * sigma**2))
@@ -84,6 +110,8 @@ def gauss_kernel(x, y, sigma=1):
 def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=False,verbose=0):
     if bandwidth == 'median':
         computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+    elif bandwidth == 'quantile':
+        computed_bandwidth = quantile(x=x,y=y,q=median_coef,verbose=verbose)
     else:
         computed_bandwidth = bandwidth * median_coef
     kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
@@ -91,6 +119,7 @@ def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=Fal
         return ( kernel, computed_bandwidth )
     else: 
         return kernel
+
 
 def mediane_per_variable(x,y,verbose=0):
     x=torch_transformator(x)
