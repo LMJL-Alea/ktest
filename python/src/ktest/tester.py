@@ -52,7 +52,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                 n_permutations=500,
                 seed_permutation=20231124,
                 marked_obs_to_ignore=None,
-                kernel=None,
                 kernel_function='gauss',
                 kernel_bandwidth='median',
                 kernel_median_coef=1,
