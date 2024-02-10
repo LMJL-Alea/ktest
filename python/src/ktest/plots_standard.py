@@ -333,7 +333,7 @@ class Plot_Standard(Statistics):
         if fig is None:
             fig,ax = plt.subplots(ncols=1,figsize=(12,6))
         
-        self.projections(t=np.max(projection),condition=condition,samples=samples,
+        self.projections(t=np.max([p for p in projection if isinstance(p,int)]),condition=condition,samples=samples,
                         marked_obs_to_ignore=marked_obs_to_ignore)
 
         p1,p2 = projection
