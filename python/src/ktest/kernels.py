@@ -76,13 +76,13 @@ def quantile(x, y=None,q=.5,verbose=0):
     
     dxx = distances(x)
     if y == None:
-        return dxx.quantile(q=q)
+        return np.quantile(dxx.numpy(),q=q)
     dyy = distances(y)
     dxy = distances(x,y)
     dyx = dxy.t()
     dtot = torch.cat((torch.cat((dxx,dxy),dim=1),
                       torch.cat((dyx,dyy),dim=1)),dim=0)
-    quantile = dtot.quantile(q=q)
+    quantile = np.quantile(dtot.numpy(),q=q)
     if quantile == 0: 
         if verbose>0 :
             print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
