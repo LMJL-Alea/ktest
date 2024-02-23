@@ -513,7 +513,7 @@ class Univariate:
                     n_anchors = self.n_anchors,
                     landmark_method = self.landmark_method,
                     anchor_basis = self.anchor_basis,
-                    kernel=self.kernel,
+                    # kernel=self.kernel,
                     kernel_function=self.kernel_function,
                     kernel_bandwidth=self.kernel_bandwidth,
                     kernel_median_coef=self.kernel_median_coef,
