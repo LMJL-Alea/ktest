@@ -528,18 +528,17 @@ class Univariate:
         t.multivariate_test(verbose=verbose)
 
         # ccovw = 'ccovw' if common_covariance else ''
-        if t.has_kfda_statistic:
-            kfdat_name = t.get_kfdat_name()
-            pvalue_name = t.get_pvalue_name()
-            try:
-                t.df_kfdat[variable] = t.df_kfdat[kfdat_name]
-            except KeyError:
-                print(f'{kfdat_name} not in df_kfdat ({t.df_kfdat.columns})')        
+        kfdat_name = t.get_kfdat_name()
+        pvalue_name = t.get_pvalue_name()
+        try:
+            t.df_kfdat[variable] = t.df_kfdat[kfdat_name]
+        except KeyError:
+            print(f'{kfdat_name} not in df_kfdat ({t.df_kfdat.columns})')        
 
-            try:
-                t.df_pval[variable] = t.df_pval[pvalue_name]
-            except KeyError:
-                print(f'{pvalue_name} not in df_pval ({t.df_pval.columns})')        
+        try:
+            t.df_pval[variable] = t.df_pval[pvalue_name]
+        except KeyError:
+            print(f'{pvalue_name} not in df_pval ({t.df_pval.columns})')        
         return(t)
         
     def add_results_univariate_kfda_in_vard(self,vtest,variable,name='',tmax=31,
