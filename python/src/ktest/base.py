@@ -503,7 +503,6 @@ class Base(Names,Kernel_Function):
                                     samples=samples,
                                     marked_obs_to_ignore=marked_obs_to_ignore)
         marked_obs = self.obs[self.obs[marked_obs_to_ignore]].index if marked_obs_to_ignore is not None else []             
-        
         return(self.obs[~self.obs.index.isin(marked_obs)][condition].cat.categories.to_list() if samples == 'all' else samples)    
 
     def init_samples_condition_marked(self,

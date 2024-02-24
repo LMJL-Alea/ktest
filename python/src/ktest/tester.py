@@ -139,6 +139,15 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
         
         super(Ktest,self).__init__(data,metadata=metadata,var_metadata=var_metadata,)
         
+        self.set_test_data_info(condition=condition,samples=samples,change_kernel=False,verbose=verbose)
+        
+        self.init_kernel(
+                function=kernel_function,
+                bandwidth=kernel_bandwidth,
+                median_coef=kernel_median_coef,
+                kernel_name=kernel_name,
+                verbose=verbose)
+        
         self.set_test_params(stat=stat,
                        nystrom = nystrom,
                        n_landmarks = n_landmarks,
@@ -150,13 +159,6 @@ class Ktest(Plot_Univariate,SaveData,Pvalues,Correlations,Permutation,Hotelling_
                        seed_permutation = seed_permutation)
 
 
-        self.set_test_data_info(condition=condition,samples=samples,change_kernel=False,verbose=verbose)
-        self.init_kernel(
-                function=kernel_function,
-                bandwidth=kernel_bandwidth,
-                median_coef=kernel_median_coef,
-                kernel_name=kernel_name,
-                verbose=verbose)
         
 
         self.set_marked_obs_to_ignore(marked_obs_to_ignore=marked_obs_to_ignore,verbose=verbose)
