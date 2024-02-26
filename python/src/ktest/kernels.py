@@ -81,9 +81,46 @@ def gauss_kernel(x, y, sigma=1):
     K = torch.exp(-d / (2 * sigma**2))  # Gram matrix
     return K
 
+def quantile(x, y=None,q=.5,verbose=0):
+    """
+    Computes the median 
+    """
+    x=torch_transformator(x)
+    y=torch_transformator(y)
+    
+    dxx = distances(x)
+    if y == None:
+        return np.quantile(dxx.numpy(),q=q)
+    dyy = distances(y)
+    dxy = distances(x,y)
+    dyx = dxy.t()
+    dtot = torch.cat((torch.cat((dxx,dxy),dim=1),
+                      torch.cat((dyx,dyy),dim=1)),dim=0)
+    quantile = np.quantile(dtot.numpy(),q=q)
+    if quantile == 0: 
+        if verbose>0 :
+            print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+        mean = dtot.mean()
+        if mean == 0 : 
+            print('warning: all your dataset is null')
+        return mean
+    else:
+        return quantile
+
 def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=False,verbose=0):
+    '''
+    Returns the Gaussian kernel with bandwidth set as the median of the distances between 
+    pairs of observations (`bandwidth`='median') or as a quantile of these distances 
+    (`bandwidth` = 'quantile' and the quantile in [0,1] is set with `median_coef`.
+
+    To be corrected : the median and quantile are computed on the symetric matrix 
+    of distances between pairs of observations, it should be computed on the upper-triangular matrix 
+    without the diagonal only. 
+    '''
     if bandwidth == 'median':
         computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+    elif bandwidth == 'quantile':
+        computed_bandwidth = quantile(x=x,y=y,q=median_coef,verbose=verbose)
     else:
         computed_bandwidth = bandwidth * median_coef
     kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
