@@ -1,7 +1,7 @@
 from scipy.stats import chi2
 import warnings
-from .kernel_statistics import Statistics
-from .data import Data
+from kernel_statistics import Statistics
+from data import Data
 
 
 # tracer l'evolution des corrélations par rapport aux gènes ordonnés
@@ -13,10 +13,10 @@ class Ktest(Statistics):
     
     Attributes: 
     ------------------------
-    data: instance of class Data !!!
+    data: instance of class Data
         data matrix initialized from data 
         
-    kstat: instance of class Statiatics !!!
+    kstat: instance of class Statistics
 
     df_kfdat: pandas.DataFrame
         stores the computed kfda statistics and
@@ -45,7 +45,7 @@ class Ktest(Statistics):
         store the MMD statistics associated to each performed test. 
     """
 
-    def __init__(self, data_1, data_2, sample_names=None,
+    def __init__(self, data, metadata, sample_names=None,
                  kernel_function='gauss', kernel_bandwidth='median',
                  kernel_median_coef=1, verbose=0):
         """
@@ -53,11 +53,11 @@ class Ktest(Statistics):
 
         Parameters
         ----------
-            data_1 : Pandas.DataFrame 
+            data : Pandas.DataFrame 
                 the data dataframe
             
-            data_2 : Pandas.DataFrame 
-                the data dataframe
+            metadata : Pandas.DataFrame 
+                the metadata dataframe
                 
             sample_names: 
                 
@@ -78,15 +78,15 @@ class Ktest(Statistics):
             kernel_median_coef (default = 1) : float
                 multiple of the median to use as bandwidth if bandwidth=='median' 
         """
-        
-        self.data = Data(data_1, data_2, sample_names=sample_names)
-        
+        self.dataset = data
+        self.metadata = metadata
+        self.sample_names = sample_names
+        self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
         self.kstat = Statistics(self.data, kernel_function=kernel_function,
                                 bandwidth=kernel_bandwidth,
                                 median_coef=kernel_median_coef)
         
         ### Output statistics ### 
-        
         self.kfdat = None
         self.pval = None
         self.kfdat_contrib = None
