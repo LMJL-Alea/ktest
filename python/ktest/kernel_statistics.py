@@ -296,7 +296,7 @@ class Statistics():
 
         return(pkm) 
 
-    def compute_kfdat(self,t=None,verbose=0):
+    def compute_kfdat(self, verbose=0):
         
         """ 
         From the former class:
@@ -395,7 +395,7 @@ class Statistics():
         sp, ev = self.diagonalize_centered_gram(verbose=verbose)
 
         # détermination de la troncature maximale à calculer 
-        t = len(sp) if t is None else len(sp) if len(sp)<t else t # troncature maximale
+        t = len(sp)
 
         # calcul de la statistique pour chaque troncature 
         pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
@@ -425,5 +425,4 @@ class Statistics():
             K.masked_fill_(eye(K.shape[0],K.shape[0]).byte(), 0)
         mmd = dot(mv(K,m),m)**2 # je crois qu'il n'y a pas besoin de carré
         return(mmd.item())    
-                
-                
+           
