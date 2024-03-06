@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 from scipy.stats import chi2
 import warnings
 from kernel_statistics import Statistics
@@ -81,22 +83,32 @@ class Ktest(Statistics):
         self.dataset = data
         self.metadata = metadata
         self.sample_names = sample_names
+        
+        ### Kernel:
+        self.kernel_function = kernel_function
+        self.kernel_bandwidth = kernel_bandwidth
+        self.kernel_median_coef = kernel_median_coef
+        
         self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
         self.kstat = Statistics(self.data, kernel_function=kernel_function,
                                 bandwidth=kernel_bandwidth,
                                 median_coef=kernel_median_coef)
         
         ### Output statistics ### 
+        ## kFDA statistic
         self.kfdat = None
-        self.pval = None
+        self.pval_kfdat = None
+        self.pval_kfdat_perm = None
         self.kfdat_contrib = None
-        self.pval_contrib = None
+        self.pval_kfdat_contrib = None
         
-        ## MMD statistic (and p-value...?)
+        ## MMD statistic
         self.mmd = None
+        self.pval_mmd = None
         
 
-    def compute_test_statistic(self, stat='kfda', unbiaised=False, verbose=0):
+    def compute_test_statistic(self, stat='kfda', kstat=None, unbiaised=False, 
+                               verbose=0):
         """"
         Compute the kfda or the MMD statistic from scratch. 
         Compute every needed intermediate quantity. 
@@ -107,32 +119,72 @@ class Ktest(Statistics):
             verbose (default = 0) : int 
                 The greater, the more verbose. 
         """        
+        kstatistics = kstat if kstat is not None else self.kstat
         if stat == 'kfda' and self.kfdat is None:
-            self.kfdat, self.kfdat_contrib = self.kstat.compute_kfdat(verbose=verbose)
+            test_res = kstatistics.compute_kfdat(verbose=verbose)
         elif stat == 'mmd' and self.mmd is None:
-            self.mmd = self.kstat.compute_mmd(unbiaised=unbiaised, verbose=0)
+            test_res = kstatistics.kstat.compute_mmd(unbiaised=unbiaised,
+                                                     verbose=verbose)
+        return test_res
+    
+    def compute_pvalue(self, stat='kfda', asymptotic=True, n_permutations=500,
+                       random_state=None):
+        """
+        Computes the p-value of the statistic of `stat`.         
+        """
+        if stat == 'kfda' and asymptotic:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                pval = chi2.sf(self.kfdat, self.kfdat.index)
+                pval_contrib = chi2.sf(self.kfdat_contrib, self.kfdat_contrib.index)
+                return pval, pval_contrib
+        else:
+            if isinstance(random_state, np.random.RandomState):
+                rnd_gen = random_state
+            elif isinstance(random_state, int):
+                rnd_gen = np.random.RandomState(random_state)
+            else:
+                rnd_gen = np.random
+            stats_count = (pd.Series(0, index=range(1, self.data.ntot + 1)) 
+                           if stat == 'kfda' else 0)
+            for i in range(n_permutations):
+                meta_perm = self.metadata.copy()
+                if isinstance(meta_perm, (pd.DataFrame, pd.Series)):
+                    rnd_gen.shuffle(meta_perm.values)
+                else:
+                    rnd_gen.shuffle(meta_perm)
+                data_perm = Data(data=self.dataset, metadata=meta_perm, 
+                                 sample_names=self.sample_names)
+                kstat_perm = Statistics(data_perm, 
+                                        kernel_function=self.kernel_function,
+                                        bandwidth=self.kernel_bandwidth,
+                                        median_coef=self.kernel_median_coef)
+                perm_stats_res = self.compute_test_statistic(stat=stat, 
+                                                             kstat=kstat_perm)
+                if stat == 'kfda':
+                    stats_count += (perm_stats_res[0] >= self.kfdat)
+                elif stat == 'mmd' : 
+                    stats_count += (perm_stats_res[0] >= self.mmd)
+            return stats_count / n_permutations
+   
+    def multivariate_test(self, stat='kfda', asymptotic=True, 
+                          n_permutations=500, verbose=0):
+        if stat == 'kfda':
+            (self.kfdat,
+             self.kfdat_contrib) = self.compute_test_statistic(verbose=verbose)
+            if asymptotic:
+                (self.pval_kfdat,
+                 self.pval_kfdat_contrib) = self.compute_pvalue()
+            else:
+                self.pval_kfdat_perm = self.compute_pvalue(asymptotic=asymptotic, 
+                                                           n_permutations=n_permutations)
+        elif stat == 'mmd':
+            self.mmd = self.compute_test_statistic(stat=stat, verbose=verbose)
+            self.pval_mmd = self.compute_pvalue(stat=stat, 
+                                                n_permutations=n_permutations)
         else:
             if verbose >0:
                 print(f"Statistic '{stat}' not recognized. Possible values : 'kfda','mmd'")
-    
-    def compute_pvalue(self, stat='kfda'):
-         """
-         Computes the p-value of the statistic of `stat`.         
-         """
-         if stat == 'kfda':
-             with warnings.catch_warnings():
-                 warnings.simplefilter("ignore")
-                 self.pval = chi2.sf(self.kfdat, self.kfdat.index)
-                 self.pval_contrib = chi2.sf(self.kfdat_contrib, self.kfdat_contrib.index)
-         else:
-             raise NotImplementedError('MMD statistic p-value requires a permutation-based approach, which has not been fixed yet.')
-
-    def multivariate_test(self, stat='kfda', verbose=0,):
-        
-        
-        self.compute_test_statistic(stat=stat,verbose=verbose)
-        self.compute_pvalue(stat=stat)
 
         #if verbose>0:
         #    self.print_multivariate_test_results(long=False)
-
