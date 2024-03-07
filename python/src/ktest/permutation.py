@@ -34,7 +34,6 @@ class Permutation:
             marked_obs_to_ignore=self.marked_obs_to_ignore,
             verbose=verbose-1,
 
-            kernel=self.kernel,
             kernel_function=self.kernel_function,
             kernel_bandwidth=self.kernel_bandwidth,
             kernel_median_coef=self.kernel_median_coef,
@@ -160,5 +159,118 @@ class Permutation:
         return(pn)
 
 
-  
+
+    # Permutation pour la MANOVA 
+
+    def compute_permutation_kernel_hotelling_lawley_statistic(
+            self,seed,parallel=False,verbose=0):
+        
+        kt_perm = self.create_permuted_ktest(seed=seed,verbose=verbose)
+        
+        kt_perm.set_design(self.design_cols)
+        kt_perm._diagonalize_residual_covariance()
+        
+        kt_perm.set_hypothesis(L = self.hypotheses[self.current_hyp]['L'],
+                            hypothesis_name = self.current_hyp,
+                            Tmax=self.hypotheses[self.current_hyp]['Tmax'])
+        kt_perm.compute_kernel_Hotelling_Lawley_test_statistic(hypothesis_name=self.current_hyp)
+        statistic = pd.DataFrame(kt_perm.hypotheses[self.current_hyp]['Hotellin-Lawley'],columns=[seed])
+        
+        if parallel == False:
+            return(kt_perm)
+        else:
+            
+            return(statistic)
+
+
+    def compute_nperm_permutation_HL_statistics(self,n_permutations,seed,n_jobs=1,verbose=0):
+        seeds = range(seed,seed+n_permutations)
+        
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
+        if n_jobs == 1:
+            results=[]
+            for s in seeds:
+                if verbose>1:
+                    print(f's={seed}',end=' ')
+                results+= [self.compute_permutation_kernel_hotelling_lawley_statistic(
+                                        seed=s,
+                                        parallel=True,
+                                        verbose=verbose)]
+        else:
+            results = Parallel(n_jobs=n_jobs)(delayed(self.compute_permutation_kernel_hotelling_lawley_statistic)(
+                                        seed=s,
+                                        parallel=True,
+                                        verbose=verbose,
+                            ) for s in seeds)
+        return(pd.concat(results,axis=1))
+
+
+
+
+    def compute_permutation_pvalue_for_HL(self,n_permutations,seed,perm_stats):
+        self._diagonalize_residual_covariance()
+        self.compute_kernel_Hotelling_Lawley_test_statistic(hypothesis_name=self.current_hyp)
+        true_stat = pd.DataFrame(self.hypotheses[self.current_hyp]['Hotellin-Lawley'],columns=['HL'])
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
+
+        perm_pval = perm_stats.ge(true_stat,axis=0).sum(axis=1)/n_permutations
+        self.df_pval[f'HL_{pn}'] = perm_pval
+    
+    def permutation_HL_pvalue(self,
+                        n_permutations=None,
+                        seed=None,
+                        n_jobs=1,
+                        keep_permutation_statistics=False,
+                        verbose=0):
+
+        if n_permutations is None: 
+            n_permutations = self.n_permutations
+        else:
+            self.n_permutations = n_permutations
+
+        if seed is None : 
+            seed = self.seed_permutation
+        else :
+            self.seed_permutation = seed 
+
+
+        pn = self.get_permutation_name(n_permutations=n_permutations,seed=seed)
+
+        if verbose>0:
+            print(f'- Permutation statistic n_permutations={n_permutations} seeds from {seed} to {seed+n_permutations} with {n_jobs} jobs')
+
+        if pn in self.df_pval:
+            if verbose>0:
+                print(f'- This permutation p-value has already been computed')
+        else:
+
+            perm_stats = self.compute_nperm_permutation_HL_statistics(
+                                                n_permutations=n_permutations,
+                                                seed=seed,
+                                                n_jobs=n_jobs,
+                                                verbose=verbose
+                                                )
+
+            self.compute_permutation_pvalue_for_HL(
+                                                n_permutations=n_permutations,
+                                                seed=seed,
+                                                perm_stats=perm_stats
+                                                )
+
+    #         if keep_permutation_statistics:
+    #             self.store_permutation_statistics_in_ktest(
+    #                                             stat=stat,
+    #                                             n_permutations=n_permutations, 
+    #                                             seed=seed,
+    #                                             perm_stats=perm_stats)
+            self.permutation_HL_name = f'HL_{pn}'
+        return(f'HL_{pn}')
+
+
+
+
+
+
+
+
 
