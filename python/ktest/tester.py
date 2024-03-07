@@ -120,19 +120,19 @@ class Ktest(Statistics):
                 The greater, the more verbose. 
         """        
         kstatistics = kstat if kstat is not None else self.kstat
-        if stat == 'kfda' and self.kfdat is None:
+        if stat == 'kfda':
             test_res = kstatistics.compute_kfdat(verbose=verbose)
-        elif stat == 'mmd' and self.mmd is None:
-            test_res = kstatistics.kstat.compute_mmd(unbiaised=unbiaised,
+        elif stat == 'mmd':
+            test_res = kstatistics.compute_mmd(unbiaised=unbiaised,
                                                      verbose=verbose)
         return test_res
     
-    def compute_pvalue(self, stat='kfda', asymptotic=True, n_permutations=500,
+    def compute_pvalue(self, stat='kfda', permutation=False, n_permutations=500,
                        random_state=None):
         """
         Computes the p-value of the statistic of `stat`.         
         """
-        if stat == 'kfda' and asymptotic:
+        if stat == 'kfda' and not permutation:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 pval = chi2.sf(self.kfdat, self.kfdat.index)
@@ -164,19 +164,19 @@ class Ktest(Statistics):
                 if stat == 'kfda':
                     stats_count += (perm_stats_res[0] >= self.kfdat)
                 elif stat == 'mmd' : 
-                    stats_count += (perm_stats_res[0] >= self.mmd)
+                    stats_count += (perm_stats_res >= self.mmd)
             return stats_count / n_permutations
    
-    def multivariate_test(self, stat='kfda', asymptotic=True, 
+    def multivariate_test(self, stat='kfda', permutation=False, 
                           n_permutations=500, verbose=0):
         if stat == 'kfda':
             (self.kfdat,
              self.kfdat_contrib) = self.compute_test_statistic(verbose=verbose)
-            if asymptotic:
+            if not permutation:
                 (self.pval_kfdat,
                  self.pval_kfdat_contrib) = self.compute_pvalue()
             else:
-                self.pval_kfdat_perm = self.compute_pvalue(asymptotic=asymptotic, 
+                self.pval_kfdat_perm = self.compute_pvalue(permutation=permutation, 
                                                            n_permutations=n_permutations)
         elif stat == 'mmd':
             self.mmd = self.compute_test_statistic(stat=stat, verbose=verbose)
