@@ -88,11 +88,12 @@ def gauss_kernel_mediane(x,y,bandwidth='median', median_coef=1,
         computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
     else:
         computed_bandwidth = bandwidth * median_coef
-    K = gauss_kernel(x, y, computed_bandwidth)
+    #K = gauss_kernel(x, y, computed_bandwidth)
+    kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
     if return_mediane:
-        return (K, computed_bandwidth )
+        return (kernel, computed_bandwidth )
     else: 
-        return K
+        return kernel
 
 class Statistics():
     '''
@@ -139,15 +140,22 @@ class Statistics():
 
         ### TO DO: add an explanation for the computed bandwidth thing
         if self.kernel_function == 'gauss':
-            self.kernel = lambda x, y: gauss_kernel_mediane(x=x, y=y, 
-                                                            bandwidth=bandwidth,  
-                                                            median_coef=median_coef,
-                                                            return_mediane=False,
-                                                            verbose=verbose)
+            self.kernel = gauss_kernel_mediane(x=self.data.data[self.data.sample_names[0]],
+                                               y=self.data.data[self.data.sample_names[1]], 
+                                               bandwidth=bandwidth,  
+                                               median_coef=median_coef,
+                                               return_mediane=False,
+                                               verbose=verbose)
         elif self.kernel_function == 'linear':
             self.kernel = linear_kernel
         else:
             self.kernel = self.kernel_function
+            
+# =============================================================================
+#         ### Spectrum and eigenvectors:
+#         self.sp = None
+#         self.ev = None
+# =============================================================================
         
     @staticmethod
     def ordered_eigsy(matrix):
@@ -424,5 +432,5 @@ class Statistics():
         if unbiaised:
             K.masked_fill_(eye(K.shape[0],K.shape[0]).byte(), 0)
         mmd = dot(mv(K,m),m)**2 # je crois qu'il n'y a pas besoin de carré
-        return(mmd.item())    
+        return(mmd.item())
            
