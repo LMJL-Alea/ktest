@@ -49,7 +49,9 @@ class Ktest(Statistics):
 
     def __init__(self, data, metadata, sample_names=None,
                  kernel_function='gauss', kernel_bandwidth='median',
-                 kernel_median_coef=1, verbose=0):
+                 kernel_median_coef=1, verbose=0, nystrom=False,
+                 n_landmarks=None, landmark_method='random', n_anchors=None,
+                 anchor_basis='w', random_state=None):
         """
         Generate a Ktest object and compute specified comparison
 
@@ -84,15 +86,39 @@ class Ktest(Statistics):
         self.metadata = metadata
         self.sample_names = sample_names
         
+        if isinstance(random_state, np.random.RandomState):
+            self.rnd_gen = random_state
+        elif isinstance(random_state, int):
+            self.rnd_gen = np.random.RandomState(random_state)
+        else:
+            self.rnd_gen = np.random
+
         ### Kernel:
         self.kernel_function = kernel_function
         self.kernel_bandwidth = kernel_bandwidth
         self.kernel_median_coef = kernel_median_coef
         
+        ### Nystrom:
         self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
-        self.kstat = Statistics(self.data, kernel_function=kernel_function,
-                                bandwidth=kernel_bandwidth,
-                                median_coef=kernel_median_coef)
+        self.data_nystrom = None
+        self.n_landmarks = n_landmarks
+        self.landmark_method = landmark_method
+        self.n_anchors = n_anchors
+        self.anchor_basis=anchor_basis
+        
+        if nystrom:
+            self.data_nystrom = Data(data=data, metadata=metadata, 
+                                     sample_names=sample_names,
+                                     nystrom=True, n_landmarks=self.n_landmarks, 
+                                     landmark_method=self.landmark_method, 
+                                     random_state=self.rnd_gen)
+        self.kstat = Statistics(self.data, 
+                                kernel_function=self.kernel_function,
+                                bandwidth=self.kernel_bandwidth,
+                                median_coef=self.kernel_median_coef,
+                                data_nystrom=self.data_nystrom, 
+                                n_anchors=self.n_anchors,
+                                anchor_basis=self.anchor_basis)
         
         ### Output statistics ### 
         ## kFDA statistic
@@ -127,8 +153,7 @@ class Ktest(Statistics):
                                                      verbose=verbose)
         return test_res
     
-    def compute_pvalue(self, stat='kfda', permutation=False, n_permutations=500,
-                       random_state=None):
+    def compute_pvalue(self, stat='kfda', permutation=False, n_permutations=500):
         """
         Computes the p-value of the statistic of `stat`.         
         """
@@ -139,26 +164,30 @@ class Ktest(Statistics):
                 pval_contrib = chi2.sf(self.kfdat_contrib, self.kfdat_contrib.index)
                 return pval, pval_contrib
         else:
-            if isinstance(random_state, np.random.RandomState):
-                rnd_gen = random_state
-            elif isinstance(random_state, int):
-                rnd_gen = np.random.RandomState(random_state)
-            else:
-                rnd_gen = np.random
             stats_count = (pd.Series(0, index=range(1, self.data.ntot + 1)) 
                            if stat == 'kfda' else 0)
             for i in range(n_permutations):
                 meta_perm = self.metadata.copy()
                 if isinstance(meta_perm, (pd.DataFrame, pd.Series)):
-                    rnd_gen.shuffle(meta_perm.values)
+                    self.rnd_gen.shuffle(meta_perm.values)
                 else:
-                    rnd_gen.shuffle(meta_perm)
+                    self.rnd_gen.shuffle(meta_perm)
                 data_perm = Data(data=self.dataset, metadata=meta_perm, 
                                  sample_names=self.sample_names)
+                data_perm_nystrom = None
+                if self.data_nystrom is not None:
+                    data_perm_nystrom = Data(data=self.dataset, metadata=meta_perm, 
+                                            sample_names=self.sample_names,
+                                            nystrom=True, n_landmarks=self.n_landmarks, 
+                                            landmark_method=self.landmark_method, 
+                                            random_state=self.rnd_gen)
                 kstat_perm = Statistics(data_perm, 
                                         kernel_function=self.kernel_function,
                                         bandwidth=self.kernel_bandwidth,
-                                        median_coef=self.kernel_median_coef)
+                                        median_coef=self.kernel_median_coef,
+                                        data_nystrom=data_perm_nystrom,  
+                                        n_anchors=self.n_anchors,
+                                        anchor_basis=self.anchor_basis)
                 perm_stats_res = self.compute_test_statistic(stat=stat, 
                                                              kstat=kstat_perm)
                 if stat == 'kfda':
@@ -180,7 +209,7 @@ class Ktest(Statistics):
                                                            n_permutations=n_permutations)
         elif stat == 'mmd':
             self.mmd = self.compute_test_statistic(stat=stat, verbose=verbose)
-            self.pval_mmd = self.compute_pvalue(stat=stat, 
+            self.pval_mmd = self.compute_pvalue(stat=stat,
                                                 n_permutations=n_permutations)
         else:
             if verbose >0:
