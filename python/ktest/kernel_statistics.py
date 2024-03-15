@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from torch import cdist, cat, matmul, exp, mv, dot, ones, eye, zeros, tensor, float64
+from torch import cdist, cat, matmul, exp, mv, dot, diag
+from torch import ones, eye, zeros, tensor, float64
 from torch.linalg import multi_dot
 import warnings
 from apt.eigen_wrapper import eigsy
@@ -122,7 +123,8 @@ class Statistics():
         
     '''     
     def __init__(self, data, kernel_function='gauss', bandwidth='median', 
-                 median_coef=1, verbose=0):
+                 median_coef=1, verbose=0, data_nystrom=None, n_anchors=None,
+                 anchor_basis='w'):
         '''
 
         Parameters
@@ -132,6 +134,15 @@ class Statistics():
         '''
         
         self.data = data
+        
+        ### Nystrom:
+        self.data_ny = data_nystrom
+        if self.data_ny is None or n_anchors is not None:
+            self.n_anchors = n_anchors
+        else:
+            self.n_anchors = self.data_ny.ntot
+        self.anchor_basis = anchor_basis
+        assert self.anchor_basis in ['w','s','k'], 'invalid anchor basis'
         
         ### Kernel:
         self.kernel_function = kernel_function
@@ -151,11 +162,11 @@ class Statistics():
         else:
             self.kernel = self.kernel_function
             
-# =============================================================================
-#         ### Spectrum and eigenvectors:
-#         self.sp = None
-#         self.ev = None
-# =============================================================================
+        ### Spectrum and eigenvectors:
+        self.sp = None
+        self.ev = None
+        self.sp_anchors = None
+        self.ev_anchors = None
         
     @staticmethod
     def ordered_eigsy(matrix):
@@ -166,7 +177,7 @@ class Statistics():
         sp = tensor(sp[order], dtype=float64)
         return(sp,ev)
 
-    def compute_centering_matrix(self):
+    def compute_centering_matrix(self, landmarks=False):
         """
         Computes a projection matrix usefull for the kernel trick. 
 
@@ -193,22 +204,29 @@ class Statistics():
             P : torch.tensor, 
                 the centering matrix corresponding to the parameters
         """
-        In = eye(self.data.ntot)
-        effectifs = list(self.data.nobs.values())
-        
-        cumul_effectifs = np.cumsum([0]+effectifs)
-        _,n = len(effectifs),np.sum(effectifs)
-        
-        # For comments: check compute_diag_Jn_by_n
-        diag_Jn_by_n = cat([
-                            cat([
-                                    zeros(nprec,nell,dtype = float64),
-                                    1/nell*ones(nell,nell,dtype = float64),
-                                    zeros(n-nprec-nell,nell,dtype = float64)
-                                ],dim=0) 
-                                for nell,nprec in zip(effectifs,cumul_effectifs)
-                            ],dim=1)
-        return(In - diag_Jn_by_n)
+        data = self.data if not landmarks else self.data_ny
+        if not landmarks or self.anchor_basis == 'w':
+           In = eye(data.ntot)
+           effectifs = list(data.nobs.values())
+           
+           cumul_effectifs = np.cumsum([0]+effectifs)
+           
+           # For comments: check compute_diag_Jn_by_n
+           diag_Jn_by_n = cat([
+                               cat([
+                                    zeros(nprec, nell, dtype = float64),
+                                    1/nell*ones(nell, nell, dtype = float64),
+                                    zeros(data.ntot-nprec-nell, nell, dtype = float64)
+                                   ], dim=0) 
+                                   for nell, nprec in zip(effectifs, cumul_effectifs)
+                               ], dim=1)
+           return(In - diag_Jn_by_n)
+        elif self.anchor_basis == 'k':
+            return(eye(data.ntot, dtype=float64))
+        elif self.anchor_basis == 's':
+            In = eye(data.ntot, dtype=float64)
+            Jn = ones(data.ntot, data.ntot, dtype=float64)
+            return(In - 1/data.ntot * Jn)
 
     def compute_omega(self):
         '''
@@ -226,13 +244,12 @@ class Statistics():
             omega : torch.tensor 
             a vector of size corresponding to the group of which we compute the mean. 
         '''
-
         n1, n2 = self.data.nobs.values()
         m_mu1 = -1/n1 * ones(n1, dtype=float64)
         m_mu2 = 1/n2 * ones(n2, dtype=float64)
         return(cat((m_mu1, m_mu2), dim=0))
 
-    def compute_gram(self): 
+    def compute_gram(self, landmarks=False): 
         """
         Computes the Gram matrix of the data corresponding to the parameters 
         sample and landmarks. 
@@ -248,9 +265,37 @@ class Statistics():
             K : torch.Tensor,
                 Gram matrix of interest
         """
-        data = cat([x for x in self.data.data.values()], axis=0)
-        K = self.kernel(data, data)
+        data = self.data if not landmarks else self.data_ny
+        D = cat([x for x in data.data.values()], axis=0)
+        K = self.kernel(D, D)
         return(K)
+    
+    
+    def compute_kmn(self):
+        """
+        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix
+
+            Parameters
+        ----------
+            landmarks (default = False): bool 
+                    Landmarks or observations ? 
+            condition (default = None): str
+                    Column of the metadata that specify the dataset  
+            samples (default = None): str 
+                    List of values to select in the column condition of the metadata
+            marked_obs_to_ignore (default = None): str
+                    Column of the metadata specifying the observations to ignore
+        """
+        data = cat([x for x in self.data.data.values()], axis=0)
+        landmarks = cat([x for x in self.data_ny.data.values()], axis=0)
+        kmn = self.kernel(landmarks, data)        
+        return(kmn)
+    
+    def compute_nystrom_anchors(self):
+        K = self.compute_gram(landmarks=True)
+        P = self.compute_centering_matrix(landmarks=True)
+        Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
+        return Statistics.ordered_eigsy(Kw)       
 
     def diagonalize_centered_gram(self, verbose=0):
         """
@@ -271,8 +316,35 @@ class Statistics():
             print('- Compute within covariance centered gram')
         # Instantiation de la matrice de centrage P 
         P = self.compute_centering_matrix()
-        K = self.compute_gram()
-        Kw = 1/self.data.ntot * multi_dot([P,K,P])
+        
+        # récupération des paramètres du modèle spécifique à l'approximation de nystrom (infos sur les ancres)    
+        if self.data_ny is not None:
+            # Computing Nystrom anchors:
+            self.sp_anchors, self.ev_anchors = self.compute_nystrom_anchors()        
+            assert sum(self.sp_anchors > 0) != 0,'No anchors found, the dataset may have two many zeros.'
+            if sum(self.sp_anchors > 0) < self.n_anchors:
+                if verbose>1:
+                    print(f'\tThe number of anchors is reduced from {self.n_anchors} to {sum(self.sp_anchors>0)} for numerical stability')
+                self.n_anchors = sum(self.sp_anchors > 0).item()
+            self.sp_anchors, self.ev_anchors = (self.sp_anchors[: self.n_anchors],
+                                                self.ev_anchors[:, : self.n_anchors])
+                
+            # calcul de la matrice correspondant à l'approximation de nystrom. 
+            Kmn = self.compute_kmn()
+            Lp_inv_12 = diag(self.sp_anchors ** (-1/2))
+            Pm = self.compute_centering_matrix(landmarks=True)
+
+            # Calcul de la matrice à diagonaliser avec Nystrom. 
+            # Comme tu le disais, cette formule est symétrique et 
+            # on pourrait utiliser une SVD en l'écrivant BB^T, 
+            # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)                     
+            Kw = (1 / (self.data.ntot * self.data_ny.ntot ** 2)
+                  * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
+                               Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
+        # version standard 
+        else:
+            K = self.compute_gram()
+            Kw = 1 / self.data.ntot * multi_dot([P, K, P])
         
         # diagonalisation par la fonction C++ codée par François puis tri 
         # décroissant des valeurs propres et vecteurs prores
@@ -282,7 +354,6 @@ class Statistics():
 
     def compute_pkm(self):
         '''
-
         This function computes the term corresponding to the matrix-matrix-vector 
         product PK omega of the KFDA statistic.
         
@@ -294,14 +365,18 @@ class Statistics():
         pkm : torch.tensor 
         Correspond to the product PK omega in the KFDA statistic. 
         '''
-
         # instantiation du vecteur de bi-centrage omega et de la matrice de centrage Pbi 
         omega = self.compute_omega() # vecteur de 1/n1 et de -1/n2 
         Pbi = self.compute_centering_matrix() # matrice de centrage par block
-
-        Kx = self.compute_gram() # matrice de gram 
-        pkm = mv(Pbi,mv(Kx,omega)) # le vecteur que renvoie cette fonction 
-
+        if self.data_ny is not None:
+            Lz12 = diag(self.sp_anchors**(-1/2))
+            Kzx = self.compute_kmn()
+            Pi = self.compute_centering_matrix(landmarks=True)
+            pkm = (1 / self.data_ny.ntot
+                   * mv(Lz12, mv(self.ev_anchors.T, mv(Pi, mv(Kzx, omega)))))
+        else: 
+            Kx = self.compute_gram()
+            pkm = mv(Pbi, mv(Kx, omega))
         return(pkm) 
 
     def compute_kfdat(self, verbose=0):
@@ -311,7 +386,6 @@ class Statistics():
         Ces fonctions calculent les coordonnées des projections des embeddings sur des sous-espaces d'intérêt 
         dans le RKHS. Sauf la projection sur ce qu'on appelle pour l'instant l'espace des résidus, comme cette 
         projection nécessite de nombreux calculs intermédiaires, elle a été encodée dans un fichier à part. 
-        
         
         
         Computes the kfda truncated statistic of [Harchaoui 2009].
@@ -400,20 +474,20 @@ class Statistics():
         
         # Récupération des vecteurs propres et valeurs propres calculés par la fonction de classe 
         # diagonalize_within_covariance_centered_gram 
-        sp, ev = self.diagonalize_centered_gram(verbose=verbose)
+        self.sp, self.ev = self.diagonalize_centered_gram(verbose=verbose)
 
         # détermination de la troncature maximale à calculer 
-        t = len(sp)
+        t = len(self.sp)
 
         # calcul de la statistique pour chaque troncature 
         pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
         n1, n2 = self.data.nobs.values() # nombres d'observations dans les échantillons
-        exposant = 2 
+        exposant = 1 if self.data_ny is not None  else 2
         
         # calcule la contribution de chaque troncature 
         kfda_contributions = ((n1 * n2) / (self.data.ntot ** exposant
-                                           * sp[:t]**exposant) 
-                              * mv(ev.T[:t], pkm) ** 2).numpy()
+                                           * self.sp[:t] ** exposant) 
+                              * mv(self.ev.T[:t], pkm) ** 2).numpy()
         #somme les contributions pour avoir la stat correspondant à chaque troncature 
         kfda = kfda_contributions.cumsum(axis=0)
 
@@ -422,15 +496,24 @@ class Statistics():
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            kfdat = pd.Series(kfda,index=trunc)
-            kfdat_contributions = pd.Series(kfda_contributions,index=trunc)
+            kfdat = pd.Series(kfda, index=trunc)
+            kfdat_contributions = pd.Series(kfda_contributions, index=trunc)
         return kfdat, kfdat_contributions
  
     def compute_mmd(self, unbiaised=False, verbose=0):
         m = self.compute_omega()
-        K = self.compute_gram()
-        if unbiaised:
-            K.masked_fill_(eye(K.shape[0],K.shape[0]).byte(), 0)
-        mmd = dot(mv(K,m),m)**2 # je crois qu'il n'y a pas besoin de carré
+        if self.data_ny is not None:
+           # Computing Nystrom anchors:
+            self.sp_anchors, self.ev_anchors = self.compute_nystrom_anchors()   
+            Lp12 = diag(self.sp_anchors ** (-1/2))
+            Pm = self.compute_centering_matrix(landmarks=True)
+            Kmn = self.compute_kmn()
+            psi_m = mv(Lp12, mv(self.ev_anchors.T, mv(Pm, mv(Kmn, m))))
+            mmd = dot(psi_m, psi_m) ** 2
+        else:
+            K = self.compute_gram()
+            if unbiaised:
+                K.masked_fill_(eye(K.shape[0], K.shape[0]).byte(), 0)
+            mmd = dot(mv(K, m), m) ** 2 # je crois qu'il n'y a pas besoin de carré
         return(mmd.item())
            
