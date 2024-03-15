@@ -85,6 +85,7 @@ class Ktest(Statistics):
         self.dataset = data
         self.metadata = metadata
         self.sample_names = sample_names
+        self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
         
         if isinstance(random_state, np.random.RandomState):
             self.rnd_gen = random_state
@@ -99,7 +100,6 @@ class Ktest(Statistics):
         self.kernel_median_coef = kernel_median_coef
         
         ### Nystrom:
-        self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
         self.data_nystrom = None
         self.n_landmarks = n_landmarks
         self.landmark_method = landmark_method
