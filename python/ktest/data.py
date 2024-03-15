@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
+from sklearn.cluster import kmeans_plusplus
 
 class Data():
     """
@@ -24,7 +25,8 @@ class Data():
     sample_names: 
 
     """  
-    def __init__(self, data, metadata, sample_names=None):
+    def __init__(self, data, metadata, sample_names=None, nystrom=False,
+                 n_landmarks=None, landmark_method='kmeans++', random_state=None):
         """
 
         Parameters
@@ -80,6 +82,21 @@ class Data():
                 else:
                     X = data_n.to_numpy() if not isinstance(data_n, np.ndarray) else data_n.copy()
                     self.data[n] = torch.from_numpy(X).double()
+                
+                if nystrom:
+                    n_landmarks_n = n_landmarks if n_landmarks is not None else self.nobs[n] // 5
+                    if landmark_method == 'random':
+                        ny_ind = random_state.choice(self.nobs[n],
+                                                     size=n_landmarks_n,
+                                                     replace=False)
+                    if landmark_method == 'kmeans++':
+                        _, ny_ind = kmeans_plusplus(self.data[n].numpy(), 
+                                                    n_clusters=n_landmarks_n, 
+                                                    random_state=random_state)
+                    self.data[n] = self.data[n][ny_ind]
+                    self.nobs[n] = n_landmarks_n
+                    self.index[n] = self.index[n][ny_ind]
+                    
         except AttributeError:
             print(f'Unknown data type {type(data_n)}')
         self.ntot = sum(self.nobs.values())
