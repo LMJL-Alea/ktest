@@ -7,19 +7,11 @@ import warnings
 from apt.eigen_wrapper import eigsy
 
 
-"""
-
-Ce fichier contient toutes les fonctions nécessaires au calcul des statistiques,
-Les quantités pkm et upk sont des quantités génériques qui apparaissent dans beaucoup de calculs. 
-Elles n'ont pas d'interprêtation facile, ces fonctions centrales permettent d'éviter les répétitions. 
-
-Les fonctions initialize_kfdat et kfdat font simplement appel a plusieurs fonctions en une fois.
-
-"""
-
 def distances(x, y=None):
     """
-    If Y=None, then this computes the distance between X and itself
+    Computes the distances between each pair of the two collections of row 
+    vectors of x and y, or x and itself if y is not provided.
+
     """
     if y is None:
         sq_dists = cdist(x, x, compute_mode='use_mm_for_euclid_dist_if_necessary').pow(
@@ -31,11 +23,7 @@ def distances(x, y=None):
             2)  # [sq_dists]_ij=||x_j - y_i \\^2
     return sq_dists
 
-def mediane(x, y=None, verbose=0):
-    """
-    Computes the median 
-    """
-    
+def mediane(x, y=None):    
     dxx = distances(x)
     if y == None:
         return dxx.median()
@@ -46,11 +34,10 @@ def mediane(x, y=None, verbose=0):
                      cat((dyx,dyy),dim=1)),dim=0)
     median = dtot.median()
     if median == 0: 
-        if verbose>0 :
-            print('warning: the median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+        warnings.warn('The median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
         mean = dtot.mean()
         if mean == 0 : 
-            print('warning: all your dataset is null')
+            warnings.warn('warning: all your dataset is null')
         return mean
     else:
         return dtot.median()
@@ -83,56 +70,88 @@ def gauss_kernel(x, y, sigma=1):
     K = exp(-d / (2 * sigma**2))  # Gram matrix
     return K
 
-def gauss_kernel_mediane(x,y,bandwidth='median', median_coef=1, 
-                         return_mediane=False, verbose=0):
+def gauss_kernel_median(x, y, bandwidth='median', median_coef=1, 
+                        return_bandwidth=False):
     if bandwidth == 'median':
-        computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+        computed_bandwidth = mediane(x, y) * median_coef
     else:
-        computed_bandwidth = bandwidth * median_coef
+        computed_bandwidth = bandwidth
     #K = gauss_kernel(x, y, computed_bandwidth)
-    kernel = lambda x, y: gauss_kernel(x,y,computed_bandwidth)
-    if return_mediane:
-        return (kernel, computed_bandwidth )
+    kernel = lambda x, y: gauss_kernel(x, y, computed_bandwidth)
+    if return_bandwidth:
+        return (kernel, computed_bandwidth)
     else: 
         return kernel
 
 class Statistics():
-    '''
-    Attributes: 
-    ------------------------
-    data: instance of class Data !!!
-        data matrix initialized from data 
+    """
+    Clacc containing the technical tools for computing kernel statistics.
+    
+    Parameters
+    ----------
+    data : instance of class Data
+        Contains various information on the original dataset, see the 
+        documentation of the class Data for more details.
         
-    kernel name (default = None): str
-        The name of the kernel function specified by the call of the function.
-        if None: the kernel name is automatically generated through the function
-        get_kernel_name 
-        
-    function (default = 'gauss'): function or str in ['gauss','linear','fisher_zero_inflated_gaussian','gauss_kernel_mediane_per_variable'] 
-        if str: specifies the kernel function
-        if function: kernel function specified by user
+    kernel_function : callable or str, optional
+        Specifies the kernel function. Acceptable values in the form of a
+        string are 'gauss' (default) and 'linear'. Pass a callable for a
+        user-defined kernel function.
 
-    bandwidth (default = 'median'): 'median' or float
-        value of the bandwidth for kernels using a bandwidth
-        if 'median': the bandwidth will be set as the median or a multiple of it is
-            according to the value of parameter `median_coef`
-        if float: value of the bandwidth
+    bandwidth : 'median' or float, optional
+        Value of the bandwidth for kernels using a bandwidth. If 'median' 
+        (default), the bandwidth will be set as the median or its multiple, 
+        depending on the value of the parameter `median_coef`. Pass a float
+        for a user-defined value of the bandwidth.
 
-    median_coef (default = 1): float
-        multiple of the median to use as bandwidth if bandwidth=='median' 
+    median_coef : float, optional
+        Multiple of the median to compute bandwidth if bandwidth=='median'.
+        The default is 1. 
         
-    '''     
+    data_nystrom : None or instance of class Data
+        Contains various information on the Nystrom dataset, see the 
+        documentation of the class Data for more details. If None, Nystrom is
+        not taken into account in the computations.
+        
+    n_anchors : int, optional
+        Number of anchors used in the Nystrom method, by default equal to
+        the number of landamarks.
+
+    anchor_basis : str, optional
+        Options for different ways of computing the covariance operator of 
+        the landmarks in the Nystrom method, of which the anchors are the 
+        eigenvalues. Possible values are 'w' (default),'s' and 'k'.
+    
+    Attributes
+    ----------
+    kernel: callable
+        Kernel function used for calculations.
+        
+    computed_bandwidth : float
+        The value of the kernel bandwidth.
+
+    sp : 1-dimensional torch tensor
+        Eigenvalues ('sp' for spectrum) associated with the diagonalization of 
+        the centered within covariance operator of the original data using 
+        the kernel trick.  
+        
+    ev : 2-dimensional torch tensor
+        Eigenvectors associated with the diagonalization of the centered within 
+        covariance operator of the original data using the kernel trick.  
+    
+    sp_anchors : 1-dimensional torch tensor
+        Eigenvalues ('sp' for spectrum) associated with the diagonalization of 
+        the centered within covariance operator of the Nystrom landmarks using 
+        the kernel trick.  
+        
+    ev_anchors : 2-dimensional torch tensor
+        Eigenvectors associated with the diagonalization of the centered within 
+        covariance operator of the Nystrom landmarks using the kernel trick.  
+        
+    """     
     def __init__(self, data, kernel_function='gauss', bandwidth='median', 
-                 median_coef=1, verbose=0, data_nystrom=None, n_anchors=None,
-                 anchor_basis='w'):
-        '''
-
-        Parameters
-        ----------
-            stat (default=): str in ['kfda','mmd']
-                Test statistic to be computed.
-        '''
-        
+                 median_coef=1, data_nystrom=None, n_anchors=None,
+                 anchor_basis='w'):      
         self.data = data
         
         ### Nystrom:
@@ -149,14 +168,13 @@ class Statistics():
         self.bandwidth = bandwidth
         self.median_coef = median_coef
 
-        ### TO DO: add an explanation for the computed bandwidth thing
         if self.kernel_function == 'gauss':
-            self.kernel = gauss_kernel_mediane(x=self.data.data[self.data.sample_names[0]],
-                                               y=self.data.data[self.data.sample_names[1]], 
-                                               bandwidth=bandwidth,  
-                                               median_coef=median_coef,
-                                               return_mediane=False,
-                                               verbose=verbose)
+            (self.kernel,
+             self.computed_bandwidth)= gauss_kernel_median(x=self.data.data[self.data.sample_names[0]],
+                                                           y=self.data.data[self.data.sample_names[1]], 
+                                                           bandwidth=bandwidth,  
+                                                           median_coef=median_coef,
+                                                           return_bandwidth=True)
         elif self.kernel_function == 'linear':
             self.kernel = linear_kernel
         else:
@@ -170,7 +188,7 @@ class Statistics():
         
     @staticmethod
     def ordered_eigsy(matrix):
-        # la matrice de vecteurs propres renvoyée a les vecteurs propres en colonnes.  
+        # The matrix with column-wise eigenvectors
         sp,ev = eigsy(matrix)
         order = sp.argsort()[::-1]
         ev = tensor(ev[:,order],dtype=float64) 
@@ -181,9 +199,9 @@ class Statistics():
         """
         Computes a projection matrix usefull for the kernel trick. 
 
-        Example fir the within-group covariance :
+        Example for the within-group covariance :
             Let I1,I2 the identity matrix of size n1 and n2 (or nxanchors and 
-             nyanchors if nystrom). J1,J2 the squared matrix full of one of 
+             nyanchors if nystrom). J1,J2 the squared matrix full of ones of 
             size n1 and n2 (or nxanchors and nyanchors if nystrom).
             012, 021 the matrix full of zeros of size n1 x n2 and n2 x n1 
             (or nxanchors x nyanchors and nyanchors x nxanchors if nystrom).
@@ -193,16 +211,15 @@ class Statistics():
 
         Parameters
         ----------
-            sample : string,
-                if sample = 'xy' : returns the bicentering matrix corresponding
-                to the within group covariance operator.
-                if sample = 'x' (resp. 'y') : returns the centering matrix 
-                corresponding to the covariance operator of sample 'x' (resp. 'y')
-
+            landmarks : bool, optional
+                False by default. If True, performs the computations on the
+                the Nystrom dataset (landmarks).
+            
         Returns
         ------- 
             P : torch.tensor, 
-                the centering matrix corresponding to the parameters
+                The centering matrix.
+                
         """
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
@@ -211,7 +228,9 @@ class Statistics():
            
            cumul_effectifs = np.cumsum([0]+effectifs)
            
-           # For comments: check compute_diag_Jn_by_n
+           # Computing a bloc diagonal matrix where the ith diagonal bloc is 
+           # J_ni, an (ni x ni) matrix full of 1/ni where ni is the size
+           # of the ith group
            diag_Jn_by_n = cat([
                                cat([
                                     zeros(nprec, nell, dtype = float64),
@@ -229,21 +248,16 @@ class Statistics():
             return(In - 1/data.ntot * Jn)
 
     def compute_omega(self):
-        '''
-        Returns the weights vector to compute a mean. 
-        
-        Parameters
-        ----------
-            sample : str,
-            if sample = 'x' : returns a vector of size n1 = len(self.x) full of 1/n1
-            if sample = 'y' : returns a vector of size n2 = len(self.y) full of 1/n2
-            if sample = 'xy' : returns a vector of size n1 + n2 with n1 1/-n1 followed by n2 1/n2 to compute (\mu_2 - \mu_1) 
-            
+        """
+        Returns the weights vector used to compute the mean. 
+
         Returns
         ------- 
             omega : torch.tensor 
-            a vector of size corresponding to the group of which we compute the mean. 
-        '''
+                a vector of size corresponding to the group of which we 
+                compute the mean. 
+                
+        """
         n1, n2 = self.data.nobs.values()
         m_mu1 = -1/n1 * ones(n1, dtype=float64)
         m_mu2 = 1/n2 * ones(n2, dtype=float64)
@@ -251,19 +265,23 @@ class Statistics():
 
     def compute_gram(self, landmarks=False): 
         """
-        Computes the Gram matrix of the data corresponding to the parameters 
-        sample and landmarks. 
+        Computes the Gram matrix of the data in question. 
 
-        The kernel used is the kernel stored in the attribute `kernel`. 
-        ( The attribute `kernel` can be initialized with the method kernel() ) 
+        The kernel used is the kernel stored in the attribute 'kernel'.
 
         The Gram matrix is not stored in memory because it is usually large 
         and fast to compute. 
+        
+        Parameters
+        ----------
+            landmarks : bool, optional
+                False by default. If True, performs the computations on the
+                the Nystrom dataset (landmarks).
 
         Returns
         -------
             K : torch.Tensor,
-                Gram matrix of interest
+                Gram matrix of interest.
         """
         data = self.data if not landmarks else self.data_ny
         D = cat([x for x in data.data.values()], axis=0)
@@ -273,18 +291,8 @@ class Statistics():
     
     def compute_kmn(self):
         """
-        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix
+        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix.
 
-            Parameters
-        ----------
-            landmarks (default = False): bool 
-                    Landmarks or observations ? 
-            condition (default = None): str
-                    Column of the metadata that specify the dataset  
-            samples (default = None): str 
-                    List of values to select in the column condition of the metadata
-            marked_obs_to_ignore (default = None): str
-                    Column of the metadata specifying the observations to ignore
         """
         data = cat([x for x in self.data.data.values()], axis=0)
         landmarks = cat([x for x in self.data_ny.data.values()], axis=0)
@@ -297,65 +305,54 @@ class Statistics():
         Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
         return Statistics.ordered_eigsy(Kw)       
 
-    def diagonalize_centered_gram(self, verbose=0):
+    def diagonalize_centered_gram(self):
         """
         Diagonalizes the bicentered Gram matrix which shares its spectrum 
-        with the Withon covariance operator in the RKHS.
-        Stores eigenvalues and eigenvectors in the dict spev 
-
-        Parameters 
-        ----------
-            verbose (default = 0): 
-                Dans l'idée, plus verbose est grand, plus 
-                la fonction détaille ce qu'elle fait
+        with the within covariance operator in the RKHS.
+        
+        Returns
+        -------
+            Eigenvalues and eigenvectors, later stored in attributes 'sp' and
+            'ev' respectively.
 
         """
-
-        # calcul de la matrice a diagonaliserif verbose>0:
-        if verbose>0:
-            print('- Compute within covariance centered gram')
-        # Instantiation de la matrice de centrage P 
+        # Computing centering matrix P:
         P = self.compute_centering_matrix()
         
-        # récupération des paramètres du modèle spécifique à l'approximation de nystrom (infos sur les ancres)    
+        # Nytrom version:  
         if self.data_ny is not None:
             # Computing Nystrom anchors:
             self.sp_anchors, self.ev_anchors = self.compute_nystrom_anchors()        
             assert sum(self.sp_anchors > 0) != 0,'No anchors found, the dataset may have two many zeros.'
             if sum(self.sp_anchors > 0) < self.n_anchors:
-                if verbose>1:
-                    print(f'\tThe number of anchors is reduced from {self.n_anchors} to {sum(self.sp_anchors>0)} for numerical stability')
+                warning_message = '\tThe number of anchors is reduced from '
+                warning_message += f'{self.n_anchors} to {sum(self.sp_anchors>0)} for numerical stability'
+                warnings.warn(warning_message)
                 self.n_anchors = sum(self.sp_anchors > 0).item()
             self.sp_anchors, self.ev_anchors = (self.sp_anchors[: self.n_anchors],
                                                 self.ev_anchors[:, : self.n_anchors])
                 
-            # calcul de la matrice correspondant à l'approximation de nystrom. 
+            # Calculating the centering matrix for the Nystrom approximation:
             Kmn = self.compute_kmn()
             Lp_inv_12 = diag(self.sp_anchors ** (-1/2))
             Pm = self.compute_centering_matrix(landmarks=True)
 
-            # Calcul de la matrice à diagonaliser avec Nystrom. 
-            # Comme tu le disais, cette formule est symétrique et 
-            # on pourrait utiliser une SVD en l'écrivant BB^T, 
-            # où B = 1/(nm) Lp Up' Pm Kmn P  (car PP = P)                     
+            # Calculating the matrix to diagonalise with Nystrom:                 
             Kw = (1 / (self.data.ntot * self.data_ny.ntot ** 2)
                   * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
                                Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
-        # version standard 
+        # Standard version:
         else:
             K = self.compute_gram()
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
         
-        # diagonalisation par la fonction C++ codée par François puis tri 
-        # décroissant des valeurs propres et vecteurs prores
-        if verbose >0:
-            print('- Diagonalize within covariance centered gram')
+        # Diagonalisation with a function in C++:
         return Statistics.ordered_eigsy(Kw) 
 
     def compute_pkm(self):
-        '''
-        This function computes the term corresponding to the matrix-matrix-vector 
-        product PK omega of the KFDA statistic.
+        """
+        Computes the term corresponding to the matrix-matrix-vector 
+        product PK omega of the kFDA statistic.
         
         See the description of the method compute_kfdat() for a brief 
         description of the computation of the KFDA statistic. 
@@ -363,11 +360,12 @@ class Statistics():
         Returns
         ------- 
         pkm : torch.tensor 
-        Correspond to the product PK omega in the KFDA statistic. 
-        '''
-        # instantiation du vecteur de bi-centrage omega et de la matrice de centrage Pbi 
-        omega = self.compute_omega() # vecteur de 1/n1 et de -1/n2 
-        Pbi = self.compute_centering_matrix() # matrice de centrage par block
+            Corresponds to the product PK omega in the kFDA statistic. 
+            
+        """
+        # Calculating the bi-centering vector Omega and the centering matrix Pbi
+        omega = self.compute_omega() # vector with 1/n1 and -1/n2 
+        Pbi = self.compute_centering_matrix() # Centering by block matrix
         if self.data_ny is not None:
             Lz12 = diag(self.sp_anchors**(-1/2))
             Kzx = self.compute_kmn()
@@ -379,54 +377,29 @@ class Statistics():
             pkm = mv(Pbi, mv(Kx, omega))
         return(pkm) 
 
-    def compute_kfdat(self, verbose=0):
+    def compute_kfdat(self):
         
         """ 
-        From the former class:
-        Ces fonctions calculent les coordonnées des projections des embeddings sur des sous-espaces d'intérêt 
-        dans le RKHS. Sauf la projection sur ce qu'on appelle pour l'instant l'espace des résidus, comme cette 
-        projection nécessite de nombreux calculs intermédiaires, elle a été encodée dans un fichier à part. 
-        
-        
-        Computes the kfda truncated statistic of [Harchaoui 2009].
-        9 methods : 
-        approximation_cov in ['standard','nystrom',]
-        approximation_mmd in ['standard','nystrom',]
-        
-        Stores the result as a column in the dataframe df_kfdat
-
-        Parameters
-        ----------
-            self : Ktest,
-            the model parameter attributes `approximation_cov`, `approximation_mmd` must be defined.
-            if the nystrom method is used, the attribute `anchor_basis` should be defined and the anchors must have been computed. 
-
-            t (default = None) : None or int,
-            valeur maximale de troncature calculée. 
-            Si None, t prend la plus grande valeur possible, soit n (nombre d'observations) pour la 
-            version standard et n_anchors (nombre d'ancres) pour la version nystrom  
-
-            name (default = None) : None or str, 
-            nom de la colonne des dataframe df_kfdat et df_kfdat_contributions dans lesquelles seront stockés 
-            les valeurs de la statistique pour les différentes troncatures calculées de 1 à t 
-
-            verbose (default = 0) : Dans l'idée, plus verbose est grand, plus la fonction détaille ce qu'elle fait
+        Computes the kFDA truncated statistic of [Harchaoui 2009].        
 
         Description 
         -----------
-        Here is a brief description of the computation of the statistic, for more details, refer to the article : 
+        Here is a brief description of the computation of the statistic, for 
+        more details, refer to the article.
 
-        Let k(·,·) denote the kernel function, K denote the Gram matrix of the two  samples 
-        and kx the vector of embeddings of the observations x1,...,xn1,y1,...,yn2 :
+        Let k(·,·) denote the kernel function, K denote the Gram matrix of the 
+        two samples, and kx the vector of embeddings of the observations 
+        x1,...,xn1,y1,...,yn2:
         
                 kx = (k(x1,·), ... k(xn1,·),k(y1,·),...,k(yn2,·)) 
         
-        Let Sw denote the within covariance operator and P denote the centering matrix such that 
+        Let Sw denote the within covariance operator, and P denote the 
+        centering matrix such that 
 
                 Sw = 1/n (kx P)(kx P)^T
         
-        Let Kw = 1/n (kx P)^T(kx P) denote the dual matrix of Sw and (li) (ui) denote its eigenvalues (shared with Sw) 
-        and eigenvectors. We have :
+        Let Kw = 1/n (kx P)^T(kx P) denote the dual matrix of Sw, and (li) (ui)
+        denote its eigenvalues (shared with Sw) and eigenvectors. We have:
 
                 ui = 1/(lp * n)^{1/2} kx P up 
 
@@ -436,21 +409,20 @@ class Statistics():
                 Swt = l1 (e1 (x) e1) + l2 (e2 (x) e2) + ... + lt (et (x) et) 
                     = \sum_{p=1:t} lp (ep (x) ep)
         
-        where (li) and (ei) are the first t eigenvalues and eigenvectors of Sw ordered by decreasing eigenvalues,
-        and (x) stands for the tensor product. 
+        where (li) and (ei) are the first t eigenvalues and eigenvectors of 
+        Sw ordered by decreasing eigenvalues, and (x) stands for the tensor 
+        product. 
 
-        Let d = mu2 - mu1 denote the difference of the two kernel mean embeddings of the two samples 
-        of sizes n1 and n2 (with n = n1 + n2) and omega the weights vector such that 
+        Let d = mu2 - mu1 denote the difference of the two kernel mean 
+        embeddings of the two samples of sizes n1 and n2 (with n = n1 + n2) 
+        and omega the weights vector such that 
         
                 d = kx * omega 
-        
         
         The standard truncated KFDA statistic is given by :
         
                 F   = n1*n2/n || Swt^{-1/2} d ||_H^2
-
                     = \sum_{p=1:t} n1*n2 / ( lp*n) <ep,d>^2 
-
                     = \sum_{p=1:t} n1*n2 / ( lp*n)^2 up^T PK omega
 
 
@@ -460,39 +432,43 @@ class Statistics():
         This statistic also defines a discriminant axis ht in the RKHS H. 
         
                 ht  = n1*n2/n Swt^{-1/2} d 
-                    
                     = \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] kx P up 
 
         To project the dataset on this discriminant axis, we compute : 
 
                 h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K   
+                
+        Returns
+        -------
+            kfdat : Pandas.Series
+                Computed kFDA statistics. Indices correspond to truncations.
+                    
+            kfdat_contrib : Pandas.Series
+                Unidirectional statistic associated with each eigendirection 
+                of the within-group covariance operator. `kfdat` contains 
+                the cumulated sum of the values in `kfdat_contributions`.
+                Indices correspond to truncations.
 
-        """
-        
-        if verbose >0: 
-            print('- Compute kfda statistic') 
-        
-        # Récupération des vecteurs propres et valeurs propres calculés par la fonction de classe 
-        # diagonalize_within_covariance_centered_gram 
-        self.sp, self.ev = self.diagonalize_centered_gram(verbose=verbose)
+        """        
+        # Calculating eigenvalues and eigenvectors:
+        self.sp, self.ev = self.diagonalize_centered_gram()
 
-        # détermination de la troncature maximale à calculer 
+        # Maximal truncation identification:
         t = len(self.sp)
 
-        # calcul de la statistique pour chaque troncature 
-        pkm = self.compute_pkm() # partie de la stat qui ne dépend pas de la troncature mais du modèle
-        n1, n2 = self.data.nobs.values() # nombres d'observations dans les échantillons
+        # Calculating statistic for every truncation:
+        pkm = self.compute_pkm()
+        n1, n2 = self.data.nobs.values()
         exposant = 1 if self.data_ny is not None  else 2
         
-        # calcule la contribution de chaque troncature 
+        # Calculating contributions of every truncation:
         kfda_contributions = ((n1 * n2) / (self.data.ntot ** exposant
                                            * self.sp[:t] ** exposant) 
                               * mv(self.ev.T[:t], pkm) ** 2).numpy()
-        #somme les contributions pour avoir la stat correspondant à chaque troncature 
+        # Sum of contributions produces the kFDA statistic:
         kfda = kfda_contributions.cumsum(axis=0)
 
-        # stockage des vecteurs propres et valeurs propres dans l'attribut spev
-        trunc = range(1,t+1) # liste des troncatures possibles de 1 à t 
+        trunc = range(1,t+1) # truncations
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -500,7 +476,16 @@ class Statistics():
             kfdat_contributions = pd.Series(kfda_contributions, index=trunc)
         return kfdat, kfdat_contributions
  
-    def compute_mmd(self, unbiaised=False, verbose=0):
+    def compute_mmd(self):
+        """
+        Computes the MMD (maximal mean discrepancy) test statistic.
+
+        Returns
+        -------
+        float
+            The value of MMD.
+
+        """
         m = self.compute_omega()
         if self.data_ny is not None:
            # Computing Nystrom anchors:
@@ -512,8 +497,6 @@ class Statistics():
             mmd = dot(psi_m, psi_m) ** 2
         else:
             K = self.compute_gram()
-            if unbiaised:
-                K.masked_fill_(eye(K.shape[0], K.shape[0]).byte(), 0)
-            mmd = dot(mv(K, m), m) ** 2 # je crois qu'il n'y a pas besoin de carré
+            mmd = dot(mv(K, m), m) ** 2
         return(mmd.item())
            
