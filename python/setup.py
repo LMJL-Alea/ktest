@@ -4,16 +4,16 @@ import setuptools
 #     long_description = fh.read()
 
 setuptools.setup(
-    # name="pyktest", # Replace with your own username
-    # version="0.0.4",
-    # author="Anthony Ozier-Lafontaine",
-    # author_email="anthony.ozier-lafontaine@ec-nantes.fr",
-    # description="Package implementing efficient kernel tests such as MMD or mKFDR",
+    # name="ktest",
+    # version="1.0.0",
+    # author="Anthony Ozier-Lafontaine, Polina Arsenteva",
+    # author_email="anthony.ozier-lafontaine@ec-nantes.fr, polina.arsenteva@univ-nantes.fr",
+    # description="Package implementing efficient kernel tests such as kFDA and MMD",
     # long_description=long_description,
     # long_description_content_type="text/markdown",
-    # url="https://github.com/AnthoOzier/ktest",
+    # url="https://github.com/LMJL-Alea/ktest",
     # project_urls={
-    #     "Bug Tracker": "https://github.com/AnthoOzier/ktest/issues",
+    #     "Bug Tracker": "https://github.com/LMJL-Alea/ktest/issues",
     # },
     # classifiers=[
     #     "Programming Language :: Python :: 3",
