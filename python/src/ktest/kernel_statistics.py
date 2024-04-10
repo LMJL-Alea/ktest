@@ -14,13 +14,15 @@ def distances(x, y=None):
 
     """
     if y is None:
-        sq_dists = cdist(x, x, compute_mode='use_mm_for_euclid_dist_if_necessary').pow(
-            2)  # [sq_dists]_ij=||X_j - X_i \\^2
+        sq_dists = cdist(x, x, 
+                         compute_mode='use_mm_for_euclid_dist_if_necessary').pow(2)  
+        # [sq_dists]_ij=||X_j - X_i \\^2
     else:
         assert(y.ndim == 2)
         assert(x.shape[1] == y.shape[1])
-        sq_dists = cdist(x, y, compute_mode='use_mm_for_euclid_dist_if_necessary').pow(
-            2)  # [sq_dists]_ij=||x_j - y_i \\^2
+        sq_dists = cdist(x, y,
+                         compute_mode='use_mm_for_euclid_dist_if_necessary').pow(2)  
+        # [sq_dists]_ij=||x_j - y_i \\^2
     return sq_dists
 
 def mediane(x, y=None):    
@@ -65,18 +67,20 @@ def gauss_kernel(x, y, sigma=1):
 
     returns: kernel matrix
     """
-    
     d = distances(x, y)   # [sq_dists]_ij=||X_j - Y_i \\^2
     K = exp(-d / (2 * sigma**2))  # Gram matrix
     return K
 
 def gauss_kernel_median(x, y, bandwidth='median', median_coef=1, 
                         return_bandwidth=False):
+    """
+    Returns the gaussian kernel with bandwidth set as the median of the 
+    distances between pairs of observations (`bandwidth`='median').
+    """
     if bandwidth == 'median':
         computed_bandwidth = mediane(x, y) * median_coef
     else:
         computed_bandwidth = bandwidth
-    #K = gauss_kernel(x, y, computed_bandwidth)
     kernel = lambda x, y: gauss_kernel(x, y, computed_bandwidth)
     if return_bandwidth:
         return (kernel, computed_bandwidth)
@@ -185,6 +189,7 @@ class Statistics():
         self.ev = None
         self.sp_anchors = None
         self.ev_anchors = None
+        
         
     @staticmethod
     def ordered_eigsy(matrix):
@@ -377,7 +382,7 @@ class Statistics():
             pkm = mv(Pbi, mv(Kx, omega))
         return(pkm) 
 
-    def compute_kfdat(self):
+    def compute_kfda(self):
         
         """ 
         Computes the kFDA truncated statistic of [Harchaoui 2009].        
@@ -498,6 +503,75 @@ class Statistics():
         else:
             K = self.compute_gram()
             mmd = dot(mv(K, m), m) ** 2
-        return(mmd.item())    
+        return(mmd.item())
+    
+    def compute_upk(self, t):
+        """
+        epk is an alias for the product ePK that appears when projecting the 
+        data on the discriminant axis. This functions computes the corresponding 
+        block with respect to the model parameters. 
+
+        warning: some work remains to be done to :
+            - normalize the vectors with respect to n_anchors as in pkm 
+            - separate the different nystrom approaches 
+        """
+        Pbi = self.compute_centering_matrix()
+        if self.sp is None and self.ev is None:
+            self.sp, self.ev = self.diagonalize_centered_gram()
+        if self.data_ny is not None:
+            Kzx = self.compute_kmn()
+            if self.sp_anchors is None and self.ev_anchors is None:
+                self.sp_anchors, self.ev_anchors = self.compute_nystrom_anchors()
+            Lz12 = diag(self.sp_anchors**-(1/2))
+            epk = 1 / self.data_ny.ntot**(1/2) * multi_dot([self.ev.T[:t],
+                                                            Lz12,
+                                                            self.ev_anchors.T,
+                                                            Kzx]).T
+        else:
+            Kx = self.compute_gram()
+            epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
+        return(epk)
+    
+    def compute_projections(self, t=100):
+        """
+        Computes the vector of projection of the embeddings on the discriminant
+        axis corresponding to the KFDA statistic for every truncation up to t. 
+        
+        The projection with a truncation t is given by the formula :
+
+                h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
+
+        Returns
+        -------
+        t : int, optional
+            Maximal truncation, the default is 100.
+            
+        proj_kfda : pandas.DataFrame
+            Projections associated with every observation (rows) on every 
+            eigendirection (columns).
+            
+        proj_kpca : pandas.DataFrame
+            Contributions of each eigendirection (columns) to projections 
+            associated with every observation (rows). 'proj_kfda' contains the 
+            cumulated sum of the values in 'proj_kpca'.
+
+        """
+        if self.sp is None and self.ev is None:
+            self.sp, self.ev = self.diagonalize_centered_gram()
+        t = min(t, len(self.sp))
+        pkm = self.compute_pkm()
+        upk = self.compute_upk(t)
+        n1, n2 = self.data.nobs.values()
+        proj = (n1 * n2 * self.data.ntot **-2 * self.sp[:t]**(-2)
+                * mv(self.ev.T[:t], pkm) * upk).numpy()
+        proj_list = [proj[:n1], proj[n1:]]
+        proj_kfda = {}
+        proj_kpca = {}
+        for i, (name, ind) in enumerate(self.data.index.items()):
+            proj_kpca[name] = pd.DataFrame(proj_list[i], index=ind,
+                                                columns=[str(t) for t in range(1,t+1)])
+            proj_kfda[name] = pd.DataFrame(proj_list[i].cumsum(axis=1), index=ind,
+                                                columns=[str(t) for t in range(1,t+1)])
+        return proj_kfda, proj_kpca 
                 
                 
