@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import chi2
+from scipy.stats import chi2, gaussian_kde
+import matplotlib.pyplot as plt
+from matplotlib import rc
 import warnings
 from tqdm import tqdm
 from kernel_statistics import Statistics
@@ -92,39 +94,45 @@ class Ktest(Statistics):
             the Nystrom dataset, see the documentation of the class Data 
             for more details.
         
-        kfdat : Pandas.Series or None
+        kfda_statistic : Pandas.Series or None
             None if not computed. Otherwise, stores the computed kFDA statistics.
             Indices correspond to truncations.
     
-        pval_kfdat_asymp : Pandas.Series or None
+        kfda_pval_asymp : Pandas.Series or None
             None if not computed. Otherwise, stores the p-values associated with
-            the kFDA statistic (stored in 'kfdat'), obtained from the asymptotic 
+            the kFDA statistic (stored in 'kfda_statistic'), obtained from the asymptotic 
             distribution (chi-square with T degree of freedom). Indices 
             correspond to truncations.
         
-        pval_kfdat_perm : Pandas.Series or None
+        kfda_pval_perm  : Pandas.Series or None
             None if not computed. Otherwise, stores the p-values associated with
-            the kFDA statistic (stored in 'kfdat'), obtained with a permutation
+            the kFDA statistic (stored in 'kfda_statistic'), obtained with a permutation
             approach. Indices correspond to truncations.
                 
-        kfdat_contrib : Pandas.Series or None
+        kfda_statistic_contrib : Pandas.Series or None
             None if not computed. Otherwise, stores the unidirectional statistic
             associated with each eigendirection of the within-group covariance
-            operator. `kfdat` contains the cumulated sum of the values 
-            in `kfdat_contributions`. Indices correspond to truncations.
+            operator. `kfda_statistic` contains the cumulated sum of the values 
+            in `kfda_contributions`. Indices correspond to truncations.
         
-        pval_kfdat_contrib : Pandas.Series or None
-            None if not computed. Otherwise, stores the asymptotic p-values 
-            associated to each unidirectional statistic (chi-square with 1 
-            degree of freedom). Indices correspond to truncations.
-        
-        mmd : float or None
+        mmd_statistic : float or None
             None if not computed. Otherwise, stores the MMD test statistics.
             
-        pval_mmd : float or None
+        mmd_pval_perm : float or None
             None if not computed. Otherwise, stores the p-values 
             associated with each MMD statistic (only the permutation approach 
             is considered for MMD).
+            
+        kfda_proj : pandas.DataFrame
+            Projections of the embeddings on the discriminant axis 
+            corresponding to the KFDA statistic, associated with every 
+            observation (rows) on every eigendirection (columns).
+            
+        within_kpca_proj : pandas.DataFrame
+            Contributions of each eigendirection (columns) to projections of 
+            the embeddings on the discriminant axis corresponding to the 
+            KFDA statistic, associated with every observation (rows). 
+            'kfda_proj' contains the cumulated sum of the values in 'kpca_proj'.
             
         rnd_gen :  int, RandomState instance or None
             Determines random number generation for the Nystrom approximation
@@ -142,8 +150,8 @@ class Ktest(Statistics):
                  random_state=None):
         self.dataset = data
         self.metadata = metadata
-        self.sample_names = sample_names
         self.data = Data(data=data, metadata=metadata, sample_names=sample_names)
+        self.sample_names = self.data.sample_names
         
         if isinstance(random_state, np.random.RandomState):
             self.rnd_gen = random_state
@@ -180,15 +188,18 @@ class Ktest(Statistics):
         
         ### Output statistics ### 
         ## kFDA statistic
-        self.kfdat = None
-        self.pval_kfdat_asymp = None
-        self.pval_kfdat_perm = None
-        self.kfdat_contrib = None
-        self.pval_kfdat_contrib = None
+        self.kfda_statistic = None
+        self.kfda_pval_asymp = None
+        self.kfda_pval_perm  = None
+        self.kfda_statistic_contrib = None
         
         ## MMD statistic
-        self.mmd = None
-        self.pval_mmd = None
+        self.mmd_statistic = None
+        self.mmd_pval_perm = None
+        
+        ### Projections:
+        self.kfda_proj = {}
+        self.within_kpca_proj = {}
         
 
     def __str__(self):
@@ -200,22 +211,23 @@ class Ktest(Statistics):
            
         s += '\n___Multivariate test results___'
         ncs = 'not computed, run ktest.test.'
-        mmd_s = f'{self.mmd}, pvalue (permutation test): {self.pval_mmd}.'
+        mmd_s = f'{self.mmd_statistic}, pvalue (permutation test): {self.mmd_pval_perm}.'
         s += '\nMMD:\n'
-        s += f'{mmd_s}' if self.mmd is not None else ncs
+        s += f'{mmd_s}' if self.mmd_statistic is not None else ncs
         s += '\nkFDA:'
-        if self.kfdat is None:
+        if self.kfda_statistic is None:
             s += '\n' + ncs
         else:
-            for t in range(min(len(self.kfdat), 5)):
-                s += f'\nTruncation {t+1}: {self.kfdat.iloc[t]}, pvalue: '
-                s += 'asymptotic - '
-                s += (f'{self.pval_kfdat_asymp.iloc[t]}' 
-                      if self.pval_kfdat_asymp is not None else 'not computed')
-                s += ',\n'
-                s += 'permutation - '
-                s += (f'{self.pval_kfdat_perm.iloc[t]}' 
-                      if self.pval_kfdat_perm is not None else 'not computed')
+            for t in range(min(len(self.kfda_statistic), 5)):
+                s += f'\nTruncation {t+1}: {self.kfda_statistic.iloc[t]}. P-value:'
+                s += '\n'
+                s += 'asymptotic: '
+                s += (f'{self.kfda_pval_asymp.iloc[t]}' 
+                      if self.kfda_pval_asymp is not None else 'not computed')
+                s += ', '
+                s += 'permutation: '
+                s += (f'{self.kfda_pval_perm .iloc[t]}' 
+                      if self.kfda_pval_perm  is not None else 'not computed')
                 s += '.'
         return(s)
 
@@ -254,7 +266,7 @@ class Ktest(Statistics):
         if verbose <= 0:
             warnings.simplefilter("ignore")
         if stat == 'kfda':
-            test_res = kstatistics.compute_kfdat()
+            test_res = kstatistics.compute_kfda()
         elif stat == 'mmd':
             test_res = kstatistics.compute_mmd()
         else:
@@ -298,13 +310,12 @@ class Ktest(Statistics):
                 print('- Computing asymptotic p-values')
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                pval = chi2.sf(self.kfdat, self.kfdat.index)
-                pval_contrib = chi2.sf(self.kfdat_contrib, self.kfdat_contrib.index)
-                return pd.Series(pval), pd.Series(pval_contrib)
+                pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
+                return pd.Series(pval)
         else:
             if verbose > 0:
                 print('- Performing permutations to compute p-values:')
-            stats_count = (pd.Series(0, index=range(1, len(self.kfdat) + 1)) 
+            stats_count = (pd.Series(0, index=range(1, len(self.kfda_statistic) + 1)) 
                            if stat == 'kfda' else 0)
             it = tqdm(range(n_permutations)) if verbose > 0 else range(n_permutations)
             for i in it:
@@ -335,9 +346,9 @@ class Ktest(Statistics):
                                                              kstat=kstat_perm,
                                                              verbose=verbose-1)
                 if stat == 'kfda':
-                    stats_count += perm_stats_res[0].ge(self.kfdat)
+                    stats_count += perm_stats_res[0].ge(self.kfda_statistic)
                 elif stat == 'mmd' : 
-                    stats_count += (perm_stats_res >= self.mmd)
+                    stats_count += (perm_stats_res >= self.mmd_statistic)
             return stats_count / n_permutations
    
     def test(self, stat='kfda', permutation=False, n_permutations=500, verbose=1):
@@ -367,22 +378,172 @@ class Ktest(Statistics):
         if stat == 'kfda':
             if verbose > 0:
                 print('- Computing kFDA statistic')
-            (self.kfdat,
-             self.kfdat_contrib) = self.compute_test_statistic(verbose=verbose)
+            (self.kfda_statistic,
+             self.kfda_statistic_contrib) = self.compute_test_statistic(verbose=verbose)
             if not permutation:
-                (self.pval_kfdat_asymp,
-                 self.pval_kfdat_contrib) = self.compute_pvalue(verbose=verbose)
+                self.kfda_pval_asymp = self.compute_pvalue(verbose=verbose)
             else:
-                self.pval_kfdat_perm = self.compute_pvalue(permutation=permutation, 
+                self.kfda_pval_perm  = self.compute_pvalue(permutation=permutation, 
                                                            n_permutations=n_permutations,
                                                            verbose=verbose)
         elif stat == 'mmd':
             if verbose > 0:
                 print('- Computing MMD statistic')
-            self.mmd = self.compute_test_statistic(stat=stat, verbose=verbose)
-            self.pval_mmd = self.compute_pvalue(stat=stat, verbose=verbose,
+            self.mmd_statistic = self.compute_test_statistic(stat=stat, verbose=verbose)
+            self.mmd_pval_perm = self.compute_pvalue(stat=stat, verbose=verbose,
                                                 n_permutations=n_permutations)
         else:
             if verbose >0:
                 print(f"Statistic '{stat}' not recognized. Possible values : 'kfda','mmd'")
+                
+    def plot_density(self, t=None, t_max=100, colors=None, labels=None, alpha=.5, 
+                     legend_fontsize=15):
+        """
+        Plots a density of the projection on either the discriminant axes of 
+        the kFDA statistic.
+
+        Parameters
+        ----------
+        t : int, optional
+            Truncation to plot, by default equal to the maximal truncation.
+            
+        t_max : int, optional
+            Maximal truncation for projections calculation, the default is 100.
+        
+        colors : dict or None
+            Sample colors, should be a dictionary with keys corresponding to the
+            attribute 'sample_names', and values to strings denoting colors. 
+            If not given, default colors are assigned.
+        
+        labels : dict or None
+            Sample labels, should be a dictionary with keys corresponding to the
+            attribute 'sample_names', and values to strings. If not given, 
+            samples are labeled with sample names.
+        
+        alpha : float, optional
+           The alpha blending value, between 0 (transparent) and 1 (opaque).
+           The default is 0.5.
+        
+        legend_fontsize : int, optional
+            Legend font size. The default is 15.
+
+        """
+        if t is None:
+            t = t_max
+        if t > len(self.kstat.sp):
+            raise ValueError(f"Value of t has to be at most {len(self.kstat.sp)}.")
+        if t > t_max:
+            t_max = t
+        if not self.kfda_proj or str(t) not in self.kfda_proj[self.sample_names[0]]:
+            self.kfda_proj, self.within_kpca_proj = self.kstat.compute_projections(t_max)
+
+        if colors is None:
+            colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
+        
+        rc('font',**{'family':'serif','serif':['Times']})
+        fig, ax = plt.subplots(ncols=1, figsize=(12,6))
+        for name, df_proj in self.kfda_proj.items():
+            dfxy = df_proj[str(t)]
+            min_proj, max_proj = dfxy.min(), dfxy.max()
+            min_scaled = min_proj - 0.1 * (max_proj - min_proj)
+            max_scaled = max_proj + 0.1 * (max_proj - min_proj)
+            x = np.linspace(min_scaled, max_scaled, 200)
+            density = gaussian_kde(dfxy, bw_method=.2)
+            y = density(x)
+            label = labels[name] if labels is not None else name
+            
+            ax.plot(x, y, color=colors[name], lw=2)
+            ax.fill_between(x, y, y2=0, color=colors[name], label=label, alpha=alpha)
+            axis_label = f'DA{t}'
+            ax.set_ylabel(axis_label, fontsize=25)
+            ax.legend(fontsize=legend_fontsize)
+        #plt.axvline(x=0, linestyle='--')
+        ax.set_title('kFDA discriminant axis projection density', fontsize=25)
+        return(fig,ax)
+    
+    def scatter_projection(self, t_x=1, t_y=2, proj_xy=['kfda', 'within_kpca'],
+                           t_max=100, colors=None, labels=None, alpha=.75,
+                           legend_fontsize=15):
+        """
+        Plots a scatter of projections, where axes can represent either the 
+        discriminant axes of the kFDA statistic, or the corresponding 
+        eigenvector contributions (kPCA).
+
+        Parameters
+        ----------
+        t_x : int, optional
+            Truncation for the scatter with respect to axis x, 
+            the default is 1.
+            
+        t_y : int, optional
+            Truncation for the scatter with respect to axis y, 
+            the default is 1.
+        
+        t_max : int, optional
+            Maximal truncation for projections calculation, the default is 100.
+            
+        proj_xy : pair of strings, optional
+            Projections to scatter with respect to axes x and y respectively, 
+            possible values: ['kfda', 'within_kpca'] (default) and 
+            ['within_kpca', 'within_kpca']. In the first case, the truncation for
+            the within kPCA is automatically assigned as the next one after 
+            the truncation for the discriminant axis (value of 't_x').
+        
+        colors : dict or None
+            Sample colors, should be a dictionary with keys corresponding to the
+            attribute 'sample_names', and values to strings denoting colors. 
+            If not given, default colors are assigned.
+        
+        labels : dict or None
+            Sample labels, should be a dictionary with keys corresponding to the
+            attribute 'sample_names', and values to strings. If not given, 
+            samples are labeled with sample names.
+        
+        alpha : float, optional
+           The alpha blending value, between 0 (transparent) and 1 (opaque).
+           The default is 0.5.
+        
+        legend_fontsize : int, optional
+            Legend font size. The default is 15.
+
+        """
+        max_t_xy = max(t_x, t_y)
+        if max_t_xy > len(self.kstat.sp):
+            raise ValueError(f"Value of t has to be at most {len(self.kstat.sp)}.")
+        if max_t_xy > t_max:
+            t_max = max_t_xy
+        if not self.kfda_proj or str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
+            self.kfda_proj, self.within_kpca_proj = self.kstat.compute_projections(t_max)
+        if proj_xy[0] == 'kfda' and proj_xy[1] == 'within_kpca':
+            dict_proj_x = self.kfda_proj
+            dict_proj_y = self.within_kpca_proj
+            t_xy=[t_x, t_x + 1]
+        elif proj_xy[0] == 'within_kpca' and proj_xy[1] == 'within_kpca':
+            dict_proj_x = self.within_kpca_proj
+            dict_proj_y = self.within_kpca_proj
+            t_xy=[t_x, t_y]
+        else:
+            err_txt = "Possible values for 'proj_xy': "
+            err_txt += "['within_kpca', 'within_kpca'], ['kfda', 'within_kpca']."
+            raise ValueError(err_txt)
+            
+        if colors is None:
+            colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
+        rc('font',**{'family':'serif','serif':['Times']})
+        fig, ax = plt.subplots(ncols=1, figsize=(12,6))
+        for name, df_proj in dict_proj_x.items():
+            x = df_proj[str(t_xy[0])]
+            y = dict_proj_y[name][str(t_xy[1])]
+            label = labels[name] if labels is not None else name
+            ax.scatter(x, y, s=30, alpha=alpha, facecolors='none', 
+                       edgecolors=colors[name], lw=2, label=label)
+            xaxis_label = (f'DA{t_xy[0]}' if proj_xy[0] == 'kfda' else 
+                           f'PC{t_xy[0]}' if proj_xy[0] == 'within_kpca' else None)
+            ax.set_xlabel(xaxis_label, fontsize=25)
+            yaxis_label = (f'DA{t_xy[1]}' if proj_xy[1] == 'kfda' else 
+                           f'PC{t_xy[1]}' if proj_xy[1] == 'within_kpca' else None)
+            ax.set_ylabel(yaxis_label, fontsize=25)
+            ax.legend(fontsize=legend_fontsize)
+        ax.set_title('Projection scatter', fontsize=25)
+        return(fig,ax)
 
