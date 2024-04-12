@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 import warnings
 from tqdm import tqdm
-from kernel_statistics import Statistics
-from data import Data
+from .kernel_statistics import Statistics
+from .data import Data
 
 class Ktest(Statistics):
     """
