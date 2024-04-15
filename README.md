@@ -23,4 +23,5 @@ remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
 
 ## References
 <a id="1">[1]</a> 
-Anthony Ozier-Lafontaine, Camille Fourneaux, Ghislain Durif, Polina Artenseva, Céline Vallot, Olivier Gandrillon, Sandrine Gonin-Giraud, Bertrand Michel, Franck Picard. (2024). Kernel-Based Testing for Single-Cell Differential Analysis. Preprint, hal-04214858.
+Anthony Ozier-Lafontaine, Camille Fourneaux, Ghislain Durif, Polina Arsenteva, Céline Vallot, Olivier Gandrillon, Sandrine Gonin-Giraud, Bertrand Michel, Franck Picard. (2024). Kernel-Based Testing for Single-Cell Differential Analysis. Preprint, [10.48550/arXiv.2307.08509](
+https://doi.org/10.48550/arXiv.2307.08509).
