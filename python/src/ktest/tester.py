@@ -462,13 +462,13 @@ class Ktest(Statistics):
         ax.set_title('kFDA discriminant axis projection density', fontsize=25)
         return(fig,ax)
     
-    def scatter_projection(self, t_x=1, t_y=2, proj_xy=['kfda', 'within_kpca'],
+    def scatter_projection(self, t_x=1, t_y=2, proj_xy=['kfda', 'kfda_contrib'],
                            t_max=100, colors=None, labels=None, alpha=.75,
                            legend_fontsize=15):
         """
         Plots a scatter of projections, where axes can represent either the 
         discriminant axes of the kFDA statistic, or the corresponding 
-        eigenvector contributions (kPCA).
+        eigenvector contributions.
 
         Parameters
         ----------
@@ -485,9 +485,9 @@ class Ktest(Statistics):
             
         proj_xy : pair of strings, optional
             Projections to scatter with respect to axes x and y respectively, 
-            possible values: ['kfda', 'within_kpca'] (default) and 
-            ['within_kpca', 'within_kpca']. In the first case, the truncation for
-            the within kPCA is automatically assigned as the next one after 
+            possible values: ['kfda', 'kfda_contrib'] (default) and 
+            ['kfda_contrib', 'kfda_contrib']. In the first case, the truncation for
+            the contribution is automatically assigned as the next one after 
             the truncation for the discriminant axis (value of 't_x').
         
         colors : dict or None
@@ -515,17 +515,17 @@ class Ktest(Statistics):
             t_max = max_t_xy
         if not self.kfda_proj or str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
             self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t_max)
-        if proj_xy[0] == 'kfda' and proj_xy[1] == 'within_kpca':
+        if proj_xy[0] == 'kfda' and proj_xy[1] == 'kfda_contrib':
             dict_proj_x = self.kfda_proj
             dict_proj_y = self.kfda_proj_contrib
             t_xy=[t_x, t_x + 1]
-        elif proj_xy[0] == 'within_kpca' and proj_xy[1] == 'within_kpca':
+        elif proj_xy[0] == 'kfda_contrib' and proj_xy[1] == 'kfda_contrib':
             dict_proj_x = self.kfda_proj_contrib
             dict_proj_y = self.kfda_proj_contrib
             t_xy=[t_x, t_y]
         else:
             err_txt = "Possible values for 'proj_xy': "
-            err_txt += "['within_kpca', 'within_kpca'], ['kfda', 'within_kpca']."
+            err_txt += "['kfda_contrib', 'kfda_contrib'], ['kfda', 'kfda_contrib']."
             raise ValueError(err_txt)
             
         if colors is None:
@@ -539,10 +539,10 @@ class Ktest(Statistics):
             ax.scatter(x, y, s=30, alpha=alpha, facecolors='none', 
                        edgecolors=colors[name], lw=2, label=label)
             xaxis_label = (f'DA{t_xy[0]}' if proj_xy[0] == 'kfda' else 
-                           f'PC{t_xy[0]}' if proj_xy[0] == 'within_kpca' else None)
+                           f'PC{t_xy[0]}' if proj_xy[0] == 'kfda_contrib' else None)
             ax.set_xlabel(xaxis_label, fontsize=25)
             yaxis_label = (f'DA{t_xy[1]}' if proj_xy[1] == 'kfda' else 
-                           f'PC{t_xy[1]}' if proj_xy[1] == 'within_kpca' else None)
+                           f'PC{t_xy[1]}' if proj_xy[1] == 'kfda_contrib' else None)
             ax.set_ylabel(yaxis_label, fontsize=25)
             ax.legend(fontsize=legend_fontsize)
         ax.set_title('Projection scatter', fontsize=25)
