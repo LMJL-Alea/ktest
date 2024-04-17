@@ -441,7 +441,7 @@ class Ktest(Statistics):
         if colors is None:
             colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
         
-        rc('font',**{'family':'serif','serif':['Times']})
+        rc('font',**{'family':'serif'})
         fig, ax = plt.subplots(ncols=1, figsize=(12,6))
         for name, df_proj in self.kfda_proj.items():
             dfxy = df_proj[str(t)]
@@ -530,7 +530,7 @@ class Ktest(Statistics):
             
         if colors is None:
             colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
-        rc('font',**{'family':'serif','serif':['Times']})
+        rc('font',**{'family':'serif'})
         fig, ax = plt.subplots(ncols=1, figsize=(12,6))
         for name, df_proj in dict_proj_x.items():
             x = df_proj[str(t_xy[0])]
