@@ -128,11 +128,12 @@ class Ktest(Statistics):
             corresponding to the KFDA statistic, associated with every 
             observation (rows) on every eigendirection (columns).
             
-        within_kpca_proj : pandas.DataFrame
+        kfda_proj_contrib : pandas.DataFrame
             Contributions of each eigendirection (columns) to projections of 
             the embeddings on the discriminant axis corresponding to the 
             KFDA statistic, associated with every observation (rows). 
-            'kfda_proj' contains the cumulated sum of the values in 'kpca_proj'.
+            'kfda_proj' contains the cumulated sum of the values in 
+            'kfda_proj_contrib'.
             
         rnd_gen :  int, RandomState instance or None
             Determines random number generation for the Nystrom approximation
@@ -199,7 +200,7 @@ class Ktest(Statistics):
         
         ### Projections:
         self.kfda_proj = {}
-        self.within_kpca_proj = {}
+        self.kfda_proj_contrib = {}
         
 
     def __str__(self):
@@ -435,7 +436,7 @@ class Ktest(Statistics):
         if t > t_max:
             t_max = t
         if not self.kfda_proj or str(t) not in self.kfda_proj[self.sample_names[0]]:
-            self.kfda_proj, self.within_kpca_proj = self.kstat.compute_projections(t_max)
+            self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t_max)
 
         if colors is None:
             colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
@@ -513,14 +514,14 @@ class Ktest(Statistics):
         if max_t_xy > t_max:
             t_max = max_t_xy
         if not self.kfda_proj or str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
-            self.kfda_proj, self.within_kpca_proj = self.kstat.compute_projections(t_max)
+            self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t_max)
         if proj_xy[0] == 'kfda' and proj_xy[1] == 'within_kpca':
             dict_proj_x = self.kfda_proj
-            dict_proj_y = self.within_kpca_proj
+            dict_proj_y = self.kfda_proj_contrib
             t_xy=[t_x, t_x + 1]
         elif proj_xy[0] == 'within_kpca' and proj_xy[1] == 'within_kpca':
-            dict_proj_x = self.within_kpca_proj
-            dict_proj_y = self.within_kpca_proj
+            dict_proj_x = self.kfda_proj_contrib
+            dict_proj_y = self.kfda_proj_contrib
             t_xy=[t_x, t_y]
         else:
             err_txt = "Possible values for 'proj_xy': "
