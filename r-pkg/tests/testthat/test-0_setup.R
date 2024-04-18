@@ -1,26 +1,3 @@
-# FIXME
-# test_that("run_py_env", {
-#     
-#     skip_if_not_interactive()
-#     
-#     # test env init
-#     expect_no_error(run_py_env({
-#         have_python <- reticulate::py_available()
-#         expect_true(have_python)
-#     }))
-#     
-#     # specific environment name
-#     envname <- random_envname("ktest", length = 20)
-#     # test specific environment init
-#     run_py_env({
-#         pyconf <- reticulate::py_discover_config()
-#         expect_true(
-#             pyconf$python,
-#             file.path(reticulate::virtualenv_root(), envname, "bin", "python")
-#         )
-#     }, envname)
-# })
-
 test_that("skip_if_no_python", {
     # Test that a skip happens
     if(reticulate::py_available()) {
@@ -52,4 +29,14 @@ test_that("skip_if_not_interactive", {
         # skip
         expect_condition(skip_if_not_interactive(), class = "skip")
     }
+})
+
+test_that("load_test_data", {
+    out <- load_test_data()
+    checkmate::expect_list(out, len = 2)
+    checkmate::expect_subset(names(out), c("data_tab", "metadata_tab"))
+    checkmate::expect_data_frame(
+        out$data_tab, nrows = 344, ncols = 83, types = "numeric")
+    checkmate::expect_data_frame(
+        out$metadata_tab, nrows = 344, ncols = 1, types = "character")
 })
