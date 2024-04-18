@@ -17,16 +17,19 @@ usethis::proj_sitrep()
 
 ## Reticulate config
 
-```{r dev-reticulate}
+```{r dev-reticulate-setup}
 # create virtualenv
 reticulate::virtualenv_create("ktest")
-# activate python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
 # install Python package (to do once)
 reticulate::virtualenv_install(
     envname = "ktest",
     packages = "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python"
 )
+```
+
+```{r dev-reticulate-load}
+# activate python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
 # check Python config
 reticulate::py_config()
 ```
@@ -84,11 +87,6 @@ usethis::use_roxygen_md()
 ```{r dev-req}
 # requirements
 usethis::use_package("reticulate", type = "Imports")
-usethis::use_package("checkmate", type = "Suggests")
-usethis::use_package("covr", type = "Suggests")
-usethis::use_package("stringi", type = "Suggests")
-usethis::use_package("stringr", type = "Suggests")
-usethis::use_package("withr", type = "Suggests")
 usethis::use_testthat()
 ```
 
