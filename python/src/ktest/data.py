@@ -130,9 +130,9 @@ class Data():
                 if isinstance(data_n, pd.Series):
                     self.data[n] = (torch.from_numpy(data_n.to_numpy()
                                                      .reshape(-1,1)).double())
-                if isinstance(data_n, pd.DataFrame):
+                elif isinstance(data_n, pd.DataFrame):
                     self.data[n] = torch.from_numpy(data_n.to_numpy()).double()
-                if isinstance(data_n, torch.Tensor):
+                elif isinstance(data_n, torch.Tensor):
                     self.data[n] = data_n.double()
                 else:
                     X = (data_n.to_numpy() if not isinstance(data_n, np.ndarray)
