@@ -29,17 +29,3 @@ skip_if_no_pyktest <- function() {
 skip_if_not_interactive <- function() {
     if(!interactive()) skip("Test only run in interactive mode")
 }
-
-# function to load test data
-load_test_data <- function() {
-    # data directory
-    data_dir <- file.path(fs::path_package("ktest"), "extdata")
-    # expression data table
-    data_tab <- readr::read_csv(file.path(data_dir, "data.csv")) %>%
-        dplyr::select(!1)
-    # metadata table
-    metadata_tab <- readr::read_csv(file.path(data_dir, "metadata.csv")) %>%
-        dplyr::select(condition)
-    # output
-    return(tibble::lst(data_tab, metadata_tab))
-}
