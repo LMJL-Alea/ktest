@@ -397,8 +397,24 @@ class Ktest(Statistics):
             if verbose >0:
                 print(f"Statistic '{stat}' not recognized. Possible values : 'kfda','mmd'")
                 
+    def project(self, t=100):
+        """
+        Computes the vector of projection of the embeddings on the discriminant
+        axis corresponding to the KFDA statistic for every truncation up to t. 
+        Assigns the values of projections and the contributions of every 
+        eigendirection to attributes 'kfda_proj' and 'kfda_proj_contrib'
+        respectively.
+
+        Parameters
+        ----------
+        t : int, optional
+            Maximal truncation for projections calculation, the default is 100.
+
+        """
+        self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t)
+                
     def plot_density(self, t=None, t_max=100, colors=None, labels=None, alpha=.5, 
-                     legend_fontsize=15):
+                     legend_fontsize=15, font_family='serif'):
         """
         Plots a density of the projection on either the discriminant axes of 
         the kFDA statistic.
@@ -427,6 +443,11 @@ class Ktest(Statistics):
         
         legend_fontsize : int, optional
             Legend font size. The default is 15.
+            
+        font_family : str, optional
+             Legend and labels' font family name accepted by matplotlib 
+             (e.g., 'serif', 'sans-serif', 'monospace', 'fantasy' or 'cursive'),
+             the default is 'serif'.
 
         """
         if t is None:
@@ -436,12 +457,12 @@ class Ktest(Statistics):
         if t > t_max:
             t_max = t
         if not self.kfda_proj or str(t) not in self.kfda_proj[self.sample_names[0]]:
-            self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t_max)
+            self.project(t=t_max)
 
         if colors is None:
             colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
         
-        rc('font',**{'family':'serif'})
+        rc('font',**{'family': font_family})
         fig, ax = plt.subplots(ncols=1, figsize=(12,6))
         for name, df_proj in self.kfda_proj.items():
             dfxy = df_proj[str(t)]
@@ -464,7 +485,7 @@ class Ktest(Statistics):
     
     def scatter_projection(self, t_x=1, t_y=2, proj_xy=['kfda', 'kfda_contrib'],
                            t_max=100, colors=None, labels=None, alpha=.75,
-                           legend_fontsize=15):
+                           legend_fontsize=15, font_family='serif'):
         """
         Plots a scatter of projections, where axes can represent either the 
         discriminant axes of the kFDA statistic, or the corresponding 
@@ -506,6 +527,11 @@ class Ktest(Statistics):
         
         legend_fontsize : int, optional
             Legend font size. The default is 15.
+            
+        font_family : str, optional
+             Legend and labels' font family name accepted by matplotlib 
+             (e.g., 'serif', 'sans-serif', 'monospace', 'fantasy' or 'cursive'),
+             the default is 'serif'.
 
         """
         max_t_xy = max(t_x, t_y)
@@ -514,7 +540,7 @@ class Ktest(Statistics):
         if max_t_xy > t_max:
             t_max = max_t_xy
         if not self.kfda_proj or str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
-            self.kfda_proj, self.kfda_proj_contrib = self.kstat.compute_projections(t_max)
+            self.project(t=t_max)
         if proj_xy[0] == 'kfda' and proj_xy[1] == 'kfda_contrib':
             dict_proj_x = self.kfda_proj
             dict_proj_y = self.kfda_proj_contrib
@@ -530,7 +556,7 @@ class Ktest(Statistics):
             
         if colors is None:
             colors = {self.sample_names[0] : 'indigo', self.sample_names[1] : 'turquoise'}
-        rc('font',**{'family':'serif'})
+        rc('font',**{'family': font_family})
         fig, ax = plt.subplots(ncols=1, figsize=(12,6))
         for name, df_proj in dict_proj_x.items():
             x = df_proj[str(t_xy[0])]
