@@ -64,7 +64,7 @@ class Ktest(Statistics):
     
         n_anchors : int, optional
             Number of anchors used in the Nystrom method, by default equal to
-            the number of landamarks.
+            the number of landmarks.
     
         landmark_method : 'random' or 'kmeans++', optional
             Method of the landmarks selection, 'random '(default) corresponds 
