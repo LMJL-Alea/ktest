@@ -312,7 +312,7 @@ class Ktest(Statistics):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
-                return pd.Series(pval)
+                return pd.Series(pval, index=self.kfda_statistic.index)
         else:
             if verbose > 0:
                 print('- Performing permutations to compute p-values:')
