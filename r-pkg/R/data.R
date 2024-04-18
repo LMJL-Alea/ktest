@@ -5,17 +5,17 @@
 #' (i.e. corresponding experimental conditions).
 #' 
 #' @details
-#' This dataset originated from a study investigated the molecular mechanisms 
-#' underlying cell differentiation and reversion, by measuring cell 
+#' This dataset originates from a study that investigated the molecular 
+#' mechanisms underlying cell differentiation and reversion, by measuring cell 
 #' transcriptomes at four time points: undifferentiated T2EC maintained in a 
-#' self-renewal medium (condition `"0H"`), then put in a differentiation-inducing 
-#' medium for 24h (condition `"24H"`). This population was then split into 
-#' a first population maintained in the same medium for another 24h to achieve 
-#' differentiation (condition `"48HDIFF"`), and the second population was put 
-#' back in the self-renewal medium to investigate potential reversion 
-#' (condition `"48HREV"`). Cell transcriptomes were measured using 
-#' scRT-qPCR on 83 genes selected to be involved in the differentiation 
-#' process.
+#' self-renewal medium (condition `"0H"`), then put in a 
+#' differentiation-inducing medium for 24h (condition `"24H"`). This population 
+#' was then split into a first population maintained in the same medium for 
+#' another 24h to achieve differentiation (condition `"48HDIFF"`), and the 
+#' second population was put back in the self-renewal medium to investigate 
+#' potential reversion (condition `"48HREV"`). Cell transcriptomes were 
+#' measured using scRT-qPCR on 83 genes selected to be involved in the 
+#' differentiation process.
 #' 
 #' See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
 #' 
@@ -38,19 +38,19 @@
 #' @importFrom tibble lst
 #' 
 #' @references
-#' Zreika S, Fourneaux C, Vallin E, Modolo L, Seraphin R, Moussy A, Ventre E, 
-#' Bouvier M, Ozier-Lafontaine A, Bonnaffoux A, Picard F, Gandrillon O, 
-#' Gonin-Giraud S. Evidence for close molecular proximity between reverting 
-#' and undifferentiated cells. BMC Biol. 2022 Jul 6;20(1):155. 
-#' \doi{10.1186/s12915-022-01363-7}. 
-#' [PMID: 35794592](https://pubmed.ncbi.nlm.nih.gov/35794592/); 
+#' Zreika S., Fourneaux C., Vallin E., Modolo L., Seraphin R., Moussy A., 
+#' Ventre E., Bouvier M., Ozier-Lafontaine A., Bonnaffoux A., Picard F., 
+#' Gandrillon O., Gonin-Giraud S. (2022 Jul 6). 
+#' Evidence for close molecular proximity between reverting and 
+#' undifferentiated cells. BMC Biol. 20(1):155.
+#' [doi:10.1186/s12915-022-01363-7](https://dx.doi.org/10.1186/s12915-022-01363-7);
+#' [PMID: 35794592](https://pubmed.ncbi.nlm.nih.gov/35794592/);
 #' [PMCID: PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
 #' [hal-04134084v1](https://hal.science/hal-04134084v1).
 #' 
-#' Anthony Ozier-Lafontaine, Camille Fourneaux, Ghislain Durif, Polina 
-#' Arsenteva, Céline Vallot, Olivier Gandrillon, Sandrine Gonin-Giraud, 
-#' Bertrand Michel, Franck Picard. (2024). Kernel-Based Testing for 
-#' Single-Cell Differential Analysis. Preprint, 
+#' Ozier-Lafontaine A., Fourneaux C., Durif G., Arsenteva P., Vallot C., 
+#' Gandrillon O., Gonin-Giraud S., Michel B., Picard F. (2024). 
+#' Kernel-Based Testing for Single-Cell Differential Analysis. Preprint. 
 #' \doi{10.48550/arXiv.2307.08509};
 #' [arXiv.2307.08509](https://arxiv.org/abs/2307.08509);
 #' [hal-04214858](https://hal.science/hal-04214858).
