@@ -17,6 +17,7 @@ usethis::proj_sitrep()
 
 ## Reticulate config
 
+To be done once:
 ```{r dev-reticulate-setup}
 # create virtualenv
 reticulate::virtualenv_create("ktest")
@@ -27,6 +28,7 @@ reticulate::virtualenv_install(
 )
 ```
 
+To be always done when starting a new R session:
 ```{r dev-reticulate-load}
 # activate python environment
 reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
@@ -87,7 +89,7 @@ usethis::use_roxygen_md()
 ```{r dev-req}
 # requirements
 usethis::use_package("reticulate", type = "Imports")
-usethis::use_testthat()
+usethis::use_testthat(3)
 ```
 
 ### Documentation
@@ -98,21 +100,34 @@ pkgload::load_all(pkg_dir)
 
 # Generate documentation and deal with dependencies
 attachment::att_amend_desc(path = pkg_dir)
+```
 
-# README file
+```{r dev-vignette}
+devtools::build_vignettes(pkg_dir)
+```
+
+```{r dev-readme}
+# generate README.md from README.Rmd
 devtools::build_readme(pkg_dir)
+```
+
+```{r dev-website}
+pkgdown::build_site(pkg = pkg_dir)
 ```
 
 ### Test and check
 
-```{r development-check}
-# Run the test
+```{r dev-test}
+# run the unit tests
 devtools::test(pkg_dir)
+```
 
-# test coverage
-covr::package_coverage(
-    pkg_dir, line_exclusions = list("R/init.R", "R/python.R"))
+```{r dev-check-doc}
+# check the package doc
+devtools::check_man(pkg_dir)
+```
 
-# Check the package
+```{r dev-check}
+# fully check the package
 devtools::check(pkg_dir)
 ```
