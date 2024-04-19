@@ -48,5 +48,7 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 inst/doc
+
+# Vignette related files
 /doc/
 /Meta/

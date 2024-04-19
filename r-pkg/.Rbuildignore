@@ -6,3 +6,6 @@
 ^LICENSE\.md$
 ^doc$
 ^Meta$
+\.gitignore
+\.git
+^example_*
