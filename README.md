@@ -1,8 +1,12 @@
 # ktest
 
-This package implements kernel tests such as kFDA and MMD. 
+This package implements kernel tests such as kFDA and MMD introduced in [[1]](#1).
 
-The results presented in [[1]](#1) are available [here](https://github.com/AnthoOzier/ktest_experiment_genome_biology_2024). The source code for experimental_data and squair scripts are based on the branch [publication_genome_biology](https://github.com/LMJL-Alea/ktest/tree/publication_genome_biology). The reversion scripts are based on the branch [publication_genome_biology_reversion](https://github.com/LMJL-Alea/ktest/tree/publication_genome_biology_reversion). See https://github.com/AnthoOzier/ktest_experiment_genome_biology_2024 for more details.
+The code for the analysis presented in [[1]](#1) are available in a dedicated repository [here](https://github.com/AnthoOzier/ktest_experiment_genome_biology_2024).
+
+The source code for experimental_data and squair scripts are based on the branch [`publication_genome_biology`](https://github.com/LMJL-Alea/ktest/tree/publication_genome_biology). The reversion scripts are based on the branch [`publication_genome_biology_reversion`](https://github.com/LMJL-Alea/ktest/tree/publication_genome_biology_reversion).
+
+See https://github.com/AnthoOzier/ktest_experiment_genome_biology_2024 for more details.
 
 
 ## Python package
@@ -18,7 +22,7 @@ pip install ktest@git+https://github.com/LMJL-Alea/ktest@main#subdirectory=pytho
 See [`r-pkg`](./r-pkg) directory.
 
 ```r
-remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
+remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 ```
 
 ## References
