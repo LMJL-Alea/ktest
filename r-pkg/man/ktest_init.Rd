@@ -60,6 +60,10 @@ Multiple of the median to compute bandwidth if
 If TRUE, computes the Nystrom approximation, and uses it to compute
 the test statistics. The default if FALSE.}
 
+\item{n_landmarks}{integer.
+Number of landmarks used in the Nystrom method. If unspecified, one
+fifth of the observations are selected as landmarks.}
+
 \item{landmark_method}{\code{'random'} or \code{'kmeans++'}.
 Method of the landmarks selection, \code{'random'} (default) corresponds
 to selecting landmarks among the observations according to the
@@ -80,10 +84,6 @@ and for the permutations. If NULL (default), the generator is
 the RandomState instance used by Numpy (i.e. \code{np.random}) in Python.
 To ensure the results are reproducible, pass an integer to
 instanciate the seed, or a Python RandomState instance (recommended).}
-
-\item{n_landmarks:}{integer.
-Number of landmarks used in the Nystrom method. If unspecified, one
-fifth of the observations are selected as landmarks.}
 }
 \value{
 a \code{Ktest} object.

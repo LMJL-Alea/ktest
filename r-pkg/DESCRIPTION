@@ -26,7 +26,6 @@ Imports:
 Suggests: 
     conflicted,
     knitr,
-    remotes,
     rmarkdown,
     testthat (>= 3.0.0)
 VignetteBuilder: 
