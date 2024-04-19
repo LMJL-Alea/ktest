@@ -19,8 +19,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-## ktest package
-
 The `ktest` package implements kernel-based statistical testing, such as maximal mean discrepancy test (MMD) and a test based on kernel Fisher Discriminant Analysis (kFDA). It can be used for differential expression analysis in transcriptomics data for instance.
 
 See Ozier-Lafontaine et al (2024) for more details.
@@ -28,7 +26,7 @@ See Ozier-Lafontaine et al (2024) for more details.
 ## Tutorial requirements
 
 ```{r requirement_install, include=FALSE}
-required <- c("conflicted", "reticulate")
+required <- c("conflicted", "reticulate", "tibble")
 sapply(
     required,
     function(pkg) {
@@ -37,21 +35,44 @@ sapply(
 )
 ```
 
+```{r reticulate_knitr_config, include=FALSE}
+knitr::knit_engines$set(python = reticulate::eng_python)
+```
+
 We load the packages required for this tutorial:
 ```{r requirements}
 library(conflicted)     # manage namespace conflict between packages
 library(reticulate)     # manage Python dependencies
+library(tibble)         # manage data.frame
 ```
 
 ## Getting started
 
-> :warning: For package installation and setup, including Python environment configuration, see the dedicated vignette `vignette("install_ktest", package = "ktest")`.
+```{r package_install, include=FALSE}
+# load ktest R package
+library(ktest)
+# create dedicated Python virtual environment
+reticulate::virtualenv_create("ktest")
+# activate the python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# verify python version
+reticulate::py_config()
+# install ktest package python requirements
+install_ktest(method = "virtualenv", envname = "ktest")
+```
+
+> :warning: For package installation and setup, including Python environment configuration, see the dedicated vignette `vignette("install_ktest", package = "ktest")`. :warning:
 
 We load the `ktest` package and the configured Python environment:
 
 ```{r setup}
 library(ktest)
 reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+We check that it is working:
+```{r check}
+check_ktest()
 ```
 
 ## Data import
@@ -65,26 +86,25 @@ data_tab <- tmp$data_tab
 metadata_tab <- tmp$metadata_tab
 ```
 
-> **Note**:
-  This dataset originates from a study that investigated the molecular mechanisms 
-  underlying cell differentiation and reversion, by measuring cell 
-  transcriptomes at four time points: undifferentiated T2EC maintained in a 
-  self-renewal medium (condition `"0H"`), then put in a differentiation-inducing 
-  medium for 24h (condition `"24H"`). This population was then split into 
-  a first population maintained in the same medium for another 24h to achieve 
-  differentiation (condition `"48HDIFF"`), and the second population was put 
-  back in the self-renewal medium to investigate potential reversion 
-  (condition `"48HREV"`). Cell transcriptomes were measured using 
-  scRT-qPCR on 83 genes selected to be involved in the differentiation 
-  process.
-  
-  See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
-  
-  The example dataset contains the samples for the condition `"0H"` and 
-  `"48HREV"`.
-  
-  See <https://github.com/LMJL-Alea/ktest/tree/main/tutorials/v5_data> for 
-  the entire dataset. 
+This dataset originates from a study that investigated the molecular mechanisms 
+underlying cell differentiation and reversion, by measuring cell 
+transcriptomes at four time points: undifferentiated T2EC maintained in a 
+self-renewal medium (condition `"0H"`), then put in a differentiation-inducing 
+medium for 24h (condition `"24H"`). This population was then split into 
+a first population maintained in the same medium for another 24h to achieve 
+differentiation (condition `"48HDIFF"`), and the second population was put 
+back in the self-renewal medium to investigate potential reversion 
+(condition `"48HREV"`). Cell transcriptomes were measured using 
+scRT-qPCR on 83 genes selected to be involved in the differentiation 
+process.
+
+See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
+
+The example dataset contains the samples for the condition `"0H"` and 
+`"48HREV"`.
+
+See <https://github.com/LMJL-Alea/ktest/tree/main/tutorials/v5_data> for 
+the entire dataset. 
 
 ## Kernel-based two sample test
 
@@ -95,8 +115,8 @@ First we initialize a `ktest` object with following input parameters:
 - `sample_names`: a vector giving the two labels that will be used for the two sample comparison (among the possible labels in `metadata`).
 
 ```{r}
-kt_1 = ktest(
-    data = data_tab, metadata = meta_tab, 
+kt_1 = ktest_init(
+    data = data_tab, metadata = metadata_tab, 
     sample_names = c('0H','48HREV')
 )
 ```
@@ -140,7 +160,7 @@ print(kt_1)
 
 We can extract the test statistics for kFDA (`stat = 'kfda'`) or MMD (stat = 'mmd'`):
 ```{r statistics}
-get_statistics(kt_1, stat = 'kfda', contrib = FALSE)
+get_statistics(kt_1, stat = 'kfda', contrib = FALSE, t_max = 50)
 ```
 
 > **Note:** for kFDA, we can extract the cumulative statistic value along the embedding projection dimensions (with `contrib = FALSE`) or the contribution of each dimension to the statistic value along the embedding projection dimensions (with `contrib = TRUE`).
@@ -149,10 +169,28 @@ get_statistics(kt_1, stat = 'kfda', contrib = FALSE)
 
 We can choose which p-values to extract, for kFDA (permutation-based or asymptotic) or MMD (permutation-based) test:
 ```{r p-values}
-get_pvalues(kt_1, stat = 'kfda', permutation = FALSE)
+get_pvalues(kt_1, stat = 'kfda', permutation = FALSE, t_max = 50)
 ```
 
 > **Note:** for kFDA, we can extract the cumulative statistic values along the embedding projection dimensions (with `contrib = FALSE`) or the contribution of each dimension to the statistic values along the embedding projection dimensions (with `contrib = TRUE`).
+
+### Extract projections
+
+For kernel FDA (kfda), we can get the kernel embedding projections for each sample condition with respect to the a given truncation value:
+```{r project}
+proj <- get_proj(kt_1, contrib = FALSE, t_max = 50)
+names(proj)
+as_tibble(proj[[1]])
+as_tibble(proj[[2]])
+```
+
+And we can also get the corresponding contributions to the kernel embedding projections for each sample condition (using `contrib = TRUE`):
+```{r project_contrib}
+proj_contrib <- get_proj(kt_1, contrib = TRUE, t_max = 50)
+names(proj_contrib)
+as_tibble(proj_contrib[[1]])
+as_tibble(proj_contrib[[2]])
+```
 
 ## Note for Python users
 
@@ -180,17 +218,22 @@ kt_1$kfda_proj_contrib
 
 At the moment, plot generation to illustrate `ktest` results can be done using the `ktest` Python package plot generation (with a trick importing `matplotlib` Python package for figure generation using `reticulate`).
 
-> **Note**: this plot generation system will work in Rmarkdown rendering but generally not (or not as expected) in console mode or in Rstudio. In that case, saving the figure should still work.
+> **Note**: this plot generation system may not work as expected with Rmarkdown rendering or in console mode or in Rstudio. In that case, saving the figure should still work.
 
-```{r import_matplotlib}
+```{r import_matplotlib, eval=FALSE}
 # import matplotlib.pyplot
 plt <- reticulate::import("matplotlib.pyplot")
 ```
 
 You can plot a density of the projection on either the discriminant axes of the kFDA statistic:
-```{r plot_density}
-fig <- kt_1$plot_density(t = 2L)
-# plot figure (should work in Rmarkdwon but not in console mode or in Rstudio)
+```{r plot_density, eval=FALSE}
+fig <- kt_1$plot_density(t = 1L)
+```
+
+See [here](https://github.com/LMJL-Alea/ktest/blob/main/python/src/ktest/tester.py#L416) for the `plot_density()` method arguments.
+
+```{r eval=FALSE}
+# plot figure (may not work as expected)
 fig[[1]]
 fig[[2]]
 plt$show()
@@ -203,10 +246,17 @@ fig[[2]]
 plt$savefig("density_plot.png")
 ```
 
+![](man/figures/density_plot.png){width=680}
+
 You can also do a scatter plot of the kernel embedding projections or of the kernel embedding projection contributions:
-```{r projection_scatterplot}
-fig <- kt_1$scatter_projection(t_x = 1, t_y = 2, proj_xy = c('kfda_contrib', 'kfda_contrib'))
-# plot figure (should work in Rmarkdwon but not in console mode or in Rstudio)
+```{r projection_scatterplot, eval=FALSE}
+fig <- kt_1$scatter_projection(t_x = 1L, t_y = 2L, proj_xy = c('kfda_contrib', 'kfda_contrib'))
+```
+
+See [here](https://github.com/LMJL-Alea/ktest/blob/main/python/src/ktest/tester.py#L486) for the `scatter_projection()` method arguments.
+
+```{r eval=FALSE}
+# plot figure (may not work as expected)
 fig[[1]]
 fig[[2]]
 plt$show()
@@ -219,9 +269,14 @@ fig[[2]]
 plt$savefig("projection_scatterplot.png")
 ```
 
-```{r projection_contrib_scatterplot}
-fig <- kt_1$scatter_projection(t_x = 1, t_y = 1, proj_xy = c('kfda', 'kfda_contrib'))
-# plot figure (should work in Rmarkdwon but not in console mode or in Rstudio)
+![](man/figures/projection_scatterplot.png){width=680}
+
+```{r projection_contrib_scatterplot, eval=FALSE}
+fig <- kt_1$scatter_projection(t_x = 1L, t_y = 1L, proj_xy = c('kfda', 'kfda_contrib'))
+```
+
+```{r eval=FALSE}
+# plot figure (may not work)
 fig[[1]]
 fig[[2]]
 plt$show()
@@ -233,6 +288,8 @@ fig[[1]]
 fig[[2]]
 plt$savefig("projection_contrib_scatterplot.png")
 ```
+
+![](man/figures/projection_contrib_scatterplot.png){width=680}
 
 ## References
 
