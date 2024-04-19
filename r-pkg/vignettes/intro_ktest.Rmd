@@ -26,7 +26,8 @@ See Ozier-Lafontaine et al (2024) for more details.
 ## Tutorial requirements
 
 ```{r requirement_install, include=FALSE}
-required <- c("conflicted", "reticulate", "tibble")
+# install requirements
+required <- c("conflicted", "dplyr", "readr", "reticulate", "stringr", "tibble")
 sapply(
     required,
     function(pkg) {
@@ -103,8 +104,8 @@ See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
 The example dataset contains the samples for the condition `"0H"` and 
 `"48HREV"`.
 
-See <https://github.com/LMJL-Alea/ktest/tree/main/tutorials/v5_data> for 
-the entire dataset. 
+> See <https://github.com/LMJL-Alea/ktest/tree/main/tutorials/v5_data> for 
+the full dataset with all conditions or the detailed section [below](#single-cell-transcriptomic-full-dataset).
 
 ## Kernel-based two sample test
 
@@ -290,6 +291,36 @@ plt$savefig("projection_contrib_scatterplot.png")
 ```
 
 ![](man/figures/projection_contrib_scatterplot.png){width=680}
+
+## Single-cell transcriptomic full dataset
+
+Here are the line to download and preprocess the full single-cell transcriptomic full dataset used in Ozier-Lafontaine et al (2024).
+
+```{r full_data}
+# requirements
+library(dplyr)
+library(readr)
+library(stringr)
+library(tibble)
+
+# download dataset
+data_tab <- readr::read_csv(
+    "https://raw.githubusercontent.com/LMJL-Alea/ktest/main/tutorials/v5_data/RTqPCR_reversion_logcentered.csv",
+    show_col_types = FALSE
+)
+
+# extract sample condition
+metadata_tab <- data_tab %>% pull(1) %>% 
+    str_split(pattern = "\\.", simplify = TRUE) %>%
+    as_tibble() %>% select(2) %>% rename_with(~c("condition"))
+
+# drop sample condition from gene expression table
+data_tab <- data_tab %>% select(!1)
+
+# detail sample conditions
+table(metadata_tab)
+```
+
 
 ## References
 
