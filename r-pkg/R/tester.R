@@ -58,7 +58,7 @@
 #'     If TRUE, computes the Nystrom approximation, and uses it to compute 
 #'     the test statistics. The default if FALSE.
 #'     
-#' @param n_landmarks: integer.
+#' @param n_landmarks integer.
 #'     Number of landmarks used in the Nystrom method. If unspecified, one
 #'     fifth of the observations are selected as landmarks.
 #'     
