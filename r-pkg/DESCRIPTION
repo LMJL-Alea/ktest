@@ -20,6 +20,7 @@ Imports:
     fs,
     readr,
     reticulate,
+    rlang,
     stringr,
     tibble,
     utils

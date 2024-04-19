@@ -35,6 +35,7 @@
 #' @importFrom dplyr %>% select
 #' @importFrom fs path_package
 #' @importFrom readr read_csv
+#' @importFrom rlang .data
 #' @importFrom tibble lst
 #' 
 #' @references
@@ -72,7 +73,7 @@ load_example_data <- function() {
     # metadata table
     metadata_tab <- readr::read_csv(
         file.path(data_dir, "metadata.csv"), show_col_types = FALSE) %>%
-        dplyr::select(condition)
+        dplyr::select(.data$condition)
     # output
     return(tibble::lst(data_tab, metadata_tab))
 }
