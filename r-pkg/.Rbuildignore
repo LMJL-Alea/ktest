@@ -3,3 +3,5 @@
 ^README\.Rmd$
 ^dev$
 ^LICENSE\.md$
+^doc$
+^Meta$
