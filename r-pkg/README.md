@@ -57,6 +57,9 @@ check_ktest()
 ``` r
 # data loading
 tmp <- load_example_data()
+#> New names:
+#> New names:
+#> • `` -> `...1`
 # gene expression data table (344 cells and 83 genes)
 data_tab <- tmp$data_tab
 # metadata table with sampling conditions (for the 344 cells)
@@ -127,6 +130,8 @@ test(
     permutation = FALSE, 
     verbose = 1
 )
+#> - Computing kFDA statistic
+#> - Computing asymptotic p-values
 ```
 
 Here[^1] with permutation:
@@ -139,12 +144,31 @@ test(
     n_permutations = 500, 
     verbose = 1
 )
+#> - Computing kFDA statistic
+#> - Performing permutations to compute p-values:
 ```
 
 We can print the results:
 
 ``` r
 print(kt_1)
+#> An object of class Ktest.
+#> 83 features across 344 observations
+#> Comparison: 0H (173 observations) and 48HREV (171 observations).
+#> ___Multivariate test results___
+#> MMD:
+#> not computed, run ktest.test.
+#> kFDA:
+#> Truncation 1: 0.25768122893254786. P-value:
+#> asymptotic: 0.6117176755322093, permutation: 0.576.
+#> Truncation 2: 36.65831702676734. P-value:
+#> asymptotic: 1.0958411375934492e-08, permutation: 0.0.
+#> Truncation 3: 74.86728462307967. P-value:
+#> asymptotic: 3.8685719368137556e-16, permutation: 0.0.
+#> Truncation 4: 111.77209285817722. P-value:
+#> asymptotic: 3.047924268172892e-23, permutation: 0.0.
+#> Truncation 5: 120.74602538674806. P-value:
+#> asymptotic: 2.181256318092915e-24, permutation: 0.0.
 ```
 
 ### Extract statistics
@@ -154,6 +178,24 @@ We can extract the test statistics for kFDA (`stat = 'kfda'`) or MMD
 
 ``` r
 get_statistics(kt_1, stat = 'kfda', contrib = FALSE, t_max = 50)
+#>           1           2           3           4           5           6 
+#>   0.2576812  36.6583170  74.8672846 111.7720929 120.7460254 126.4390202 
+#>           7           8           9          10          11          12 
+#> 126.5761190 127.0480822 127.1302889 130.4058893 131.4395665 139.9422136 
+#>          13          14          15          16          17          18 
+#> 152.6610851 153.7023419 153.7349078 154.6052119 160.2342769 161.1602776 
+#>          19          20          21          22          23          24 
+#> 166.6401095 168.4681932 169.0263149 176.8598037 182.8506798 208.1064807 
+#>          25          26          27          28          29          30 
+#> 209.1857589 209.7949791 209.7961977 246.6842350 250.2489963 251.0360613 
+#>          31          32          33          34          35          36 
+#> 253.5617838 257.8182001 258.6969020 318.1404698 318.1853513 323.3736594 
+#>          37          38          39          40          41          42 
+#> 323.4449691 329.3598766 329.4283957 335.3213748 335.7356350 338.2821328 
+#>          43          44          45          46          47          48 
+#> 338.2852147 338.4339921 342.9890795 343.1930595 343.1931877 356.9054618 
+#>          49          50 
+#> 357.5857633 357.6056779
 ```
 
 > **Note:** for kFDA, we can extract the cumulative statistic value
@@ -168,6 +210,24 @@ asymptotic) or MMD (permutation-based) test:
 
 ``` r
 get_pvalues(kt_1, stat = 'kfda', permutation = FALSE, t_max = 50)
+#>            1            2            3            4            5            6 
+#> 6.117177e-01 1.095841e-08 3.868572e-16 3.047924e-23 2.181256e-24 7.219795e-25 
+#>            7            8            9           10           11           12 
+#> 3.260563e-24 1.156615e-23 4.611268e-23 3.860337e-23 8.898916e-23 6.152441e-24 
+#>           13           14           15           16           17           18 
+#> 5.993821e-26 1.304160e-25 4.364155e-25 9.626304e-25 2.390025e-25 4.938151e-25 
+#>           19           20           21           22           23           24 
+#> 1.289465e-25 1.720393e-25 3.971201e-25 3.573069e-26 7.285468e-27 2.798294e-31 
+#>           25           26           27           28           29           30 
+#> 5.175632e-31 1.160420e-30 3.344107e-30 7.435028e-37 4.559285e-37 9.562493e-37 
+#>           31           32           33           34           35           36 
+#> 9.150847e-37 4.040883e-37 7.883852e-37 7.365180e-48 2.232091e-47 6.677301e-48 
+#>           37           38           39           40           41           42 
+#> 1.958790e-47 4.202573e-48 1.212181e-47 2.611290e-48 6.355529e-48 5.971620e-48 
+#>           43           44           45           46           47           48 
+#> 1.708242e-47 4.530116e-47 1.729527e-47 4.407183e-47 1.214308e-46 8.531403e-49 
+#>           49           50 
+#> 1.745468e-48 4.713689e-48
 ```
 
 > **Note:** for kFDA, we can extract the cumulative statistic values
@@ -183,8 +243,49 @@ each sample condition with respect to the a given truncation value:
 ``` r
 proj <- get_proj(kt_1, contrib = FALSE, t_max = 50)
 names(proj)
+#> [1] "0H"     "48HREV"
 as_tibble(proj[[1]])
+#> # A tibble: 173 × 50
+#>      `1`    `2`    `3`    `4`    `5`    `6`    `7`    `8`    `9`   `10`   `11`
+#>    <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>
+#>  1 -2.48  -55.8 -171.  -218.  -213.  -219.  -227.  -243.  -249.  -242.  -244. 
+#>  2 -3.78  -80.4 -121.  -103.  -136.  -172.  -185.  -197.  -201.  -196.  -214. 
+#>  3 -6.83   49.9  124.   -47.3  -36.2  -26.1  -30.3  -44.2  -47.9  -33.3  -34.0
+#>  4 -8.30   59.5   40.1 -104.   -96.6  -70.4  -77.6  -76.6  -84.4  -79.3  -83.2
+#>  5 -2.09 -117.  -131.  -369.  -366.  -394.  -399.  -391.  -397.  -376.  -357. 
+#>  6  1.26 -127.  -125.  -176.  -210.  -182.  -192.  -196.  -198.  -197.  -198. 
+#>  7 -1.86  -56.4  -17.9  -27.0  -47.1  -16.0  -27.5  -40.6  -43.6  -32.0  -39.7
+#>  8 -4.82   23.8  -51.1 -139.   -83.9  -46.7  -53.7  -48.0  -54.7  -63.2  -67.6
+#>  9 -5.71  -78.3 -169.  -217.  -217.  -247.  -257.  -270.  -277.  -264.  -270. 
+#> 10  9.60   16.6  -16.2   56.4   40.1   76.7   69.8   70.0   70.4   79.3   70.7
+#> # ℹ 163 more rows
+#> # ℹ 39 more variables: `12` <dbl>, `13` <dbl>, `14` <dbl>, `15` <dbl>,
+#> #   `16` <dbl>, `17` <dbl>, `18` <dbl>, `19` <dbl>, `20` <dbl>, `21` <dbl>,
+#> #   `22` <dbl>, `23` <dbl>, `24` <dbl>, `25` <dbl>, `26` <dbl>, `27` <dbl>,
+#> #   `28` <dbl>, `29` <dbl>, `30` <dbl>, `31` <dbl>, `32` <dbl>, `33` <dbl>,
+#> #   `34` <dbl>, `35` <dbl>, `36` <dbl>, `37` <dbl>, `38` <dbl>, `39` <dbl>,
+#> #   `40` <dbl>, `41` <dbl>, `42` <dbl>, `43` <dbl>, `44` <dbl>, `45` <dbl>, …
 as_tibble(proj[[2]])
+#> # A tibble: 171 × 50
+#>        `1`   `2`     `3`     `4`     `5`    `6`    `7`    `8`    `9`    `10`
+#>      <dbl> <dbl>   <dbl>   <dbl>   <dbl>  <dbl>  <dbl>  <dbl>  <dbl>   <dbl>
+#>  1   9.80   73.0    5.70   31.4    15.6    29.6   30.3   16.6   11.4    8.20
+#>  2  -6.42  -31.1   14.6    31.3    35.5    44.2   37.5   33.5   26.7    6.19
+#>  3   0.552 -32.8    9.09 -117.    -69.0   -61.9  -70.1  -84.0  -92.5  -74.3 
+#>  4 -13.1    16.6   40.7     8.31    2.40   51.4   47.6   39.7   35.3   43.0 
+#>  5   1.41   20.0  194.    117.    150.    161.   151.   146.   148.   182.  
+#>  6  -2.37   67.4  223.    223.    220.    271.   263.   277.   273.   288.  
+#>  7  -3.06   39.5  147.     49.6    79.1    84.2   76.5   69.0   65.3   63.1 
+#>  8  -7.95   72.0  240.    156.    207.    234.   233.   228.   222.   220.  
+#>  9   1.45  -32.1 -113.   -186.   -120.   -130.  -134.  -142.  -149.  -173.  
+#> 10  -9.97   23.2   84.3    86.3   118.    178.   169.   168.   164.   175.  
+#> # ℹ 161 more rows
+#> # ℹ 40 more variables: `11` <dbl>, `12` <dbl>, `13` <dbl>, `14` <dbl>,
+#> #   `15` <dbl>, `16` <dbl>, `17` <dbl>, `18` <dbl>, `19` <dbl>, `20` <dbl>,
+#> #   `21` <dbl>, `22` <dbl>, `23` <dbl>, `24` <dbl>, `25` <dbl>, `26` <dbl>,
+#> #   `27` <dbl>, `28` <dbl>, `29` <dbl>, `30` <dbl>, `31` <dbl>, `32` <dbl>,
+#> #   `33` <dbl>, `34` <dbl>, `35` <dbl>, `36` <dbl>, `37` <dbl>, `38` <dbl>,
+#> #   `39` <dbl>, `40` <dbl>, `41` <dbl>, `42` <dbl>, `43` <dbl>, `44` <dbl>, …
 ```
 
 And we can also get the corresponding contributions to the kernel
@@ -194,8 +295,49 @@ embedding projections for each sample condition (using
 ``` r
 proj_contrib <- get_proj(kt_1, contrib = TRUE, t_max = 50)
 names(proj_contrib)
+#> [1] "0H"     "48HREV"
 as_tibble(proj_contrib[[1]])
+#> # A tibble: 173 × 50
+#>      `1`     `2`     `3`     `4`     `5`    `6`    `7`     `8`    `9`  `10`
+#>    <dbl>   <dbl>   <dbl>   <dbl>   <dbl>  <dbl>  <dbl>   <dbl>  <dbl> <dbl>
+#>  1 -2.48  -53.3  -116.    -46.8    5.21   -5.75  -8.04 -16.5   -5.99   7.00
+#>  2 -3.78  -76.6   -40.2    18.0  -33.6   -35.8  -13.4  -11.7   -4.39   5.64
+#>  3 -6.83   56.7    74.1  -171.    11.2    10.0   -4.18 -13.9   -3.64  14.6 
+#>  4 -8.30   67.8   -19.4  -145.     7.86   26.2   -7.18   0.969 -7.75   5.11
+#>  5 -2.09 -115.    -14.5  -237.     2.42  -27.2   -5.70   8.47  -5.77  20.2 
+#>  6  1.26 -129.      2.06  -50.7  -33.8    27.8  -10.2   -3.81  -2.45   1.32
+#>  7 -1.86  -54.6    38.5    -9.04 -20.1    31.1  -11.6  -13.1   -2.96  11.6 
+#>  8 -4.82   28.6   -74.9   -88.2   55.4    37.2   -6.98   5.70  -6.72  -8.41
+#>  9 -5.71  -72.6   -90.3   -48.5    0.203 -29.7  -10.6  -12.4   -7.03  12.6 
+#> 10  9.60    7.04  -32.9    72.7  -16.3    36.6   -6.87   0.126  0.442  8.92
+#> # ℹ 163 more rows
+#> # ℹ 40 more variables: `11` <dbl>, `12` <dbl>, `13` <dbl>, `14` <dbl>,
+#> #   `15` <dbl>, `16` <dbl>, `17` <dbl>, `18` <dbl>, `19` <dbl>, `20` <dbl>,
+#> #   `21` <dbl>, `22` <dbl>, `23` <dbl>, `24` <dbl>, `25` <dbl>, `26` <dbl>,
+#> #   `27` <dbl>, `28` <dbl>, `29` <dbl>, `30` <dbl>, `31` <dbl>, `32` <dbl>,
+#> #   `33` <dbl>, `34` <dbl>, `35` <dbl>, `36` <dbl>, `37` <dbl>, `38` <dbl>,
+#> #   `39` <dbl>, `40` <dbl>, `41` <dbl>, `42` <dbl>, `43` <dbl>, `44` <dbl>, …
 as_tibble(proj_contrib[[2]])
+#> # A tibble: 171 × 50
+#>        `1`   `2`   `3`      `4`    `5`    `6`     `7`    `8`   `9`   `10`
+#>      <dbl> <dbl> <dbl>    <dbl>  <dbl>  <dbl>   <dbl>  <dbl> <dbl>  <dbl>
+#>  1   9.80   63.2 -67.3   25.7   -15.9   14.1    0.722 -13.8  -5.19  -3.18
+#>  2  -6.42  -24.7  45.7   16.7     4.20   8.72  -6.73   -3.95 -6.85 -20.5 
+#>  3   0.552 -33.4  41.9 -126.     48.3    7.09  -8.18  -13.9  -8.50  18.2 
+#>  4 -13.1    29.7  24.1  -32.4    -5.90  49.0   -3.78   -7.87 -4.42   7.73
+#>  5   1.41   18.6 174.   -76.9    32.6   11.0  -10.0    -4.47  1.28  33.9 
+#>  6  -2.37   69.8 156.     0.297  -3.12  50.4   -7.97   13.9  -3.56  15.2 
+#>  7  -3.06   42.6 107.   -97.4    29.5    5.07  -7.66   -7.50 -3.76  -2.18
+#>  8  -7.95   80.0 168.   -83.1    50.5   27.5   -1.30   -5.15 -6.40  -1.36
+#>  9   1.45  -33.6 -80.5  -73.7    66.1  -10.2   -3.04   -8.70 -6.92 -24.3 
+#> 10  -9.97   33.2  61.1    2.00   31.3   60.8   -9.67   -1.11 -3.91  11.5 
+#> # ℹ 161 more rows
+#> # ℹ 40 more variables: `11` <dbl>, `12` <dbl>, `13` <dbl>, `14` <dbl>,
+#> #   `15` <dbl>, `16` <dbl>, `17` <dbl>, `18` <dbl>, `19` <dbl>, `20` <dbl>,
+#> #   `21` <dbl>, `22` <dbl>, `23` <dbl>, `24` <dbl>, `25` <dbl>, `26` <dbl>,
+#> #   `27` <dbl>, `28` <dbl>, `29` <dbl>, `30` <dbl>, `31` <dbl>, `32` <dbl>,
+#> #   `33` <dbl>, `34` <dbl>, `35` <dbl>, `36` <dbl>, `37` <dbl>, `38` <dbl>,
+#> #   `39` <dbl>, `40` <dbl>, `41` <dbl>, `42` <dbl>, `43` <dbl>, `44` <dbl>, …
 ```
 
 ## Note for Python users
@@ -331,20 +473,31 @@ data_tab <- readr::read_csv(
     "https://raw.githubusercontent.com/LMJL-Alea/ktest/main/tutorials/v5_data/RTqPCR_reversion_logcentered.csv",
     show_col_types = FALSE
 )
+#> New names:
+#> • `` -> `...1`
 
 # extract sample condition
 metadata_tab <- data_tab %>% pull(1) %>% 
     str_split(pattern = "\\.", simplify = TRUE) %>%
-    as_tibble() %>% select(2) %>% rename_with(~c("condition"))
+    as_tibble(.name_repair = "universal") %>% select(2) %>% 
+    rename_with(~c("condition"))
+#> New names:
+#> • `` -> `...1`
+#> • `` -> `...2`
+#> • `` -> `...3`
 
 # drop sample condition from gene expression table
 data_tab <- data_tab %>% select(!1)
 
 # data dimension (cells x genes)
 dim(data_tab)
+#> [1] 685  83
 
 # detail sample conditions
 table(metadata_tab)
+#> condition
+#>      0H     24H 48HDIFF  48HREV 
+#>     173     173     168     171
 ```
 
 ## References
@@ -367,6 +520,120 @@ PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
 [hal-04134084v1](https://hal.science/hal-04134084v1).
 
 # Installation and configuration
+
+``` r
+knitr::opts_chunk$set(eval = TRUE)
+```
+
+## Package requirements
+
+- R version 4+
+- Python version 3+
+
+**Important:** Python is a requirement as an intern machinery for the
+package to work but you will not need to create nor manipulate Python
+codes to use the `ktest` R package.
+
+> **Note:** if you don’t have Python on your system: when configuring
+> the `ktest` R package (c.f. [below](#first-time-configuration)), the
+> `reticulate` R package will offer to install Python on your system.
+
+The `ktest` R package is using the `ktest` Python package under the hood
+thanks to the
+[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
+that provides an “R Interface to Python”.
+
+## Installation
+
+You can install the development version of `ktest` with the following
+commands:
+
+``` r
+install.package("remotes")
+remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
+```
+
+> **Note:** `ktest` is not available on CRAN at the moment but will be
+> shortly.
+
+## First-time configuration
+
+After installing the `ktest` R package, you need to run the following
+commands (**once**) to complete the setup (and install the `ktest`
+Python package on your system):
+
+> :warning: To avoid messing with your Python system or user
+> environment, we recommend to use a dedicated Python environment for
+> `ktest` (c.f. [next section](#using-a-python-environment)) :warning:
+
+``` r
+# load ktest R package
+library(ktest)
+# install ktest package python requirements
+install_ktest()
+# check ktest configuration
+check_ktest()
+```
+
+### Using a Python environment
+
+Here are the commands to be run (once) to configure the `ktest` package
+using a dedicated Python **virtual environment**:
+
+``` r
+# load ktest R package
+library(ktest)
+# create dedicated Python virtual environment
+reticulate::virtualenv_create("ktest")
+# activate the python environment
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# verify python version
+reticulate::py_config()
+# install ktest package python requirements
+install_ktest(method = "virtualenv", envname = "ktest")
+# check ktest configuration
+check_ktest()
+```
+
+> **Note:** if you are a Miniconda/Anaconda Python distribution user,
+> you can either user a Python virtual environment (c.f. above) or a
+> **Conda environment** with the same results. Please refer to the
+> `reticulate`
+> [documentation](https://rstudio.github.io/reticulate/articles/versions.html#providing-hints)
+> in this case.
+
+### Managing Python
+
+To check which **version of Python** you are using through `reticulate`,
+you can run:
+
+``` r
+reticulate::py_discover_config()
+```
+
+> **Note:** To get more information about **managing** which **version
+> of Python** you are using, you can refer to `reticulate`
+> [documentation](https://rstudio.github.io/reticulate/articles/versions.html)
+> about “Python Version Configuration”.
+
+## Usage
+
+Once the `ktest` package is installed and configured, to use it, you
+only need to load it like any other R package:
+
+``` r
+library(ktest)
+kt <- ktest(...) # see other vignettes
+```
+
+:warning: If you are using a **dedicated Python environment**, you also
+need to load it every time before using `ktest`:
+
+``` r
+library(ktest)
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+kt <- ktest(...) # see other vignettes
+```
 
 [^1]: the previous result without permutation are not lost, the object
     is just updated with the new permutation-based result

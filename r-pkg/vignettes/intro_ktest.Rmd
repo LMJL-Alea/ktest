@@ -316,7 +316,8 @@ data_tab <- readr::read_csv(
 # extract sample condition
 metadata_tab <- data_tab %>% pull(1) %>% 
     str_split(pattern = "\\.", simplify = TRUE) %>%
-    as_tibble() %>% select(2) %>% rename_with(~c("condition"))
+    as_tibble(.name_repair = "universal") %>% select(2) %>% 
+    rename_with(~c("condition"))
 
 # drop sample condition from gene expression table
 data_tab <- data_tab %>% select(!1)

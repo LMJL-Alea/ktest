@@ -30,6 +30,10 @@ Kernel based statistical testing
 
 # Installation and configuration
 
+```{r}
+knitr::opts_chunk$set(eval = TRUE)
+```
+
 ```{r vignette-install}
 #| child: vignettes/install_ktest.Rmd
 ```
