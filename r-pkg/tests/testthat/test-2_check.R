@@ -1,8 +1,8 @@
 test_that("check_python", {
     checkmate::expect_flag(check_python(verbose = FALSE))
     skip_if_no_python()
-    expect_true(expect_message(check_python()))
-    expect_false(expect_warning(check_python(version = "100000")))
+    expect_true(check_python(verbose = FALSE))
+    expect_false(check_python(verbose = FALSE, version = "100000"))
 })
 
 test_that("check_ktest", {

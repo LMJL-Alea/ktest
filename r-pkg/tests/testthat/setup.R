@@ -21,11 +21,6 @@ skip_if_no_python <- function() {
 
 # helper function to skip tests if `pyktest` is not available
 skip_if_no_pyktest <- function() {
-    have_pyktest <- reticulate::py_module_available("pyktest")
-    if(!have_pyktest) skip("'pyktest' not available for testing")
-}
-
-# helper function to skip tests if not interactive mode
-skip_if_not_interactive <- function() {
-    if(!interactive()) skip("Test only run in interactive mode")
+    have_pyktest <- reticulate::py_module_available("ktest")
+    if(!have_pyktest) skip("'ktest' Python package not available for testing")
 }

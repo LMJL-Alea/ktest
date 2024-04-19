@@ -26,6 +26,9 @@ test_that("ktest_init", {
 
 test_that("test", {
     
+    skip_if_no_python()
+    skip_if_no_pyktest()
+    
     # data loading
     tmp <- load_example_data()
     # gene expression data table (344 cells and 83 genes)
@@ -74,6 +77,10 @@ test_that("test", {
 })
 
 test_that("get_pvalues", {
+    
+    skip_if_no_python()
+    skip_if_no_pyktest()
+    
     # data loading
     tmp <- load_example_data()
     # gene expression data table (344 cells and 83 genes)
@@ -136,6 +143,10 @@ test_that("get_pvalues", {
 })
 
 test_that("get_statistics", {
+    
+    skip_if_no_python()
+    skip_if_no_pyktest()
+    
     # data loading
     tmp <- load_example_data()
     # gene expression data table (344 cells and 83 genes)
@@ -189,6 +200,10 @@ test_that("get_statistics", {
 })
 
 test_that("get_proj", {
+    
+    skip_if_no_python()
+    skip_if_no_pyktest()
+    
     # data loading
     tmp <- load_example_data()
     # gene expression data table (344 cells and 83 genes)
