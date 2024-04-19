@@ -1,33 +1,39 @@
 Package: ktest
 Title: Kernel Based Statistical Testing
-Version: 1.0.0
+Version: 1.0.1
 Authors@R: c(
     person("Anthony", "Ozier-Lafontaine", , "anthony.ozier-lafontaine@ec-nantes.fr", role = "aut",
            comment = c(ORCID = "0000-0003-3232-0503")),
+    person("Polina", "Artenseva", , "Polina.Arsenteva@univ-nantes.fr", role = "aut",
+           comment = c(ORCID = "0000-0002-7554-5000")),
     person("Ghislain", "Durif", , "gd.dev@libertymail.net", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-2567-1401"))
   )
-Description: Write Me
+Description: Implementation of kernel-based statistical testing,
+    especially for differential expression analysis in transcriptomics
+    data.
 License: MIT + file LICENSE
-URL: https://github.com/AnthoOzier/ktest
+URL: https://github.com/LMJL-Alea/ktest
 Imports: 
     checkmate,
+    dplyr,
+    fs,
+    readr,
     reticulate,
-    stringi,
+    rlang,
     stringr,
+    tibble,
     utils
 Suggests: 
-    devtools,
+    conflicted,
     knitr,
     rmarkdown,
-    rprojroot,
-    testthat (>= 3.0.0),
-    withr
+    testthat (>= 3.0.0)
 VignetteBuilder: 
     knitr
 Config/testthat/edition: 3
-Date/Publication: 2023/03/21
+Date/Publication: 2024/04/18
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 SystemRequirements: Python (>= 3.5.0)
