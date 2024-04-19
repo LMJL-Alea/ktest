@@ -76,6 +76,10 @@ We check that it is working:
 check_ktest()
 ```
 
+```{r disable_if_no_pyktest, include=FALSE}
+if(!check_ktest(verbose = FALSE)) knitr::opts_chunk$set(eval = FALSE)
+```
+
 ## Data import
 
 ```{r}
@@ -316,6 +320,9 @@ metadata_tab <- data_tab %>% pull(1) %>%
 
 # drop sample condition from gene expression table
 data_tab <- data_tab %>% select(!1)
+
+# data dimension (cells x genes)
+dim(data_tab)
 
 # detail sample conditions
 table(metadata_tab)
