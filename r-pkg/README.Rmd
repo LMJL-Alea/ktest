@@ -28,6 +28,8 @@ Kernel based statistical testing
 #| child: vignettes/intro_ktest.Rmd
 ```
 
+---
+
 # Installation and configuration
 
 ```{r}

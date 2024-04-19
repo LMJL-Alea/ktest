@@ -519,6 +519,8 @@ Biol. 20(1):155.
 PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
 [hal-04134084v1](https://hal.science/hal-04134084v1).
 
+---
+
 # Installation and configuration
 
 ``` r
