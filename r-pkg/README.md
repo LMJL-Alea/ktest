@@ -1,6 +1,5 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
-<!-- Python configuration -->
 
 # ktest R package
 
@@ -9,346 +8,365 @@
 
 Kernel based statistical testing
 
+> :warning: To install and configure the `ktest` R package, see the
+> “Installation and configuration” section
+> [below](#installation-and-configuration). :warning:
+
+# Using ktest
+
+The `ktest` package implements kernel-based statistical testing, such as
+maximal mean discrepancy test (MMD) and a test based on kernel Fisher
+Discriminant Analysis (kFDA). It can be used for differential expression
+analysis in transcriptomics data for instance.
+
+See Ozier-Lafontaine et al (2024) for more details.
+
+## Tutorial requirements
+
+We load the packages required for this tutorial:
+
+``` r
+library(conflicted)     # manage namespace conflict between packages
+library(reticulate)     # manage Python dependencies
+library(tibble)         # manage data.frame
+```
+
+## Getting started
+
+> :warning: For package installation and setup, including Python
+> environment configuration, see the dedicated vignette
+> `vignette("install_ktest", package = "ktest")`. :warning:
+
+We load the `ktest` package and the configured Python environment:
+
+``` r
+library(ktest)
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+```
+
+We check that it is working:
+
+``` r
+check_ktest()
+#> 'ktest' is ready.
+#> [1] TRUE
+```
+
+## Data import
+
+``` r
+# data loading
+tmp <- load_example_data()
+# gene expression data table (344 cells and 83 genes)
+data_tab <- tmp$data_tab
+# metadata table with sampling conditions (for the 344 cells)
+metadata_tab <- tmp$metadata_tab
+```
+
+This dataset originates from a study that investigated the molecular
+mechanisms underlying cell differentiation and reversion, by measuring
+cell transcriptomes at four time points: undifferentiated T2EC
+maintained in a self-renewal medium (condition `"0H"`), then put in a
+differentiation-inducing medium for 24h (condition `"24H"`). This
+population was then split into a first population maintained in the same
+medium for another 24h to achieve differentiation (condition
+`"48HDIFF"`), and the second population was put back in the self-renewal
+medium to investigate potential reversion (condition `"48HREV"`). Cell
+transcriptomes were measured using scRT-qPCR on 83 genes selected to be
+involved in the differentiation process.
+
+See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more
+details.
+
+The example dataset contains the samples for the condition `"0H"` and
+`"48HREV"`.
+
+> See <https://github.com/LMJL-Alea/ktest/tree/main/tutorials/v5_data>
+> for the full dataset with all conditions or the detailed section
+> [below](#single-cell-transcriptomic-full-dataset).
+
+## Kernel-based two sample test
+
+First we initialize a `ktest` object with following input parameters:
+
+- `data`: a data table of observations in rows and features in columns
+  (cells in rows and gene expression in columns in this example).
+- `metadata`: a single column data table with the sample label for each
+  observations.
+- `sample_names`: a vector giving the two labels that will be used for
+  the two sample comparison (among the possible labels in `metadata`).
+
+``` r
+kt_1 = ktest_init(
+    data = data_tab, metadata = metadata_tab, 
+    sample_names = c('0H','48HREV')
+)
+```
+
+Then we run the test using the following input parameters:
+
+- `kt`: the ktest object that was previously initialized.
+- `stat`: the test to implement, `"kfda"` for kernel-FDA-based test and
+  `"mmd"` for MMD-based test.
+- `permutation`: to indicate if p-values will be computed using a
+  permutation-based approach in addition to the asymptotically derived
+  p-values for kFDA testing (MMD testing always uses permutation-based
+  p-value computation).
+- `n_permutation`: number of permutation to consider for
+  permutation-based p-value computation.
+
+> **Note:** this function does not return any value, it updates the
+> input ktest object.
+
+Here without permutation:
+
+``` r
+test(
+    kt = kt_1, 
+    stat = 'kfda', 
+    permutation = FALSE, 
+    verbose = 1
+)
+```
+
+Here[^1] with permutation:
+
+``` r
+test(
+    kt = kt_1, 
+    stat = 'kfda', 
+    permutation = TRUE, 
+    n_permutations = 500, 
+    verbose = 1
+)
+```
+
+We can print the results:
+
+``` r
+print(kt_1)
+```
+
+### Extract statistics
+
+We can extract the test statistics for kFDA (`stat = 'kfda'`) or MMD
+(stat = ‘mmd’\`):
+
+``` r
+get_statistics(kt_1, stat = 'kfda', contrib = FALSE, t_max = 50)
+```
+
+> **Note:** for kFDA, we can extract the cumulative statistic value
+> along the embedding projection dimensions (with `contrib = FALSE`) or
+> the contribution of each dimension to the statistic value along the
+> embedding projection dimensions (with `contrib = TRUE`).
+
+### Extract p-values
+
+We can choose which p-values to extract, for kFDA (permutation-based or
+asymptotic) or MMD (permutation-based) test:
+
+``` r
+get_pvalues(kt_1, stat = 'kfda', permutation = FALSE, t_max = 50)
+```
+
+> **Note:** for kFDA, we can extract the cumulative statistic values
+> along the embedding projection dimensions (with `contrib = FALSE`) or
+> the contribution of each dimension to the statistic values along the
+> embedding projection dimensions (with `contrib = TRUE`).
+
+### Extract projections
+
+For kernel FDA (kfda), we can get the kernel embedding projections for
+each sample condition with respect to the a given truncation value:
+
+``` r
+proj <- get_proj(kt_1, contrib = FALSE, t_max = 50)
+names(proj)
+as_tibble(proj[[1]])
+as_tibble(proj[[2]])
+```
+
+And we can also get the corresponding contributions to the kernel
+embedding projections for each sample condition (using
+`contrib = TRUE`):
+
+``` r
+proj_contrib <- get_proj(kt_1, contrib = TRUE, t_max = 50)
+names(proj_contrib)
+as_tibble(proj_contrib[[1]])
+as_tibble(proj_contrib[[2]])
+```
+
+## Note for Python users
+
+If you are used to using the `ktest` Python package, you can do pretty
+much the same things in R thanks to `reticulate` using a `$` character
+instead of a `.` character to access the `Ktest` class attributes and
+member functions, e.g.:
+
+``` r
+# run test
+kt_1$test(permutation = TRUE, n_permutation = 1000L)
+# get statistic value
+kt_1$kfda_statistic
+# get p-values (asymptotic and permutation-based)
+kt_1$kfda_pval_asymp
+kt_1$kfda_pval_perm
+# compute kernel embedding projection
+kt_1$project()
+# get projections
+kt_1$kfda_proj
+# get contribution for projections
+kt_1$kfda_proj_contrib
+```
+
+> **Note**: you can refer to this [notebook
+> tutorial](https://github.com/LMJL-Alea/ktest/blob/main/tutorials/demo_ktest.ipynb)
+> to discover more about the `ktest` Python package.
+
+## Figures
+
+At the moment, plot generation to illustrate `ktest` results can be done
+using the `ktest` Python package plot generation (with a trick importing
+`matplotlib` Python package for figure generation using `reticulate`).
+
+> **Note**: this plot generation system may not work as expected with
+> Rmarkdown rendering or in console mode or in Rstudio. In that case,
+> saving the figure should still work.
+
+``` r
+# import matplotlib.pyplot
+plt <- reticulate::import("matplotlib.pyplot")
+```
+
+You can plot a density of the projection on either the discriminant axes
+of the kFDA statistic:
+
+``` r
+fig <- kt_1$plot_density(t = 1L)
+```
+
+See
+[here](https://github.com/LMJL-Alea/ktest/blob/main/python/src/ktest/tester.py#L416)
+for the `plot_density()` method arguments.
+
+``` r
+# plot figure (may not work as expected)
+fig[[1]]
+fig[[2]]
+plt$show()
+```
+
+``` r
+# save the figure
+fig[[1]]
+fig[[2]]
+plt$savefig("density_plot.png")
+```
+
+<img src="man/figures/density_plot.png" width="680" />
+
+You can also do a scatter plot of the kernel embedding projections or of
+the kernel embedding projection contributions:
+
+``` r
+fig <- kt_1$scatter_projection(t_x = 1L, t_y = 2L, proj_xy = c('kfda_contrib', 'kfda_contrib'))
+```
+
+See
+[here](https://github.com/LMJL-Alea/ktest/blob/main/python/src/ktest/tester.py#L486)
+for the `scatter_projection()` method arguments.
+
+``` r
+# plot figure (may not work as expected)
+fig[[1]]
+fig[[2]]
+plt$show()
+```
+
+``` r
+# save the figure
+fig[[1]]
+fig[[2]]
+plt$savefig("projection_scatterplot.png")
+```
+
+<img src="man/figures/projection_scatterplot.png" width="680" />
+
+``` r
+fig <- kt_1$scatter_projection(t_x = 1L, t_y = 1L, proj_xy = c('kfda', 'kfda_contrib'))
+```
+
+``` r
+# plot figure (may not work)
+fig[[1]]
+fig[[2]]
+plt$show()
+```
+
+``` r
+# save the figure
+fig[[1]]
+fig[[2]]
+plt$savefig("projection_contrib_scatterplot.png")
+```
+
+<img src="man/figures/projection_contrib_scatterplot.png" width="680" />
+
+## Single-cell transcriptomic full dataset
+
+Here are the line to download and preprocess the full single-cell
+transcriptomic full dataset used in Ozier-Lafontaine et al (2024).
+
+``` r
+# requirements
+library(dplyr)
+library(readr)
+library(stringr)
+library(tibble)
+
+# download dataset
+data_tab <- readr::read_csv(
+    "https://raw.githubusercontent.com/LMJL-Alea/ktest/main/tutorials/v5_data/RTqPCR_reversion_logcentered.csv",
+    show_col_types = FALSE
+)
+
+# extract sample condition
+metadata_tab <- data_tab %>% pull(1) %>% 
+    str_split(pattern = "\\.", simplify = TRUE) %>%
+    as_tibble() %>% select(2) %>% rename_with(~c("condition"))
+
+# drop sample condition from gene expression table
+data_tab <- data_tab %>% select(!1)
+
+# data dimension (cells x genes)
+dim(data_tab)
+
+# detail sample conditions
+table(metadata_tab)
+```
+
+## References
+
+Ozier-Lafontaine A., Fourneaux C., Durif G., Arsenteva P., Vallot C.,
+Gandrillon O., Gonin-Giraud S., Michel B., Picard F. (2024).
+Kernel-Based Testing for Single-Cell Differential Analysis. Preprint.
+[doi:10.48550/arXiv.2307.08509](https://dx.doi.org/10.48550/arXiv.2307.08509);
+[arXiv.2307.08509](https://arxiv.org/abs/2307.08509);
+[hal-04214858](https://hal.science/hal-04214858).
+
+Zreika S., Fourneaux C., Vallin E., Modolo L., Seraphin R., Moussy A.,
+Ventre E., Bouvier M., Ozier-Lafontaine A., Bonnaffoux A., Picard F.,
+Gandrillon O., Gonin-Giraud S. (2022 Jul 6). Evidence for close
+molecular proximity between reverting and undifferentiated cells. BMC
+Biol. 20(1):155.
+[doi:10.1186/s12915-022-01363-7](https://dx.doi.org/10.1186/s12915-022-01363-7);
+[PMID: 35794592](https://pubmed.ncbi.nlm.nih.gov/35794592/); [PMCID:
+PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
+[hal-04134084v1](https://hal.science/hal-04134084v1).
+
 # Installation and configuration
 
-## Requirements
-
-- R version 4+
-- Python version 3+
-
-**Important:** Python is a requirement as an intern machinery for the
-package to work but you will not need to create nor manipulate Python
-codes to use the `ktest` R package.
-
-> **Note:** if you don’t have Python on your system: when configuring
-> the `ktest` R package (c.f. [below](#first-time-configuration)), the
-> `reticulate` R package will offer to install Python on your system.
-
-The `ktest` R package is using the `ktest` Python package under the hood
-thanks to the
-[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
-that provides an “R Interface to Python”.
-
-## Installation
-
-You can install the development version of `ktest` with the following
-commands:
-
-``` r
-install.package("remotes")
-remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
-```
-
-> **Note:** `ktest` is not available on CRAN at the moment but will be
-> shortly.
-
-## First-time configuration
-
-After installing the `ktest` R package, you need to run the following
-commands (**once**) to complete the setup (and install the `ktest`
-Python package on your system):
-
-> :warning: To avoid messing with your Python system or user
-> environment, we recommend to use a dedicated Python environment for
-> `ktest` (c.f. [next section](#using-a-python-environment)) :warning:
-
-``` r
-# load ktest R package
-library(ktest)
-# install ktest package python requirements
-install_ktest()
-# check ktest configuration
-check_ktest()
-```
-
-### Using a Python environment
-
-Here are the commands to be run (once) to configure the `ktest` package
-using a dedicated Python **virtual environment**:
-
-``` r
-# load ktest R package
-library(ktest)
-# create dedicated Python virtual environment
-reticulate::virtualenv_create("ktest")
-# activate the python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-# verify python version
-reticulate::py_config()
-# install ktest package python requirements
-install_ktest(method = "virtualenv", envname = "ktest")
-# check ktest configuration
-check_ktest()
-```
-
-> **Note:** if you are a Miniconda/Anaconda Python distribution user,
-> you can either user a Python virtual environment (c.f. above) or a
-> **Conda environment** with the same results. Please refer to the
-> `reticulate`
-> [documentation](https://rstudio.github.io/reticulate/articles/versions.html#providing-hints)
-> in this case.
-
-## Managing Python
-
-To check which **version of Python** you are using through `reticulate`,
-you can run:
-
-``` r
-reticulate::py_discover_config()
-```
-
-> **Note:** To get more information about **managing** which **version
-> of Python** you are using, you can refer to `reticulate`
-> [documentation](https://rstudio.github.io/reticulate/articles/versions.html)
-> about “Python Version Configuration”.
-
-## Usage
-
-Once the `ktest` package is installed and configured, to use it, you
-only need to load it like any other R package:
-
-``` r
-library(ktest)
-kt <- ktest(...) # see other vignettes
-```
-
-:warning: If you are using a **dedicated Python environment**, you also
-need to load it every time before using `ktest`:
-
-``` r
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-library(ktest)
-kt <- ktest(...) # see other vignettes
-```
-
-# Example: multivariate testing
-
-``` r
-library(ktest)
-```
-
-## Load data
-
-Load data and metadata:
-
-``` r
-# cell expression data
-sc_df <- read.table("data/data2.csv", row.names = 1, sep = ",", header = TRUE)
-# cell metadata
-meta_sc_df <- read.table("data/metadata2.csv", row.names = 1, sep = ",", header = TRUE)
-```
-
-## Ktest definition
-
-Initialize the `ktest` object:
-
-- `data` is the dataframe of data.
-- `metadata` is the dataframe of metadata.
-- `condition` is the column of `metadata` containing the labels to test.
-- `samples` is the couple of samples to test in the column `condition`
-  of `metadata`
-- Set `nystrom` to `TRUE` to use the Nystrom approximation.
-- Set `verbose >0` to follow the steps of the initialization of the
-  `ktest` object.
-
-``` r
-kt <- ktest(
-    sc_df, meta_sc_df,
-    condition='condition', samples=c('0H','48HREV'), verbose=1
-)
-```
-
-## Multivariate testing
-
-Perform a multivariate test on the data:
-
-``` r
-# R call
-multivariate_test(kt, verbose=1)
-# equivalent Python call through reticulate
-kt$multivariate_test(verbose=1)
-```
-
-### Print test results
-
-- `long` : if `TRUE`, the results are printed for several truncations
-- `t` : truncation associated to the printed p-value if `long` is
-  `FALSE`.
-- `ts` : list of truncations associated to the printed p-values if
-  `long` is `TRUE`.
-
-``` r
-# R call
-print_multivariate_test_results(kt, long = TRUE, ts = c(1,2,3))
-# equivalent Python call through reticulate
-kt$print_multivariate_test_results(long = TRUE, ts = c(1,2,3))
-```
-
-### Get p-values table with respect to the truncation parameter.
-
-- `contrib`: if true, returns the p-value associated to each principal
-  component individually. Returns the p-value associated to the `kfda`
-  statistic otherwise.
-- `log`: if `TRUE`, returns the log p-values.
-
-``` r
-# R call
-pval <- get_pvalue(kt, contrib = TRUE, log = FALSE)
-# equivalent Python call through reticulate
-pval <- kt$get_pvalue(contrib = TRUE, log = FALSE)
-
-head(pval)
-#>          1            2            3            4            5            6   
-#> 6.117177e-01 1.246529e-08 2.552708e-08 1.884499e-07 1.101084e-01 4.584441e-01
-```
-
-### Plot p-values with respect to truncation
-
-FIX ME!
-
-### Other tests
-
-The default p-value is the asymptotic p-value of the `kfda` statistic
-associated to the truncation parameter `t=10`. To change the default
-truncation parameter, use the class function `set_truncation`.
-
-``` r
-# Python call through reticulate
-kt$set_truncation(5L)
-kt$multivariate_test(verbose=1)
-```
-
-The asymptotic p-value is available for the `kfda` statistic only. The
-permutation p-value is available for the `kfda` statistic and the `mmd`
-statistic.
-
-Compute the permutation p-value associated to the chosen statistic:
-
-- `stat` : chosen statistic among (`kfda`,`mmd`)
-- `permutation`: if True, compute the permutation p-value (automatically
-  True if `stat` is `mmd`)
-- `n_permutations` : set the number of permutations.
-- `seed_permutation` : define the number of random seeds.
-- `n_jobs_permutation` : number of CPU to use for parallelized
-  computation
-
-``` r
-# Python call through reticulate
-kt$multivariate_test(
-    stat='mmd',
-    permutation=TRUE,
-    n_permutations=2000L,
-    seed_permutation=123L,
-    n_jobs_permutation=3L,
-    verbose=1L)
-```
-
-Results:
-
-``` r
-# Python call through reticulate
-kt$stat
-#> [1] "mmd"
-kt$get_pvalue_name()
-#> [1] "standard_perm2000_seed123_datacondition0H48HREV"
-kt$dict_pval_mmd[kt$get_pvalue_name()]
-#> $standard_perm2000_seed123_datacondition0H48HREV
-#> [1] 0
-kt$get_pvalue()
-#> [1] 0
-```
-
-### Nystrom approximation
-
-Use the Nystrom approximation to reduce the computational cost:
-
-``` r
-# Python call through reticulate
-kt$set_test_params(nystrom=TRUE)
-kt$multivariate_test(verbose=1)
-```
-
-Tune each parameter of the Nystrom approximation with the function
-`set_test_params()`:
-
-- `nystrom` : if True, use the Nystrom approximation
-- `n_landmarks` : number of landmarks to use (subsample used to compute
-  the anchors).
-- `n_anchors` : number of anchors to use (eigenvectors associated to a
-  matrix defined with the landmarks).
-- `landmark_method` : how to choose the landmarks among
-  (`random`,`kmeans`)
-- `anchor_basis` : matrix used to define the anchors among
-  - `k` : second moment of the landmarks.
-  - `s` : total covariance of the landmarks.
-  - `w` : within group covariance of the landmarks.
-
-``` r
-# Python call through reticulate
-kt$set_test_params(
-    nystrom=TRUE,
-    n_landmarks=50L,
-    n_anchors=50L,
-    landmark_method='random',
-    anchor_basis='s'
-)
-kt$multivariate_test(verbose=1)
-```
-
-### Kernel function choice
-
-**TODO**
-
-The default kernel is the RBF kernel with median bandwidth. Use
-`init_kernel_params()` to specify the kernel function with a `dict` of
-specifications:
-
-- `function` is either a string among \[`gauss`,`linear`\] or a user
-  specified kernel function.
-  - if `function` is `gauss`:
-    - `bandwidth` is either the string `median` or a float.
-    - if `bandwidth` is `median`:
-      - `median_coef` is the coefficient such that
-        `bandwidth=median_coef x median` (default is `1`)
-- `kernel_name` is the name of the kernel used.
-
-``` python
-import torch
-from pyktest.base import init_kernel_params
-
-# gauss kernel with median/2 bandwidth
-kernel1 = init_kernel_params(function = 'gauss', bandwidth = 'median', median_coef = 1/2)
-
-# linear kernel 
-kernel2 = init_kernel_params(function='linear')
-
-# user specified kernel
-kernel3 = init_kernel_params(function=lambda x,y: torch.cdist(x,y).exp()+1,kernel_name='useless_kernel')
-```
-
-``` python
-kt = Ktest(data,
-           metadata,
-           condition='condition',
-           samples=['0H','48HREV'],
-#            kernel=kernel3,
-           verbose=1)
-
-kt.multivariate_test(verbose=1)
-```
-
-    - Add data 'data' to Ktest, dimensions=(685, 83)
-    - Set test data info (0H,48HREV from condition)
-    - Define kernel function (gauss)
-    - Initialize kfdat
-        cov : standard 
-        mmd : standard
-    - Diagonalize within covariance centered gram
-    - Compute within covariance centered gram
-    - Compute kfda statistic
-
-    ___Multivariate kfda test results___
-    Asymptotic p-value(truncation) for multivariate testing : 
-        p-value(10) = 3.9e-23 (kfda=130.41)
-
-# Example: univariate testing
+[^1]: the previous result without permutation are not lost, the object
+    is just updated with the new permutation-based result
