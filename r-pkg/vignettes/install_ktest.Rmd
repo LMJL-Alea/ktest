@@ -32,7 +32,7 @@ The `ktest` R package is using the `ktest` Python package under the hood thanks 
 You can install the development version of `ktest` with the following commands:
 
 ```{r setup-install-dev, eval=FALSE}
-install.package("remotes")
+install.packages("remotes")
 remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 ```
 

@@ -10,7 +10,7 @@ library(tibble)         # manipulate data.frame
 
 #---- Install and configuration (to be done once!) ----------------------------#
 # install ktest
-install.package("remotes")
+install.packages("remotes")
 remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 # load ktest R package
 library(ktest)
@@ -62,7 +62,15 @@ kt_1 = ktest_init(
     sample_names = c('0H','48HREV')
 )
 
-# run test
+# run test without permuation-based p-value computing
+test(
+    kt = kt_1, 
+    stat = 'kfda', 
+    permutation = FALSE, 
+    verbose = 1
+)
+
+# run test with permuation-based p-value computing
 test(
     kt = kt_1, 
     stat = 'kfda', 

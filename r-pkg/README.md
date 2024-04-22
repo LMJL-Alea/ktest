@@ -238,7 +238,7 @@ get_pvalues(kt_1, stat = 'kfda', permutation = FALSE, t_max = 50)
 ### Extract projections
 
 For kernel FDA (kfda), we can get the kernel embedding projections for
-each sample condition with respect to the a given truncation value:
+each sample condition with respect to a given truncation value:
 
 ``` r
 proj <- get_proj(kt_1, contrib = FALSE, t_max = 50)
@@ -551,7 +551,7 @@ You can install the development version of `ktest` with the following
 commands:
 
 ``` r
-install.package("remotes")
+install.packages("remotes")
 remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 ```
 

@@ -181,7 +181,7 @@ get_pvalues(kt_1, stat = 'kfda', permutation = FALSE, t_max = 50)
 
 ### Extract projections
 
-For kernel FDA (kfda), we can get the kernel embedding projections for each sample condition with respect to the a given truncation value:
+For kernel FDA (kfda), we can get the kernel embedding projections for each sample condition with respect to a given truncation value:
 ```{r project}
 proj <- get_proj(kt_1, contrib = FALSE, t_max = 50)
 names(proj)
