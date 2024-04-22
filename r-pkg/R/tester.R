@@ -151,6 +151,11 @@ ktest_init <- function(
     assert_choice(anchor_basis, c("w", "s", "k"))
     assert_count(random_state, null.ok = TRUE)
     
+    # type cast
+    if(!is.null(n_landmarks)) n_landmarks <- as.integer(n_landmarks)
+    if(!is.null(n_anchors)) n_anchors <- as.integer(n_anchors)
+    if(!is.null(random_state)) random_state <- as.integer(random_state)
+    
     # Python call
     return(pyktest$tester$Ktest(
         data, metadata, 
