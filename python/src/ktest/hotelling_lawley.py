@@ -329,3 +329,35 @@ class Hotelling_Lawley:
         return(cook_distances)
         
 
+    def compute_cookL_distances(self,Tmax=30,hypothesis_name=None):
+        index_data = self.get_index(in_dict=False,samples='all')
+        XX = self.XX
+        X = self.design
+        XXinv = self.XXinv
+        hyp = self.get_hypothesis(hypothesis_name)
+        L = hyp['L']
+        XXXL = torch.linalg.multi_dot([X,XXinv,L.T])
+
+        LXXL = torch.linalg.multi_dot([L,XXinv,L.T])
+        sp,ev = ordered_eigsy(LXXL)
+        non_zero = sp>10e-14
+        sp = sp[non_zero]
+        ev = ev[:,non_zero]
+        LXXLinv = torch.linalg.multi_dot([ev,torch.diag(sp**-1),ev.T])
+
+        Pi = self.ProjImX
+        one_minus_hii = (1 - torch.diag(Pi))
+
+
+
+        wi_by_one_minus_hii = XXXL.T/one_minus_hii
+        cook_coefs = torch.diag(torch.linalg.multi_dot([wi_by_one_minus_hii.T,LXXLinv,wi_by_one_minus_hii]))
+        _,_,res = self.compute_diagnostics(Tmax=Tmax)
+        torch_res = torch.tensor(res.to_numpy(),dtype=torch.float64)
+        cook_distances = {}
+        for t in range(1,Tmax+1):
+            cook_traces = torch.diag(torch.linalg.multi_dot([torch_res[:,:t],torch_res[:,:t].T]))
+            cook_distances[t] = (cook_traces * cook_coefs).numpy()
+        cook_distances = pd.DataFrame(cook_distances,index=index_data)
+        return(cook_distances)
+        
