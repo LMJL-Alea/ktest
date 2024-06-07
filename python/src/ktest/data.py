@@ -1,6 +1,6 @@
-import torch
 import numpy as np
 import pandas as pd
+from torch import from_numpy, Tensor
 from sklearn.cluster import kmeans_plusplus
 
 class Data():
@@ -128,16 +128,16 @@ class Data():
                 
                 # Convert data to tensor:
                 if isinstance(data_n, pd.Series):
-                    self.data[n] = (torch.from_numpy(data_n.to_numpy()
+                    self.data[n] = (from_numpy(data_n.to_numpy()
                                                      .reshape(-1,1)).double())
                 elif isinstance(data_n, pd.DataFrame):
-                    self.data[n] = torch.from_numpy(data_n.to_numpy()).double()
-                elif isinstance(data_n, torch.Tensor):
+                    self.data[n] = from_numpy(data_n.to_numpy()).double()
+                elif isinstance(data_n, Tensor):
                     self.data[n] = data_n.double()
                 else:
                     X = (data_n.to_numpy() if not isinstance(data_n, np.ndarray)
                          else data_n.copy())
-                    self.data[n] = torch.from_numpy(X).double()
+                    self.data[n] = from_numpy(X).double()
                 
                 if nystrom:
                     n_landmarks_n = (n_landmarks * self.nobs[n] // data.shape[0]
