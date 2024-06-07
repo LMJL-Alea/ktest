@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Requirements
+## Package requirements
 
 - R version 4+
 - Python version 3+
@@ -32,8 +32,8 @@ The `ktest` R package is using the `ktest` Python package under the hood thanks 
 You can install the development version of `ktest` with the following commands:
 
 ```{r setup-install-dev, eval=FALSE}
-install.package("remotes")
-remotes::install_github("AnthoOzier/ktest", ref = "r-ktest", subdir = "r-pkg")
+install.packages("remotes")
+remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 ```
 
 > **Note:** `ktest` is not available on CRAN at the moment but will be shortly.
@@ -75,7 +75,7 @@ check_ktest()
 > **Note:** if you are a Miniconda/Anaconda Python distribution user, you can either user a Python virtual environment (c.f. above) or a **Conda environment** with the same results. Please refer to the `reticulate` [documentation](https://rstudio.github.io/reticulate/articles/versions.html#providing-hints) in this case.
 
 
-## Managing Python
+### Managing Python
 
 To check which **version of Python** you are using through `reticulate`, you can run:
 
@@ -95,7 +95,7 @@ kt <- ktest(...) # see other vignettes
 
 :warning: If you are using a **dedicated Python environment**, you also need to load it every time before using `ktest`:
 ```{r load-ktest-env, eval=FALSE}
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
 library(ktest)
+reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
 kt <- ktest(...) # see other vignettes
 ```

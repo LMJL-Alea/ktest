@@ -2,26 +2,35 @@
 % Please edit documentation in R/ktest-package.R
 \docType{package}
 \name{ktest-package}
-\alias{ktest}
 \alias{ktest-package}
-\title{ktest: Kernel Based Statistical Testing}
+\alias{ktest}
+\title{ktest}
 \description{
-Write Me
+Kernel-based testing
+}
+\details{
+The \code{ktest} package implements kernel-based statistical testing, such as
+maximal mean discrepancy test (MMD) and a test based on kernel Fisher
+Discriminant Analysis (kFDA). It can be used for differential expression
+analysis in transcriptomics data for instance.
+
+See Ozier-Lafontaine et al (2024) for more details.
+}
+\references{
+Ozier-Lafontaine A., Fourneaux C., Durif G., Arsenteva P., Vallot C.,
+Gandrillon O., Gonin-Giraud S., Michel B., Picard F. (2024).
+Kernel-Based Testing for Single-Cell Differential Analysis. Preprint.
+\doi{10.48550/arXiv.2307.08509};
+\href{https://arxiv.org/abs/2307.08509}{arXiv.2307.08509};
+\href{https://hal.science/hal-04214858}{hal-04214858}.
 }
 \seealso{
-Useful links:
-\itemize{
-  \item \url{https://github.com/AnthoOzier/ktest}
-}
-
+\code{\link[=ktest_init]{ktest_init()}}, \code{\link[=test]{test()}}
 }
 \author{
-\strong{Maintainer}: Ghislain Durif \email{gd.dev@libertymail.net} (\href{https://orcid.org/0000-0003-2567-1401}{ORCID})
-
-Authors:
 \itemize{
-  \item Anthony Ozier-Lafontaine \email{anthony.ozier-lafontaine@ec-nantes.fr} (\href{https://orcid.org/0000-0003-3232-0503}{ORCID})
+\item \href{https://www.researchgate.net/profile/Anthony-Ozier-Lafontaine}{Anthony Ozier-Lafontaine}
+\item \href{https://parsenteva.github.io/}{Polina Arsenteva}
+\item \href{https://gdurif.perso.math.cnrs.fr/}{Ghislain Durif}
 }
-
 }
-\keyword{internal}
