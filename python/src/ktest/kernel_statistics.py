@@ -343,7 +343,7 @@ class Statistics():
             Pm = self.compute_centering_matrix(landmarks=True)
 
             # Calculating the matrix to diagonalise with Nystrom:                 
-            Kw = (1 / (self.data.ntot * self.data_ny.ntot ** 2)
+            Kw = (1 / (self.data.ntot * self.data_ny.ntot)
                   * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
                                Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
         # Standard version:
