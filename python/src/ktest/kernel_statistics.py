@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from torch import cdist, cat, matmul, exp, mv, dot, diag
+from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, tensor, float64
 from torch.linalg import multi_dot
 import warnings
@@ -78,7 +78,7 @@ def gauss_kernel_median(x, y, bandwidth='median', median_coef=1,
     distances between pairs of observations (`bandwidth`='median').
     """
     if bandwidth == 'median':
-        computed_bandwidth = mediane(x, y) * median_coef
+        computed_bandwidth = sqrt(mediane(x, y) * median_coef)
     else:
         computed_bandwidth = bandwidth
     kernel = lambda x, y: gauss_kernel(x, y, computed_bandwidth)
@@ -375,7 +375,7 @@ class Statistics():
             Lz12 = diag(self.sp_anchors**(-1/2))
             Kzx = self.compute_kmn()
             Pi = self.compute_centering_matrix(landmarks=True)
-            pkm = (1 / np.sqrt(self.data_ny.ntot)
+            pkm = (1 / sqrt(self.data_ny.ntot)
                    * mv(Lz12, mv(self.ev_anchors.T, mv(Pi, mv(Kzx, omega)))))
         else: 
             Kx = self.compute_gram()
