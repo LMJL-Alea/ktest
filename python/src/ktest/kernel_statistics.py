@@ -375,7 +375,7 @@ class Statistics():
             Lz12 = diag(self.sp_anchors**(-1/2))
             Kzx = self.compute_kmn()
             Pi = self.compute_centering_matrix(landmarks=True)
-            pkm = (1 / sqrt(self.data_ny.ntot)
+            pkm = (1 / np.sqrt(self.data_ny.ntot)
                    * mv(Lz12, mv(self.ev_anchors.T, mv(Pi, mv(Kzx, omega)))))
         else: 
             Kx = self.compute_gram()
