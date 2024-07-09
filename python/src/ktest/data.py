@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from torch import from_numpy, Tensor
+from torch import from_numpy, Tensor, concat
 from sklearn.cluster import kmeans_plusplus
 
 class Data():
@@ -82,7 +82,7 @@ class Data():
             Number of variables in the dataset.
             
         ntot : int
-            Total numbetr of variables in the dataset (sum of nobs).
+            Total number of variables in the dataset (sum of nobs).
 
     """  
     def __init__(self, data, metadata, sample_names=None, nystrom=False,
@@ -140,7 +140,8 @@ class Data():
                     self.data[n] = from_numpy(X).double()
                 
                 if nystrom:
-                    n_landmarks_n = (n_landmarks * self.nobs[n] // data.shape[0]
+                    n_ = meta_fmt.isin(sample_names).sum()
+                    n_landmarks_n = (n_landmarks * self.nobs[n] // n_
                                      if n_landmarks is not None 
                                      else self.nobs[n] // 5)
                     if landmark_method == 'random':
