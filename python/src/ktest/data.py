@@ -141,7 +141,8 @@ class Data():
                 
                 if nystrom:
                     n_ = meta_fmt.isin(self.sample_names).sum()
-                    n_landmarks_n = (n_landmarks * self.nobs[n] // n_
+                    n_landmarks_n = (min(n_landmarks * self.nobs[n] // n_,
+                                         self.nobs[n])
                                      if n_landmarks is not None 
                                      else self.nobs[n] // 5)
                     if landmark_method == 'random':
