@@ -140,7 +140,7 @@ class Data():
                     self.data[n] = from_numpy(X).double()
                 
                 if nystrom:
-                    n_ = meta_fmt.isin(sample_names).sum()
+                    n_ = meta_fmt.isin(self.sample_names).sum()
                     n_landmarks_n = (n_landmarks * self.nobs[n] // n_
                                      if n_landmarks is not None 
                                      else self.nobs[n] // 5)
