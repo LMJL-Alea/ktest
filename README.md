@@ -8,6 +8,9 @@ The source code for experimental_data and squair scripts are based on the branch
 
 See https://github.com/AnthoOzier/ktest_experiment_genome_biology_2024 for more details.
 
+## Licensing and authorship
+
+See the dedicated [`LICENSE.md`](./LICENSE.md) and [`AUTHORS.md`](./AUTHORS.md) files.
 
 ## Python package
 
@@ -26,6 +29,6 @@ remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
 ```
 
 ## References
+
 <a id="1">[1]</a> 
-Anthony Ozier-Lafontaine, Camille Fourneaux, Ghislain Durif, Polina Arsenteva, Céline Vallot, Olivier Gandrillon, Sandrine Gonin-Giraud, Bertrand Michel, Franck Picard. (2024). Kernel-Based Testing for Single-Cell Differential Analysis. Preprint, [10.48550/arXiv.2307.08509](
-https://doi.org/10.48550/arXiv.2307.08509).
+Anthony Ozier-Lafontaine, Camille Fourneaux, Ghislain Durif, Polina Arsenteva, Céline Vallot, Olivier Gandrillon, Sandrine Gonin-Giraud, Bertrand Michel, Franck Picard. Kernel-based testing for single-cell differential analysis. Genome Biol 25, 114 (2024). [doi:10.1186/s13059-024-03255-1](https://doi.org/10.1186/s13059-024-03255-1), [hal-04214858](https://hal.science/hal-04214858)
