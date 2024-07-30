@@ -1,6 +1,47 @@
 [build-system]
 requires = [
-    "setuptools>=42",
-    "wheel"
+    "setuptools>=72.1.0"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "ktest"
+version = "1.0.4"
+authors = [
+    {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
+    {name = "Polina Arsenteva", email = "polina.arsenteva@univ-nantes.fr"},
+    {name = "Ghislain Durif", email = "ghislain.durif@ens-lyon.fr"}
+]
+license = {text = "MIT License"}
+description = "Package implementing efficient kernel tests such as MMD or KFDA"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "anthony_project_tools @ git+https://github.com/lereldarion/anthony_project_tools.git",
+    "torch",
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    "pandas",
+    "joblib",
+    "matplotlib",
+    "adjustText",
+    "kmeans_pytorch",
+    "tqdm",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "https://github.com/LMJL-Alea/ktest.git"
+"Bug Tracker" = "https://github.com/LMJL-Alea/ktest/issues"
+
+[tool.setuptools]
+package-dir = ["ktest"]
+include-package-data = false
