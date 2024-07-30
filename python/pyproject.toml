@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "1.0.4"
+version = "1.0.5"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
     {name = "Polina Arsenteva", email = "polina.arsenteva@univ-nantes.fr"},
@@ -43,5 +43,5 @@ Homepage = "https://github.com/LMJL-Alea/ktest.git"
 "Bug Tracker" = "https://github.com/LMJL-Alea/ktest/issues"
 
 [tool.setuptools]
-package-dir = ["ktest"]
+packages = ["ktest"]
 include-package-data = false
