@@ -416,13 +416,13 @@ class Ktest(Statistics):
     def plot_density(self, t=None, t_max=100, colors=None, labels=None, alpha=.5, 
                      legend_fontsize=15, font_family='serif'):
         """
-        Plots a density of the projection on either the discriminant axes of 
+        Plots a density of the projection on a discriminant axis of 
         the kFDA statistic.
 
         Parameters
         ----------
         t : int, optional
-            Truncation to plot, by default equal to the maximal truncation.
+            Axis to plot, by default equal to the maximal truncation.
             
         t_max : int, optional
             Maximal truncation for projections calculation, the default is 100.
@@ -451,7 +451,7 @@ class Ktest(Statistics):
 
         """
         if t is None:
-            t = t_max
+            t = min(t_max, len(self.kstat.sp))
         if t > len(self.kstat.sp):
             raise ValueError(f"Value of t has to be at most {len(self.kstat.sp)}.")
         if t > t_max:
@@ -494,11 +494,11 @@ class Ktest(Statistics):
         Parameters
         ----------
         t_x : int, optional
-            Truncation for the scatter with respect to axis x, 
+            Axis for the scatter with respect to axis x, 
             the default is 1.
             
         t_y : int, optional
-            Truncation for the scatter with respect to axis y, 
+            Axis for the scatter with respect to axis y, 
             the default is 1.
         
         t_max : int, optional
