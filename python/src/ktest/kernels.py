@@ -118,7 +118,8 @@ def gauss_kernel_mediane(x,y,bandwidth='median',median_coef=1,return_mediane=Fal
     without the diagonal only. 
     '''
     if bandwidth == 'median':
-        computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+        # computed_bandwidth = mediane(x, y,verbose=verbose) * median_coef
+        computed_bandwidth = np.sqrt(mediane(x, y,verbose=verbose) * median_coef)
     elif bandwidth == 'quantile':
         computed_bandwidth = quantile(x=x,y=y,q=median_coef,verbose=verbose)
     else:
