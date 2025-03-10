@@ -89,7 +89,7 @@ def gauss_kernel_median(x, y, bandwidth='median', median_coef=1,
 
 class Statistics():
     """
-    Clacc containing the technical tools for computing kernel statistics.
+    Class containing the technical tools for computing kernel statistics.
     
     Parameters
     ----------
