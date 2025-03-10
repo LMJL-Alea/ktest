@@ -38,7 +38,7 @@ class Data():
         nystrom : bool, optional
             If True, computes the Nystrom landmarks, in which case all 
             attributes correspond to the landmarks and not the original data.
-            The default if False.
+            The default is False.
     
         n_landmarks: int, optional
             Number of landmarks used in the Nystrom method. If unspecified, one
