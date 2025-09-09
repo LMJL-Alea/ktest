@@ -412,7 +412,7 @@ class Statistics():
         such that 
         
                 Swt = l1 (e1 (x) e1) + l2 (e2 (x) e2) + ... + lt (et (x) et) 
-                    = \sum_{p=1:t} lp (ep (x) ep)
+                    = \\sum_{p=1:t} lp (ep (x) ep)
         
         where (li) and (ei) are the first t eigenvalues and eigenvectors of 
         Sw ordered by decreasing eigenvalues, and (x) stands for the tensor 
@@ -427,8 +427,8 @@ class Statistics():
         The standard truncated KFDA statistic is given by :
         
                 F   = n1*n2/n || Swt^{-1/2} d ||_H^2
-                    = \sum_{p=1:t} n1*n2 / ( lp*n) <ep,d>^2 
-                    = \sum_{p=1:t} n1*n2 / ( lp*n)^2 up^T PK omega
+                    = \\sum_{p=1:t} n1*n2 / ( lp*n) <ep,d>^2 
+                    = \\sum_{p=1:t} n1*n2 / ( lp*n)^2 up^T PK omega
 
 
         Projection
@@ -437,11 +437,11 @@ class Statistics():
         This statistic also defines a discriminant axis ht in the RKHS H. 
         
                 ht  = n1*n2/n Swt^{-1/2} d 
-                    = \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] kx P up 
+                    = \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] kx P up 
 
         To project the dataset on this discriminant axis, we compute : 
 
-                h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K   
+                h^T kx =  \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K   
                 
         Returns
         -------
@@ -539,7 +539,7 @@ class Statistics():
         
         The projection with a truncation t is given by the formula :
 
-                h^T kx =  \sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
+                h^T kx =  \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
 
         Returns
         -------
