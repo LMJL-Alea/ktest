@@ -2,9 +2,8 @@ import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, tensor, float64
-from torch.linalg import multi_dot
+from torch.linalg import multi_dot, eigh
 import warnings
-from apt.eigen_wrapper import eigsy
 
 
 def distances(x, y=None):
@@ -194,7 +193,7 @@ class Statistics():
     @staticmethod
     def ordered_eigsy(matrix):
         # The matrix with column-wise eigenvectors
-        sp,ev = eigsy(matrix)
+        sp, ev = eigh(matrix)
         order = sp.argsort()[::-1]
         ev = tensor(ev[:,order],dtype=float64) 
         sp = tensor(sp[order], dtype=float64)
