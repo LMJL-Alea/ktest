@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib import rc
 import warnings
 from tqdm import tqdm
+import dill
+import gzip
 from .kernel_statistics import Statistics
 from .data import Data
 
@@ -574,3 +576,54 @@ class Ktest(Statistics):
         ax.set_title('Projection scatter', fontsize=25)
         return(fig,ax)
 
+    def save(self, file_name, compress=True):
+        """
+        Save Ktest object to disk in binary format (pickle/dill) possibly
+        with Gzip compression.
+
+        If compression is enabled, a `.gz` extension is added to `file_name`
+        if not already present.
+
+        Parameters
+        ----------
+        file_name : str
+            absolute or relatative path to file where to store the Ktest
+            object.
+        compress : bool
+            flag to enable/disable compression when saving Ktest object to
+            disk.
+        """
+        # compress result file?
+        if compress:
+            custom_open = gzip.open
+            # add `.gz` extension if needed
+            if not file_name.endswith('.gz'):
+                file_name = file_name + '.gz'
+        else:
+            custom_open = open
+
+        with custom_open(file_name, 'wb') as f:
+            dill.dump(self, f)
+
+    @staticmethod
+    def load(file_name, compressed=True):
+        """
+        Load Ktest object that was saved on disk in binary format (pickle/dill)
+        possibly with Gzip decompression.
+
+        Parameters
+        ----------
+        file_name : str
+            absolute or relatative path to file where the Ktest object is
+            stored.
+        compressed : bool
+            flag to enable/disable decompression when loading Ktest object from
+            disk.
+        """
+        if compressed:
+            custom_open = gzip.open
+        else:
+            custom_open = open
+
+        with custom_open(file_name, 'rb') as f:
+            return dill.load(f)
