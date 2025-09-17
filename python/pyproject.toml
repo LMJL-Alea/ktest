@@ -45,3 +45,8 @@ Homepage = "https://github.com/LMJL-Alea/ktest.git"
 [tool.setuptools]
 packages = ["ktest"]
 include-package-data = false
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.1",
+]
