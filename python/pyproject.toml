@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "1.0.6"
+version = "1.0.7"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
     {name = "Polina Arsenteva", email = "polina.arsenteva@univ-nantes.fr"},
