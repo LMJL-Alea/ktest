@@ -54,7 +54,7 @@ def test_Ktest(kt, dummy_data):
     ## check content
     # input data
     for group in np.unique(dummy_data[1]):
-        np.testing.assert_equal(
+        np.testing.assert_array_equal(
             kt.data.data[group].numpy(),
             dummy_data[0][dummy_data[1] == group].to_numpy()
         )
@@ -76,7 +76,7 @@ def output_file():
     yield os.path.join(pytest.output_dir, f"ktest_obj_{secrets.token_hex(4)}.pkl")
 
 
-def test_save_load(kt, output_file):
+def test_save_load(kt, output_file, assert_equal_ktest):
     """Test Ktest object saving and loading."""
     # saving (no compression)
     kt.save(output_file, compress=False)
@@ -93,22 +93,44 @@ def test_save_load(kt, output_file):
     kt_2 = Ktest.load(f"{output_file}.gz", compressed=True)
 
     ## checks (compare before and after loading)
-    # input data
-    for group in np.unique(kt.metadata):
-        np.testing.assert_equal(
-            kt.data.data[group].numpy(),
-            kt_1.data.data[group].numpy()
-        )
-        np.testing.assert_equal(
-            kt.data.data[group].numpy(),
-            kt_2.data.data[group].numpy()
-        )
-    pd.testing.assert_series_equal(kt.metadata, kt_1.metadata)
-    pd.testing.assert_series_equal(kt.metadata, kt_2.metadata)
-    # test statistics
-    pd.testing.assert_series_equal(kt.kfda_statistic, kt_1.kfda_statistic)
-    pd.testing.assert_series_equal(kt.kfda_statistic, kt_2.kfda_statistic)
-    # asymptotic p-values
-    pd.testing.assert_series_equal(kt.kfda_pval_asymp, kt_1.kfda_pval_asymp)
-    pd.testing.assert_series_equal(kt.kfda_pval_asymp, kt_2.kfda_pval_asymp)
+    assert_equal_ktest(kt, kt_1)
+    assert_equal_ktest(kt, kt_2)
 
+
+@pytest.fixture(scope="module")
+def exp_data():
+    """Data and metadata from experimental transcriptomic dataset."""
+    # data frame
+    data = pd.read_csv(pytest.data_file, index_col=0)
+    # metadata
+    meta = pd.Series(data.index).apply(lambda x: x.split(sep='.')[1])
+    meta.index = data.index
+    # sample names
+    sample_names = ['48HREV','48HDIFF']
+    # output
+    yield data, meta, sample_names
+
+
+@pytest.fixture(scope="module")
+def kt_data(exp_data):
+    """Create Ktest object from dummy data for testing."""
+    # init object
+    kt = Ktest(
+        data=exp_data[0], metadata=exp_data[1], sample_names=exp_data[2]
+    )
+    # run kfda test
+    kt.test()
+    # output
+    yield kt
+
+
+def test_num_stability(kt_data, assert_equal_ktest):
+    """Compare numerical results to previous version of ktest (if available)."""
+
+    # saving current results
+    kt_data.save(pytest.res_file, compress=True)
+
+    # load previous results (if available)
+    if pytest.previous_res_file is not None:
+        kt_data_prev = Ktest.load(pytest.previous_res_file, compressed=True)
+        assert_equal_ktest(kt_data, kt_data_prev)
