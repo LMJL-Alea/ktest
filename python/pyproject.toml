@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "1.0.7"
+version = "1.0.8"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
     {name = "Polina Arsenteva", email = "polina.arsenteva@univ-nantes.fr"},
@@ -50,4 +50,5 @@ include-package-data = false
 [dependency-groups]
 dev = [
     "pytest>=7.0.1",
+    "toml>=0.10.2",
 ]
