@@ -248,7 +248,7 @@ class Statistics():
         if eps is None:
             eps = finfo(matrix.dtype).eps
         # select non null eigen val
-        sp_mask = sp < eps
+        sp_mask = sp >= eps
         # output
         return sp[sp_mask], ev[:, sp_mask]
 
