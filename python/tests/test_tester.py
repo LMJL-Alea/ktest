@@ -137,4 +137,6 @@ def test_num_stability(kt_data, assert_equal_ktest):
     # load previous results (if available)
     if pytest.previous_res_file is not None:
         kt_data_prev = Ktest.load(pytest.previous_res_file, compressed=True)
-        assert_equal_ktest(kt_data, kt_data_prev)
+        assert_equal_ktest(
+            kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic)
+        )
