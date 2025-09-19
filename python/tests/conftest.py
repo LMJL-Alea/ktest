@@ -1,4 +1,5 @@
 from glob import glob
+import numpy.testing as npt
 import os
 import pandas.testing as pdt
 import pytest
@@ -78,7 +79,8 @@ def assert_equal_ktest():
     (almost) equal or not.
 
     See <https://docs.pytorch.org/docs/stable/testing.html#torch.testing.assert_close>
-    for default tolerance value (when `atol=None`).
+    or <https://numpy.org/doc/stable/reference/generated/numpy.testing.assert_allclose.html>
+    for `atol` and `rtol` definitions.
 
     Note: partial comparison to check data input and result output (test
     statistic and p-values).
@@ -87,10 +89,15 @@ def assert_equal_ktest():
     ----------
         kt_1 : Ktest object.
         kt_2 : Ktest object.
+        t_max : integer,
+            maximum truncation level (i.e. maximum dimension in embedded
+            space). `None` by default and no truncation is done.
         atol : float,
             absolute tolerance for comparison.
+        rtol : float,
+            relative tolerance for comparison.
     """
-    def _assert_equal_ktest(kt_1, kt_2, atol=1e-5):
+    def _assert_equal_ktest(kt_1, kt_2, trunc=None, rtol=0, atol=1e-5):
         # dataset
         pdt.assert_frame_equal(kt_1.dataset, kt_2.dataset)
         # data
@@ -99,7 +106,7 @@ def assert_equal_ktest():
         ):
             assert group1 == group2, \
                 f"Unmatching samples '{group1}' and '{group2}'"
-            tt.assert_close(array1, array2, rtol=0, atol=atol)
+            tt.assert_close(array1, array2, rtol=rtol, atol=atol)
         # metadata
         pdt.assert_series_equal(kt_1.metadata, kt_2.metadata)
         # data nystrom (if relevant)
@@ -109,14 +116,26 @@ def assert_equal_ktest():
             ):
                 assert group1 == group2, \
                     f"Unmatching samples '{group1}' and '{group2}'"
-                tt.assert_close(array1, array2, rtol=0, atol=atol)
+                tt.assert_close(array1, array2, rtol=rtol, atol=atol)
         else:
             assert kt_1.data_nystrom == kt_2.data_nystrom
+        # setup truncation
+        if trunc is None:
+            trunc1 = len(kt_1.kfda_statistic)
+            trunc2 = len(kt_2.kfda_statistic)
+        else:
+            trunc1 = trunc
+            trunc2 = trunc
         # test statistics
-        pdt.assert_series_equal(kt_1.kfda_statistic, kt_2.kfda_statistic)
+        npt.assert_allclose(
+            kt_1.kfda_statistic[:trunc1], kt_2.kfda_statistic[:trunc2],
+            rtol=rtol, atol=atol
+        )
         # asymptotic p-values
-        pdt.assert_series_equal(kt_1.kfda_pval_asymp, kt_2.kfda_pval_asymp)
-        pdt.assert_series_equal(kt_1.kfda_pval_asymp, kt_2.kfda_pval_asymp)
+        npt.assert_allclose(
+            kt_1.kfda_pval_asymp[:trunc1], kt_2.kfda_pval_asymp[:trunc2],
+            rtol=rtol, atol=atol
+        )
 
     yield _assert_equal_ktest
 
