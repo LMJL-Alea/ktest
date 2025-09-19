@@ -28,7 +28,7 @@ def dummy_data(data_shape):
 
     # create meta data frame indicating two groups
     meta = pd.Series(
-        data = [f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
+        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
     )
 
     # output
@@ -73,7 +73,9 @@ def output_file():
     Note: file will be removed during test teardown.
     """
     # add a random unique tag to file
-    yield os.path.join(pytest.output_dir, f"ktest_obj_{secrets.token_hex(4)}.pkl")
+    yield os.path.join(
+        pytest.output_dir, f"ktest_obj_{secrets.token_hex(4)}.pkl"
+    )
 
 
 def test_save_load(kt, output_file, assert_equal_ktest):
@@ -106,7 +108,7 @@ def exp_data():
     meta = pd.Series(data.index).apply(lambda x: x.split(sep='.')[1])
     meta.index = data.index
     # sample names
-    sample_names = ['48HREV','48HDIFF']
+    sample_names = ['48HREV', '48HDIFF']
     # output
     yield data, meta, sample_names
 
@@ -125,7 +127,9 @@ def kt_data(exp_data):
 
 
 def test_num_stability(kt_data, assert_equal_ktest):
-    """Compare numerical results to previous version of ktest (if available)."""
+    """
+    Compare numerical results to previous version of ktest (if available).
+    """
 
     # saving current results
     kt_data.save(pytest.res_file, compress=True)
