@@ -56,6 +56,10 @@ class Data():
             by `np.random`. To ensure the results are reproducible, pass an int
             to instanciate the seed, or a RandomState instance (recommended).
 
+        dtype : torch.dtype, optional
+            Floating point number type/precision used for number storage and
+            computations. Default is `torch.float64`.
+
     Attributes
     ----------
         sample_names : 1-dimensional array-like
@@ -84,17 +88,22 @@ class Data():
 
         ntot : int
             Total number of variables in the dataset (sum of nobs).
-
     """
 
     def __init__(
         self, data, metadata, sample_names=None, nystrom=False,
-        n_landmarks=None, landmark_method='kmeans++', random_state=None
+        n_landmarks=None, landmark_method='kmeans++', random_state=None,
+        dtype=t.float64
     ):
+        # init
         self.data = {}
         self.index = {}
         self.nobs = {}
 
+        # dtype
+        self.dtype = dtype
+
+        # process data
         try:
             assert len(data.squeeze().shape) <= 2, \
                 'Data has to be at most 2-dimensional'
@@ -137,16 +146,20 @@ class Data():
                 # Convert data to tensor:
                 if isinstance(data_n, pd.Series):
                     self.data[n] = \
-                        t.from_numpy(data_n.to_numpy().reshape(-1, 1)).double()
+                        t.from_numpy(
+                            data_n.to_numpy().reshape(-1, 1)
+                        ).type(self.dtype)
                 elif isinstance(data_n, pd.DataFrame):
-                    self.data[n] = t.from_numpy(data_n.to_numpy()).double()
+                    self.data[n] = t.from_numpy(
+                        data_n.to_numpy()
+                    ).type(self.dtype)
                 elif isinstance(data_n, t.Tensor):
-                    self.data[n] = data_n.double()
+                    self.data[n] = data_n.type(self.dtype)
                 else:
                     X = data_n.to_numpy() \
                         if not isinstance(data_n, np.ndarray) else \
                         data_n.copy()
-                    self.data[n] = t.from_numpy(X).double()
+                    self.data[n] = t.from_numpy(X).type(self.dtype)
 
                 if nystrom:
                     n_ = meta_fmt.isin(self.sample_names).sum()

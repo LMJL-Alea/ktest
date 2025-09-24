@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
-from torch import ones, eye, zeros, float64, finfo
+from torch import ones, eye, zeros, finfo
 from torch.linalg import multi_dot, eigh
 import warnings
 
@@ -164,13 +164,21 @@ class Statistics():
         Eigenvectors associated with the diagonalization of the centered within
         covariance operator of the Nystrom landmarks using the kernel trick.
 
+    dtype : torch.dtype, optional
+        Floating point number type/precision used for number storage and
+        computations given by data.
     """
 
     def __init__(
         self, data, kernel_function='gauss', bandwidth='median',
         median_coef=1, data_nystrom=None, n_anchors=None, anchor_basis='w'
     ):
+
+        # data
         self.data = data
+
+        # dtype
+        self.dtype = data.dtype
 
         ### Nystrom:
         self.data_ny = data_nystrom
@@ -290,18 +298,18 @@ class Statistics():
             # of the ith group
             diag_Jn_by_n = cat([
                 cat([
-                    zeros(nprec, nell, dtype=float64),
-                    1/nell*ones(nell, nell, dtype=float64),
-                    zeros(data.ntot - nprec - nell, nell, dtype=float64)
+                    zeros(nprec, nell, dtype=self.dtype),
+                    1/nell*ones(nell, nell, dtype=self.dtype),
+                    zeros(data.ntot - nprec - nell, nell, dtype=self.dtype)
                 ], dim=0)
                 for nell, nprec in zip(effectifs, cumul_effectifs)
             ], dim=1)
             return In - diag_Jn_by_n
         elif self.anchor_basis == 'k':
-            return eye(data.ntot, dtype=float64)
+            return eye(data.ntot, dtype=self.dtype)
         elif self.anchor_basis == 's':
-            In = eye(data.ntot, dtype=float64)
-            Jn = ones(data.ntot, data.ntot, dtype=float64)
+            In = eye(data.ntot, dtype=self.dtype)
+            Jn = ones(data.ntot, data.ntot, dtype=self.dtype)
             return In - 1/data.ntot * Jn
 
     def compute_omega(self):
@@ -316,8 +324,8 @@ class Statistics():
 
         """
         n1, n2 = self.data.nobs.values()
-        m_mu1 = -1/n1 * ones(n1, dtype=float64)
-        m_mu2 = 1/n2 * ones(n2, dtype=float64)
+        m_mu1 = -1/n1 * ones(n1, dtype=self.dtype)
+        m_mu2 = 1/n2 * ones(n2, dtype=self.dtype)
         return cat((m_mu1, m_mu2), dim=0)
 
     def compute_gram(self, landmarks=False):
@@ -532,8 +540,13 @@ class Statistics():
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            kfdat = pd.Series(kfda, index=trunc)
-            kfdat_contributions = pd.Series(kfda_contributions, index=trunc)
+            kfdat = pd.Series(
+                kfda, index=trunc, dtype=str(self.dtype).replace('torch.', '')
+            )
+            kfdat_contributions = pd.Series(
+                kfda_contributions, index=trunc,
+                dtype=str(self.dtype).replace('torch.', '')
+            )
         return kfdat, kfdat_contributions
 
     def compute_mmd(self):
