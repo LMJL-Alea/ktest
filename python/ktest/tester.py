@@ -7,6 +7,8 @@ import warnings
 from tqdm import tqdm
 import dill
 import gzip
+import torch as t
+
 from .kernel_statistics import Statistics
 from .data import Data
 
@@ -79,6 +81,15 @@ class Ktest(Statistics):
             the landmarks in the Nystrom method, of which the anchors are the
             eigenvalues. Possible values are 'w' (default),'s' and 'k'.
 
+        dtype : torch.dtype, optional
+            Floating point number type/precision used for data storage and
+            computations. Default is `torch.float64`.
+
+        eps : float, optional
+            minimum threshold value to clip lower eigen values to zeros.
+            If `None` (default), then machine precision (given by
+            `torch.finfo()`) for specified dtype is used as threshold.
+
     Attributes
     ----------
         dataset: 1 or 2-dimensional array-like
@@ -147,17 +158,23 @@ class Ktest(Statistics):
             RandomState instance (recommended).
     """
 
-    def __init__(self, data, metadata, sample_names=None,
-                 kernel_function='gauss', kernel_bandwidth='median',
-                 kernel_median_coef=1, nystrom=False, n_landmarks=None,
-                 landmark_method='random', n_anchors=None, anchor_basis='w',
-                 random_state=None):
+    def __init__(
+        self, data, metadata, sample_names=None,
+        kernel_function='gauss', kernel_bandwidth='median',
+        kernel_median_coef=1, nystrom=False, n_landmarks=None,
+        landmark_method='random', n_anchors=None, anchor_basis='w',
+        random_state=None, dtype=t.float64, eps=None
+    ):
         self.dataset = data
         self.metadata = metadata
         self.data = Data(
-            data=data, metadata=metadata, sample_names=sample_names
+            data=data, metadata=metadata, sample_names=sample_names,
+            dtype=dtype
         )
         self.sample_names = self.data.sample_names
+
+        self.dtype = dtype
+        self.eps = eps
 
         if isinstance(random_state, np.random.RandomState):
             self.rnd_gen = random_state
@@ -184,7 +201,8 @@ class Ktest(Statistics):
                 sample_names=sample_names,
                 nystrom=True, n_landmarks=self.n_landmarks,
                 landmark_method=self.landmark_method,
-                random_state=self.rnd_gen
+                random_state=self.rnd_gen,
+                dtype=dtype
             )
         self.kstat = Statistics(
             self.data, kernel_function=self.kernel_function,
@@ -192,7 +210,8 @@ class Ktest(Statistics):
             median_coef=self.kernel_median_coef,
             data_nystrom=self.data_nystrom,
             n_anchors=self.n_anchors,
-            anchor_basis=self.anchor_basis
+            anchor_basis=self.anchor_basis,
+            eps=self.eps
         )
 
         ### Output statistics ###
@@ -325,7 +344,10 @@ class Ktest(Statistics):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
-                return pd.Series(pval, index=self.kfda_statistic.index)
+                return pd.Series(
+                    pval, index=self.kfda_statistic.index,
+                    dtype=str(self.dtype).replace('torch.', '')
+                )
         else:
             if verbose > 0:
                 print('- Performing permutations to compute p-values:')
