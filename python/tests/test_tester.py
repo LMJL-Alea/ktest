@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import pytest
 import secrets
+import torch as t
 
 from ktest.tester import Ktest
 
@@ -36,18 +37,27 @@ def dummy_data(data_shape):
 
 
 @pytest.fixture(scope="module")
-def kt(dummy_data):
-    """Create Ktest object from dummy data for testing."""
-    # init object
-    kt = Ktest(data=dummy_data[0], metadata=dummy_data[1])
-    # run kfda test
-    kt.test()
-    # output
-    yield kt
+def dummy_ktest(dummy_data):
+    """
+    Function to create Ktest object from dummy data for testing using a given
+    floating point number type/precision.
+    """
+    def _ktest(dtype=t.float64):
+        # init object
+        kt = Ktest(data=dummy_data[0], metadata=dummy_data[1], dtype=dtype)
+        # run kfda test
+        kt.test()
+        # output
+        return kt
+    # fixture output
+    yield _ktest
 
 
-def test_Ktest(kt, dummy_data):
+def test_Ktest(dummy_ktest, dummy_data):
     """Testing Ktest class."""
+    # create ktest objects
+    kt = dummy_ktest()
+
     # check object class
     assert isinstance(kt, Ktest)
 
@@ -78,8 +88,10 @@ def output_file():
     )
 
 
-def test_save_load(kt, output_file, assert_equal_ktest):
+def test_save_load(dummy_ktest, output_file, assert_equal_ktest):
     """Test Ktest object saving and loading."""
+    # create ktest objects
+    kt = dummy_ktest()
     # saving (no compression)
     kt.save(output_file, compress=False)
     # check
