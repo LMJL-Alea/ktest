@@ -266,6 +266,16 @@ class Statistics():
             eps = finfo(matrix.dtype).eps
         # select non null eigen val
         sp_mask = sp >= eps
+        # reduc dimension
+        reduc_dim = sp_mask.sum()
+        # warning
+        if reduc_dim < len(sp):
+            warnings.warn(
+                f"Clipping last {len(sp) - reduc_dim} eigen values " +
+                f"out of {len(sp)} dimensions, " +
+                f"that are lower than threshold {eps}."
+            )
+
         # output
         return sp[sp_mask], ev[:, sp_mask]
 
