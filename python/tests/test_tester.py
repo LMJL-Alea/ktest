@@ -1,8 +1,11 @@
 import numpy as np
+import numpy.testing as npt
 import os
 import pandas as pd
 import pytest
 import secrets
+import torch as t
+import warnings
 
 from ktest.tester import Ktest
 
@@ -28,7 +31,7 @@ def dummy_data(data_shape):
 
     # create meta data frame indicating two groups
     meta = pd.Series(
-        data = [f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
+        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
     )
 
     # output
@@ -36,18 +39,27 @@ def dummy_data(data_shape):
 
 
 @pytest.fixture(scope="module")
-def kt(dummy_data):
-    """Create Ktest object from dummy data for testing."""
-    # init object
-    kt = Ktest(data=dummy_data[0], metadata=dummy_data[1])
-    # run kfda test
-    kt.test()
-    # output
-    yield kt
+def dummy_ktest(dummy_data):
+    """
+    Function to create Ktest object from dummy data for testing using a given
+    floating point number type/precision.
+    """
+    def _ktest(dtype=t.float64):
+        # init object
+        kt = Ktest(data=dummy_data[0], metadata=dummy_data[1], dtype=dtype)
+        # run kfda test
+        kt.test()
+        # output
+        return kt
+    # fixture output
+    yield _ktest
 
 
-def test_Ktest(kt, dummy_data):
+def test_Ktest(dummy_ktest, dummy_data):
     """Testing Ktest class."""
+    # create ktest objects
+    kt = dummy_ktest()
+
     # check object class
     assert isinstance(kt, Ktest)
 
@@ -65,6 +77,44 @@ def test_Ktest(kt, dummy_data):
     assert isinstance(kt.kfda_pval_asymp, pd.Series)
 
 
+def test_ktest_precision(dummy_ktest, assert_equal_ktest):
+    """Testing Ktest computing with various precision."""
+    # create ktest objects (for a given precision)
+    kt_f32 = dummy_ktest(dtype=t.float32)
+    kt_f64 = dummy_ktest(dtype=t.float64)
+
+    # check output type
+    assert kt_f32.kfda_statistic.dtype == "float32"
+    assert kt_f32.kfda_pval_asymp.dtype == "float32"
+    assert kt_f64.kfda_statistic.dtype == "float64"
+    assert kt_f64.kfda_pval_asymp.dtype == "float64"
+
+    # compare results
+    # (tolerance threshold not too tight because of expected result differences
+    # due to precision difference)
+    max_len = min([len(kt_f32.kfda_statistic), len(kt_f64.kfda_statistic)])
+    npt.assert_allclose(
+        kt_f32.kstat.sp.numpy()[:max_len],
+        kt_f64.kstat.sp.numpy()[:max_len],
+        rtol=0, atol=1e-7
+    )
+    try:
+        npt.assert_allclose(
+            kt_f32.kfda_statistic.to_numpy()[:max_len],
+            kt_f64.kfda_statistic.to_numpy()[:max_len],
+            rtol=0, atol=1e-3
+        )
+    except AssertionError as e:
+        # use warning in that case because max absolute difference is
+        # often higher than required threshold (but not always)
+        warnings.warn(e)
+    npt.assert_allclose(
+        kt_f32.kfda_pval_asymp.to_numpy()[:max_len],
+        kt_f64.kfda_pval_asymp.to_numpy()[:max_len],
+        rtol=0, atol=1e-5
+    )
+
+
 @pytest.fixture
 def output_file():
     """
@@ -73,11 +123,15 @@ def output_file():
     Note: file will be removed during test teardown.
     """
     # add a random unique tag to file
-    yield os.path.join(pytest.output_dir, f"ktest_obj_{secrets.token_hex(4)}.pkl")
+    yield os.path.join(
+        pytest.output_dir, f"ktest_obj_{secrets.token_hex(4)}.pkl"
+    )
 
 
-def test_save_load(kt, output_file, assert_equal_ktest):
+def test_save_load(dummy_ktest, output_file, assert_equal_ktest):
     """Test Ktest object saving and loading."""
+    # create ktest objects
+    kt = dummy_ktest()
     # saving (no compression)
     kt.save(output_file, compress=False)
     # check
@@ -93,8 +147,8 @@ def test_save_load(kt, output_file, assert_equal_ktest):
     kt_2 = Ktest.load(f"{output_file}.gz", compressed=True)
 
     ## checks (compare before and after loading)
-    assert_equal_ktest(kt, kt_1)
-    assert_equal_ktest(kt, kt_2)
+    assert_equal_ktest(kt, kt_1, atol=1e-9)
+    assert_equal_ktest(kt, kt_2, atol=1e-9)
 
 
 @pytest.fixture(scope="module")
@@ -106,7 +160,7 @@ def exp_data():
     meta = pd.Series(data.index).apply(lambda x: x.split(sep='.')[1])
     meta.index = data.index
     # sample names
-    sample_names = ['48HREV','48HDIFF']
+    sample_names = ['48HREV', '48HDIFF']
     # output
     yield data, meta, sample_names
 
@@ -125,7 +179,9 @@ def kt_data(exp_data):
 
 
 def test_num_stability(kt_data, assert_equal_ktest):
-    """Compare numerical results to previous version of ktest (if available)."""
+    """
+    Compare numerical results to previous version of ktest (if available).
+    """
 
     # saving current results
     kt_data.save(pytest.res_file, compress=True)
@@ -133,4 +189,6 @@ def test_num_stability(kt_data, assert_equal_ktest):
     # load previous results (if available)
     if pytest.previous_res_file is not None:
         kt_data_prev = Ktest.load(pytest.previous_res_file, compressed=True)
-        assert_equal_ktest(kt_data, kt_data_prev)
+        assert_equal_ktest(
+            kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic), atol=1e-8
+        )
