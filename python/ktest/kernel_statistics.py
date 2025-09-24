@@ -39,7 +39,10 @@ def mediane(x, y=None):
     dtot = cat((cat((dxx, dxy), dim=1), cat((dyx, dyy), dim=1)), dim=0)
     median = dtot.median()
     if median == 0:
-        warnings.warn('The median is null. To avoid a kernel with zero bandwidth, we replace the median by the mean')
+        warnings.warn(
+            'The median is null. To avoid a kernel with zero bandwidth, ' +
+            'we replace the median by the mean'
+        )
         mean = dtot.mean()
         if mean == 0:
             warnings.warn('warning: all your dataset is null')
@@ -451,7 +454,8 @@ class Statistics():
             Corresponds to the product PK omega in the kFDA statistic.
 
         """
-        # Calculating the bi-centering vector Omega and the centering matrix Pbi
+        # Calculating the bi-centering vector Omega and
+        # the centering matrix Pbi
         omega = self.compute_omega()  # vector with 1/n1 and -1/n2
         Pbi = self.compute_centering_matrix()  # Centering by block matrix
         if self.data_ny is not None:
