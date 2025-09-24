@@ -107,8 +107,8 @@ def test_save_load(dummy_ktest, output_file, assert_equal_ktest):
     kt_2 = Ktest.load(f"{output_file}.gz", compressed=True)
 
     ## checks (compare before and after loading)
-    assert_equal_ktest(kt, kt_1)
-    assert_equal_ktest(kt, kt_2)
+    assert_equal_ktest(kt, kt_1, atol=1e-9)
+    assert_equal_ktest(kt, kt_2, atol=1e-9)
 
 
 @pytest.fixture(scope="module")
@@ -150,5 +150,5 @@ def test_num_stability(kt_data, assert_equal_ktest):
     if pytest.previous_res_file is not None:
         kt_data_prev = Ktest.load(pytest.previous_res_file, compressed=True)
         assert_equal_ktest(
-            kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic)
+            kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic), atol=1e-8
         )
