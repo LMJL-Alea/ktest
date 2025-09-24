@@ -21,7 +21,6 @@ classifiers = [
 ]
 requires-python = ">=3.6"
 dependencies = [
-    "anthony_project_tools @ git+https://github.com/lereldarion/anthony_project_tools.git",
     "torch",
     "numpy",
     "scipy",
