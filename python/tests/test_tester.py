@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.testing as npt
 import os
 import pandas as pd
 import pytest
@@ -73,6 +74,37 @@ def test_Ktest(dummy_ktest, dummy_data):
     # output
     assert isinstance(kt.kfda_statistic, pd.Series)
     assert isinstance(kt.kfda_pval_asymp, pd.Series)
+
+
+def test_ktest_precision(dummy_ktest, assert_equal_ktest):
+    """Testing Ktest computing with various precision."""
+    # create ktest objects (for a given precision)
+    kt_f32 = dummy_ktest(dtype=t.float32)
+    kt_f64 = dummy_ktest(dtype=t.float64)
+
+    # check output type
+    assert kt_f32.kfda_statistic.dtype == "float32"
+    assert kt_f32.kfda_pval_asymp.dtype == "float32"
+    assert kt_f64.kfda_statistic.dtype == "float64"
+    assert kt_f64.kfda_pval_asymp.dtype == "float64"
+
+    # compare results
+    max_len = min([len(kt_f32.kfda_statistic), len(kt_f64.kfda_statistic)])
+    npt.assert_allclose(
+        kt_f32.kstat.sp.numpy()[:max_len],
+        kt_f64.kstat.sp.numpy()[:max_len],
+        rtol=0, atol=1e-7
+    )
+    npt.assert_allclose(
+        kt_f32.kfda_statistic.to_numpy()[:max_len],
+        kt_f64.kfda_statistic.to_numpy()[:max_len],
+        rtol=0, atol=1e-3
+    )
+    npt.assert_allclose(
+        kt_f32.kfda_pval_asymp.to_numpy()[:max_len],
+        kt_f64.kfda_pval_asymp.to_numpy()[:max_len],
+        rtol=0, atol=1e-7
+    )
 
 
 @pytest.fixture
