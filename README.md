@@ -20,10 +20,10 @@ See [`python`](./python) directory.
 
 ### Install
 
-Latest release:
+<!--Latest release:
 ```
 pip install ktest
-```
+```-->
 
 Latest development version:
 ```

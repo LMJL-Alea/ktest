@@ -18,10 +18,10 @@ See the dedicated [`LICENSE.md`](./LICENSE.md) and [`AUTHORS.md`](./AUTHORS.md) 
 
 ### Install
 
-Latest release:
+<!--Latest release:
 ```
 pip install ktest
-```
+```-->
 
 Latest development version:
 ```
