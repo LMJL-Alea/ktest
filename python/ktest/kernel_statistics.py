@@ -138,6 +138,11 @@ class Statistics():
         the landmarks in the Nystrom method, of which the anchors are the
         eigenvalues. Possible values are 'w' (default),'s' and 'k'.
 
+    eps : float, optional
+        minimum threshold value to clip lower eigen values to zeros.
+        If `None` (default), then machine precision (given by
+        `torch.finfo()`) for specified dtype is used as threshold.
+
     Attributes
     ----------
     kernel: callable
@@ -171,7 +176,8 @@ class Statistics():
 
     def __init__(
         self, data, kernel_function='gauss', bandwidth='median',
-        median_coef=1, data_nystrom=None, n_anchors=None, anchor_basis='w'
+        median_coef=1, data_nystrom=None, n_anchors=None, anchor_basis='w',
+        eps=None
     ):
 
         # data
@@ -179,6 +185,9 @@ class Statistics():
 
         # dtype
         self.dtype = data.dtype
+
+        # epsilon for eigen value clipping
+        self.eps = eps
 
         ### Nystrom:
         self.data_ny = data_nystrom
@@ -367,7 +376,7 @@ class Statistics():
         K = self.compute_gram(landmarks=True)
         P = self.compute_centering_matrix(landmarks=True)
         Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
-        return Statistics.ordered_eigsy(Kw)
+        return Statistics.ordered_eigsy(Kw, self.eps)
 
     def diagonalize_centered_gram(self):
         """
@@ -416,7 +425,7 @@ class Statistics():
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
 
         # Diagonalisation with a function in C++:
-        return Statistics.ordered_eigsy(Kw)
+        return Statistics.ordered_eigsy(Kw, self.eps)
 
     def compute_pkm(self):
         """
