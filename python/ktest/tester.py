@@ -90,6 +90,9 @@ class Ktest(Statistics):
             If `None` (default), then machine precision (given by
             `torch.finfo()`) for specified dtype is used as threshold.
 
+        clip_eigval : boolean,
+            flag to enable/disable eigen value clipping.
+
     Attributes
     ----------
         dataset: 1 or 2-dimensional array-like
@@ -163,7 +166,7 @@ class Ktest(Statistics):
         kernel_function='gauss', kernel_bandwidth='median',
         kernel_median_coef=1, nystrom=False, n_landmarks=None,
         landmark_method='random', n_anchors=None, anchor_basis='w',
-        random_state=None, dtype=t.float64, eps=None
+        random_state=None, dtype=t.float64, eps=None, clip_eigval=True
     ):
         self.dataset = data
         self.metadata = metadata
@@ -175,6 +178,7 @@ class Ktest(Statistics):
 
         self.dtype = dtype
         self.eps = eps
+        self.clip_eigval = clip_eigval
 
         if isinstance(random_state, np.random.RandomState):
             self.rnd_gen = random_state
@@ -211,7 +215,7 @@ class Ktest(Statistics):
             data_nystrom=self.data_nystrom,
             n_anchors=self.n_anchors,
             anchor_basis=self.anchor_basis,
-            eps=self.eps
+            eps=self.eps, clip_eigval=self.clip_eigval
         )
 
         ### Output statistics ###
@@ -381,7 +385,7 @@ class Ktest(Statistics):
                     data_nystrom=data_perm_nystrom,
                     n_anchors=self.n_anchors,
                     anchor_basis=self.anchor_basis,
-                    eps=self.eps
+                    eps=self.eps, clip_eigval=self.clip_eigval
                 )
                 if verbose >= 3:
                     warnings.simplefilter("always")

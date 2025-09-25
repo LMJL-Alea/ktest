@@ -146,6 +146,9 @@ class Statistics(object):
         If `None` (default), then machine precision (given by
         `torch.finfo()`) for specified dtype is used as threshold.
 
+    clip_eigval : boolean,
+        flag to enable/disable eigen value clipping.
+
     Attributes
     ----------
     kernel: callable
@@ -180,7 +183,7 @@ class Statistics(object):
     def __init__(
         self, data, kernel_function='gauss', bandwidth='median',
         median_coef=1, data_nystrom=None, n_anchors=None, anchor_basis='w',
-        eps=None
+        eps=None, clip_eigval=True
     ):
 
         # data
@@ -191,6 +194,9 @@ class Statistics(object):
 
         # epsilon for eigen value clipping
         self.eps = eps
+
+        # clipping eigen values?
+        self.clip_eigval = clip_eigval
 
         ### Nystrom:
         self.data_ny = data_nystrom
@@ -227,7 +233,7 @@ class Statistics(object):
         self.ev_anchors = None
 
     @staticmethod
-    def ordered_eigsy(matrix, eps=None):
+    def ordered_eigsy(matrix, eps=None, clip=True):
         """
         Compute eigen values and eigen vectors of input matrix stored by
         decreasing eigen value order.
@@ -250,6 +256,8 @@ class Statistics(object):
                 minimum threshold value to clip lower eigen values to zeros.
                 If `None` (default), then machine precision (given by
                 `torch.finfo()`) for matrix dtype is used as threshold.
+            clip : boolean,
+                flag to enable/disable eigen value clipping.
 
         Returns
         -------
@@ -264,23 +272,29 @@ class Statistics(object):
         # revert to get decreasing order for eigen values
         sp = sp.flip(dims=(0,))
         ev = ev.flip(dims=(1,))
-        # eigen value clipping threshold
-        if eps is None:
-            eps = finfo(matrix.dtype).eps
-        # select non null eigen val
-        sp_mask = sp >= eps
-        # reduc dimension
-        reduc_dim = sp_mask.sum()
-        # warning
-        if reduc_dim < len(sp):
-            warnings.warn(
-                f"Clipping last {len(sp) - reduc_dim} eigen values " +
-                f"out of {len(sp)} dimensions, " +
-                f"that are lower than threshold {eps}."
-            )
+        # clipping?
+        if clip:
+            # eigen value clipping threshold
+            if eps is None:
+                eps = finfo(matrix.dtype).eps
+            # select non null eigen val
+            sp_mask = sp >= eps
+            # reduc dimension
+            reduc_dim = sp_mask.sum()
+            # warning
+            if reduc_dim < len(sp):
+                warnings.warn(
+                    f"Clipping last {len(sp) - reduc_dim} eigen values " +
+                    f"out of {len(sp)} dimensions, " +
+                    f"that are lower than threshold {eps}."
+                )
 
-        # output
-        return sp[sp_mask], ev[:, sp_mask]
+            # output
+            return sp[sp_mask], ev[:, sp_mask]
+        else:
+            # no clipping
+            # output
+            return sp, ev
 
     def compute_centering_matrix(self, landmarks=False):
         """
@@ -389,7 +403,7 @@ class Statistics(object):
         K = self.compute_gram(landmarks=True)
         P = self.compute_centering_matrix(landmarks=True)
         Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
-        return Statistics.ordered_eigsy(Kw, self.eps)
+        return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
 
     def diagonalize_centered_gram(self):
         """
@@ -438,7 +452,7 @@ class Statistics(object):
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
 
         # Diagonalisation with a function in C++:
-        return Statistics.ordered_eigsy(Kw, self.eps)
+        return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
 
     def compute_pkm(self):
         """
