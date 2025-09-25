@@ -380,7 +380,8 @@ class Ktest(Statistics):
                     median_coef=self.kernel_median_coef,
                     data_nystrom=data_perm_nystrom,
                     n_anchors=self.n_anchors,
-                    anchor_basis=self.anchor_basis
+                    anchor_basis=self.anchor_basis,
+                    eps=self.eps
                 )
                 if verbose >= 3:
                     warnings.simplefilter("always")
