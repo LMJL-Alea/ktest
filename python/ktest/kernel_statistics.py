@@ -102,7 +102,7 @@ def gauss_kernel_median(
         return kernel
 
 
-class Statistics():
+class Statistics(object):
     """
     Class containing the technical tools for computing kernel statistics.
 

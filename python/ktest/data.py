@@ -4,7 +4,7 @@ import torch as t
 from sklearn.cluster import kmeans_plusplus
 
 
-class Data():
+class Data(object):
     """
     Class transforming two-sample data provided by the user into the quantities
     compatible with the kernel test statistic calculations performed by the
