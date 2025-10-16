@@ -24,7 +24,7 @@
 #' \dontrun{
 #' check_python()
 #' }
-check_python <- function(version = "3.5", verbose = TRUE) {
+check_python <- function(version = "3.12", verbose = TRUE) {
     # check input
     assert_string(version, pattern = "[0-9]+(\\.[0-9]+)*")
     assert_flag(verbose)
@@ -39,10 +39,7 @@ check_python <- function(version = "3.5", verbose = TRUE) {
             "'reticulate::py_available()' functions from the 'reticulate' ",
             "package.\n\n",
             "You can also check the 'reticulate' package documentation at ",
-            "https://rstudio.github.io/reticulate/ for more details.\n",
-            "Note: we recommend that you use ",
-            "a dedicated Python environment, see 'reticulate' documentation ",
-            "or 'ktest' package vignette or README."
+            "https://rstudio.github.io/reticulate/ for more details."
         )
         if(verbose) warning(msg)
         return(FALSE)
@@ -53,7 +50,7 @@ check_python <- function(version = "3.5", verbose = TRUE) {
             "Python version older than required ", version, "\n",
             "Please install a more recent version of Python.",
             "You can also check the 'reticulate' package documentation at ",
-            "https://rstudio.github.io/reticulate/ for more details.\n"
+            "https://rstudio.github.io/reticulate/ for more details."
         )
         if(verbose) warning(msg)
         return(FALSE)
@@ -91,7 +88,7 @@ check_ktest <- function(verbose = TRUE) {
     have_pyktest <- FALSE
     import_pyktest <- FALSE
     # check pyton
-    have_python <- check_python(version = "3.5", verbose = FALSE)
+    have_python <- check_python(version = "3.12", verbose = FALSE)
     if(!have_python) return(FALSE)
     # check pyktest loading
     have_pyktest <- reticulate::py_module_available("ktest")
@@ -105,18 +102,12 @@ check_ktest <- function(verbose = TRUE) {
         msg <- stringr::str_c(
             "\nATTENTION: 'ktest' is not ready.\n\n",
             "You should:\n",
-            "1. verify that Python is available on your system, ", 
-            "see 'reticulate::py_discover_config()' and ", 
-            "'reticulate::py_available()' functions from the 'reticulate' ",
-            "package,\n",
-            "2. restart your R session,\n",
-            "3. run the function 'install_ktest()' after ", 
-            "loading 'ktest'.\n\n",
-            "Note: we recommend that you use ",
-            "a dedicated Python environment, see 'reticulate' documentation ",
-            "or 'ktest' package vignette or README.\n\n",
-            "You can also check the 'reticulate' package documentation at ",
-            "https://rstudio.github.io/reticulate/ for more details.\n")
+            "1. restart your R session,\n",
+            "2. load 'ktest'.\n",
+            "3. Run `reticulate::py_config()` to fix Python setup.\n\n",
+            "Note: see 'ktest' package vignette or README ",
+            " or 'reticulate' documentation at",
+            "https://rstudio.github.io/reticulate/ for more details.")
         if(verbose) warning(msg)
         return(FALSE)
     } else {
