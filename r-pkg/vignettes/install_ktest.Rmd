@@ -18,8 +18,8 @@ knitr::opts_chunk$set(
 
 ## Package requirements
 
-- R version 4+
-- Python version 3+
+- R version 4.1+
+- Python version 3.12+
 
 **Important:** Python is a requirement as an intern machinery for the package to work but you will not need to create nor manipulate Python codes to use the `ktest` R package.
 
