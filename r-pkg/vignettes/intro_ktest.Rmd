@@ -49,26 +49,15 @@ library(tibble)         # manage data.frame
 
 ## Getting started
 
-```{r package_install, include=FALSE}
-# load ktest R package
-library(ktest)
-# create dedicated Python virtual environment
-reticulate::virtualenv_create("ktest")
-# activate the python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-# verify python version
-reticulate::py_config()
-# install ktest package python requirements
-install_ktest(method = "virtualenv", envname = "ktest")
-```
-
-> :warning: For package installation and setup, including Python environment configuration, see the dedicated vignette `vignette("install_ktest", package = "ktest")`. :warning:
+> :warning: For package installation and setup, see the dedicated vignette `vignette("install_ktest", package = "ktest")`. :warning:
 
 We load the `ktest` package and the configured Python environment:
 
 ```{r setup}
+# load ktest R package
 library(ktest)
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# fix Python with reticulate
+reticulate::py_config()
 ```
 
 We check that it is working:
@@ -91,17 +80,7 @@ data_tab <- tmp$data_tab
 metadata_tab <- tmp$metadata_tab
 ```
 
-This dataset originates from a study that investigated the molecular mechanisms 
-underlying cell differentiation and reversion, by measuring cell 
-transcriptomes at four time points: undifferentiated T2EC maintained in a 
-self-renewal medium (condition `"0H"`), then put in a differentiation-inducing 
-medium for 24h (condition `"24H"`). This population was then split into 
-a first population maintained in the same medium for another 24h to achieve 
-differentiation (condition `"48HDIFF"`), and the second population was put 
-back in the self-renewal medium to investigate potential reversion 
-(condition `"48HREV"`). Cell transcriptomes were measured using 
-scRT-qPCR on 83 genes selected to be involved in the differentiation 
-process.
+This dataset originates from a study that investigated the molecular mechanisms underlying cell differentiation and reversion, by measuring cell transcriptomes at four time points: undifferentiated T2EC maintained in a self-renewal medium (condition `"0H"`), then put in a differentiation-inducing medium for 24h (condition `"24H"`). This population was then split into a first population maintained in the same medium for another 24h to achieve differentiation (condition `"48HDIFF"`), and the second population was put back in the self-renewal medium to investigate potential reversion (condition `"48HREV"`). Cell transcriptomes were measured using scRT-qPCR on 83 genes selected to be involved in the differentiation process.
 
 See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
 
