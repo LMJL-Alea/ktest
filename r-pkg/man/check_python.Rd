@@ -4,7 +4,7 @@
 \alias{check_python}
 \title{Check Python availability}
 \usage{
-check_python(version = "3.5", verbose = TRUE)
+check_python(version = "3.12", verbose = TRUE)
 }
 \arguments{
 \item{version}{character string, Python required version (e.g. \code{"3.5"},
