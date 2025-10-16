@@ -13,6 +13,87 @@ Kernel based statistical testing
 > “Installation and configuration” section
 > [below](#installation-and-configuration). :warning:
 
+------------------------------------------------------------------------
+
+# Installation and configuration
+
+## Package requirements
+
+- R version 4+
+- Python version 3+
+
+**Important:** Python is a requirement as an intern machinery for the
+package to work but you will not need to create nor manipulate Python
+codes to use the `ktest` R package.
+
+The `ktest` R package is using the `ktest` Python package under the hood
+thanks to the
+[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
+that provides an “R Interface to Python”.
+
+> **Note:** `reticulate` manages Python program and Python packages by
+> using [`uv`](https://docs.astral.sh/uv/) Python package and project
+> manager. If `uv` is not available on your system, then `reticulate`
+> will install it seamlessly. If you encounter any issue (related to
+> `reticulate` not being able to find a working Python on your system),
+> then you can install `uv` manually to solve it (see `uv` installation
+> [documentation](https://docs.astral.sh/uv/getting-started/installation/)).
+> Also, see
+> [here](https://rstudio.github.io/reticulate/articles/python_packages.html)
+> and
+> [here](https://rstudio.github.io/reticulate/reference/py_require.html)
+> for more details about how Python is managed by `reticulate` in
+> `ktest` package.
+
+## Installation
+
+You can install the development version of `ktest` with the following
+commands:
+
+``` r
+install.packages("remotes")
+remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
+```
+
+> **Note:** `ktest` is not available on CRAN at the moment but will be
+> shortly.
+
+## Usage
+
+Once the `ktest` package is installed and configured, to use it, you
+only need (1) to load it like any other R package and (2) to fix
+`reticulate` setup by doing the following:
+
+``` r
+# load ktest R package
+library(ktest)
+
+# fix reticulate setup
+reticulate::py_config()
+```
+
+> **Note:** the second step will trigger a Python environment setup and
+> Python requirement installation ( for the first time use only), which
+> could take some time.
+
+You can check that every thing is working by doing:
+
+``` r
+# check ktest configuration
+check_ktest()
+```
+
+Then you can use `ktest` package:
+
+``` r
+# load data...
+
+# define a ktest object and run an analysis
+kt <- ktest(...) # see other vignettes
+```
+
+------------------------------------------------------------------------
+
 # Using ktest
 
 The `ktest` package implements kernel-based statistical testing, such as
@@ -169,7 +250,7 @@ print(kt_1)
 #> not computed, run ktest.test.
 #> kFDA:
 #> Truncation 1: 0.06324761704941312. P-value:
-#> asymptotic: 0.8014346825718801, permutation: 0.8.
+#> asymptotic: 0.8014346825718801, permutation: 0.794.
 #> Truncation 2: 37.23297311875312. P-value:
 #> asymptotic: 8.22171872274361e-09, permutation: 0.0.
 #> Truncation 3: 42.70101052795479. P-value:
@@ -527,89 +608,6 @@ Biol. 20(1):155.
 [PMID: 35794592](https://pubmed.ncbi.nlm.nih.gov/35794592/); [PMCID:
 PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
 [hal-04134084v1](https://hal.science/hal-04134084v1).
-
-------------------------------------------------------------------------
-
-# Installation and configuration
-
-``` r
-knitr::opts_chunk$set(eval = TRUE)
-```
-
-## Package requirements
-
-- R version 4+
-- Python version 3+
-
-**Important:** Python is a requirement as an intern machinery for the
-package to work but you will not need to create nor manipulate Python
-codes to use the `ktest` R package.
-
-The `ktest` R package is using the `ktest` Python package under the hood
-thanks to the
-[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
-that provides an “R Interface to Python”.
-
-> **Note:** `reticulate` manages Python program and Python packages by
-> using [`uv`](https://docs.astral.sh/uv/) Python package and project
-> manager. If `uv` is not available on your system, then `reticulate`
-> will install it seamlessly. If you encounter any issue (related to
-> `reticulate` not being able to find a working Python on your system),
-> then you can install `uv` manually to solve it (see `uv` installation
-> [documentation](https://docs.astral.sh/uv/getting-started/installation/)).
-> Also, see
-> [here](https://rstudio.github.io/reticulate/articles/python_packages.html)
-> and
-> [here](https://rstudio.github.io/reticulate/reference/py_require.html)
-> for more details about how Python is managed by `reticulate` in
-> `ktest` package.
-
-## Installation
-
-You can install the development version of `ktest` with the following
-commands:
-
-``` r
-install.packages("remotes")
-remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
-```
-
-> **Note:** `ktest` is not available on CRAN at the moment but will be
-> shortly.
-
-## Usage
-
-Once the `ktest` package is installed and configured, to use it, you
-only need (1) to load it like any other R package and (2) to fix
-`reticulate` setup by doing the following:
-
-``` r
-# load ktest R package
-library(ktest)
-
-# fix reticulate setup
-reticulate::py_config()
-```
-
-> **Note:** the second step will trigger a Python environment setup and
-> Python requirement installation ( for the first time use only), which
-> could take some time.
-
-You can check that every thing is working by doing:
-
-``` r
-# check ktest configuration
-check_ktest()
-```
-
-Then you can use `ktest` package:
-
-``` r
-# load data...
-
-# define a ktest object and run an analysis
-kt <- ktest(...) # see other vignettes
-```
 
 [^1]: the previous result without permutation are not lost, the object
     is just updated with the new permutation-based result
