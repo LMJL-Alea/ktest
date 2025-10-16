@@ -17,7 +17,8 @@ boolean value indicating if the required Python version is available
 on the system.
 }
 \description{
-Check if Python is available on the system and if its version is sufficient.
+Check if Python is available on the system and if its version is sufficient
+(which should be automatically managed by \code{reticulate}).
 }
 \details{
 This function is just a wrapper around \code{\link[reticulate:py_available]{reticulate::py_available()}} and

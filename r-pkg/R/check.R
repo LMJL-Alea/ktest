@@ -1,7 +1,8 @@
 #' Check Python availability
 #' 
 #' @description
-#' Check if Python is available on the system and if its version is sufficient.
+#' Check if Python is available on the system and if its version is sufficient
+#' (which should be automatically managed by `reticulate`).
 #' 
 #' @details
 #' This function is just a wrapper around [reticulate::py_available()] and 
@@ -66,16 +67,14 @@ check_python <- function(version = "3.12", verbose = TRUE) {
 #' Check if `ktest` package is ready to run.
 #' 
 #' @description
-#' In practice, check if `ktest` Python package is installed (which should be
-#' done by the [ktest::install_ktest()] function).
+#' Check if `ktest` Python package is installed (which should be automatically
+#' managed by `reticulate`).
 #' 
 #' @param verbose boolean, if TRUE (default), inform user about check result.
 #'
 #' @return boolean value indicating if the `ktest` package is ready.
 #' 
 #' @importFrom stringr str_c
-#' 
-#' @seealso [ktest::install_ktest()]
 #' 
 #' @examples
 #' \dontrun{
