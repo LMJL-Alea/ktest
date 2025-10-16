@@ -22,10 +22,10 @@ test_that("saving-loading_ktest", {
     # saving/loading Ktest object
     withr::with_tempfile("temp_file_for_saving", {
         # saving
-        save_ktest(kt_1, temp_file_for_saving, compress=TRUE)
+        save_ktest(kt_1, str_c(temp_file_for_saving, ".gz"), compress=TRUE)
         
         # loading
-        kt_2 <- load_ktest(temp_file_for_saving, compressed=TRUE)
+        kt_2 <- load_ktest(str_c(temp_file_for_saving, ".gz"), compressed=TRUE)
         
         # check
         expect_equal(get_pvalues(kt_1), get_pvalues(kt_2))
