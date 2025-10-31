@@ -1,4 +1,5 @@
 from glob import glob
+from natsort import natsorted
 import numpy.testing as npt
 import os
 import pandas.testing as pdt
@@ -60,7 +61,7 @@ try:
 except ValueError:
     pass
 # sort existing files
-previous_res_files.sort()
+previous_res_files = natsorted(previous_res_files)
 # get file from previous package version to compare results
 try:
     pytest.previous_res_file = previous_res_files[-1]
