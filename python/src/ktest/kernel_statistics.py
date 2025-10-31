@@ -213,10 +213,17 @@ class Statistics(object):
         self.median_coef = median_coef
 
         if self.kernel_function == 'gauss':
+            if self.data_ny is not None:
+                x = self.data_ny.data[self.data.sample_names[0]]
+                y = self.data_ny.data[self.data.sample_names[1]]
+            else:
+                x = self.data.data[self.data.sample_names[0]]
+                y = self.data.data[self.data.sample_names[1]]
+
             self.kernel, self.computed_bandwidth = \
                 gauss_kernel_median(
-                    x=self.data.data[self.data.sample_names[0]],
-                    y=self.data.data[self.data.sample_names[1]],
+                    x,
+                    y,
                     bandwidth=bandwidth,
                     median_coef=median_coef,
                     return_bandwidth=True

@@ -44,9 +44,12 @@ def dummy_ktest(dummy_data):
     Function to create Ktest object from dummy data for testing using a given
     floating point number type/precision.
     """
-    def _ktest(dtype=t.float64):
+    def _ktest(nystrom=False, dtype=t.float64):
         # init object
-        kt = Ktest(data=dummy_data[0], metadata=dummy_data[1], dtype=dtype)
+        kt = Ktest(
+            data=dummy_data[0], metadata=dummy_data[1], nystrom=nystrom,
+            dtype=dtype
+        )
         # run kfda test
         kt.test()
         # output
@@ -55,10 +58,12 @@ def dummy_ktest(dummy_data):
     yield _ktest
 
 
-def test_Ktest(dummy_ktest, dummy_data):
+@pytest.mark.parametrize("nystrom", [False, True])
+@pytest.mark.parametrize("dtype", [t.float64, t.float32])
+def test_Ktest(dummy_ktest, dummy_data, nystrom, dtype):
     """Testing Ktest class."""
     # create ktest objects
-    kt = dummy_ktest()
+    kt = dummy_ktest(nystrom, dtype)
 
     # check object class
     assert isinstance(kt, Ktest)
@@ -66,9 +71,10 @@ def test_Ktest(dummy_ktest, dummy_data):
     ## check content
     # input data
     for group in np.unique(dummy_data[1]):
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             kt.data.data[group].numpy(),
-            dummy_data[0][dummy_data[1] == group].to_numpy()
+            dummy_data[0][dummy_data[1] == group].to_numpy(),
+            rtol=0, atol=1e-6
         )
     pd.testing.assert_series_equal(kt.metadata, dummy_data[1])
 
