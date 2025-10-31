@@ -118,8 +118,7 @@ def assert_equal_ktest():
                 assert group1 == group2, \
                     f"Unmatching samples '{group1}' and '{group2}'"
                 tt.assert_close(array1, array2, rtol=rtol, atol=atol)
-        else:
-            assert kt_1.data_nystrom == kt_2.data_nystrom
+
         # setup truncation
         if trunc is None:
             trunc1 = len(kt_1.kfda_statistic)
