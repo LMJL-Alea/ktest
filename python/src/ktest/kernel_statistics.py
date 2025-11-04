@@ -347,6 +347,11 @@ class Statistics(object):
                 ], dim=0)
                 for nell, nprec in zip(effectifs, cumul_effectifs)
             ], dim=1)
+            print("______________ DEBUGGING CENTERING MATRIX ________________")
+            print(f"Nystrom? {landmarks}")
+            print(f"data shape {effectifs}")
+            print(f"In matrix shape {In.shape}")
+            print(f"diag_Jn_by_n matrix shape {diag_Jn_by_n.shape})
             return In - diag_Jn_by_n
         elif self.anchor_basis == 'k':
             return eye(data.ntot, dtype=self.dtype)
