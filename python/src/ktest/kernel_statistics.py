@@ -462,6 +462,8 @@ class Statistics(object):
             Kw = (1 / (self.data.ntot * self.data_ny.ntot)
                   * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
                                Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
+
+            print(f"Kw shape = {Kw.shape}")
         # Standard version:
         else:
             K = self.compute_gram()
