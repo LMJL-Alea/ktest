@@ -431,6 +431,10 @@ class Statistics(object):
         # Computing centering matrix P:
         P = self.compute_centering_matrix()
 
+        print("______________ DIAGONALIZATION ________________")
+        print("centering matrix =")
+        print(P)
+
         # Nytrom version:
         if self.data_ny is not None:
             # Computing Nystrom anchors:
