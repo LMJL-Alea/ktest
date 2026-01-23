@@ -48,7 +48,7 @@ def mediane(x, y=None):
             warnings.warn('warning: all your dataset is null')
         return mean
     else:
-        return dtot.median()
+        return median
 
 
 def linear_kernel(x, y):
