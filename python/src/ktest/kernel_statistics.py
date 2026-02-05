@@ -339,6 +339,10 @@ class Statistics(object):
                 The centering matrix.
 
         """
+        if landmarks and self.data_ny is None:
+            raise ValueError(
+                "Cannot use landmarks, Nystrom approximation not provided."
+            )
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
             if stacked:
@@ -414,6 +418,10 @@ class Statistics(object):
             K : torch.Tensor,
                 Gram matrix of interest.
         """
+        if landmarks and self.data_ny is None:
+            raise ValueError(
+                "Cannot use landmarks, Nystrom approximation not provided."
+            )
         data = self.data if not landmarks else self.data_ny
         D = cat([x for x in data.data.values()], axis=0)
         K = self.kernel(D, D)
