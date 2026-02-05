@@ -1,74 +1,23 @@
 import numpy as np
-import pandas as pd
 import pytest
 import torch as t
 
 from ktest.kernel_statistics import Statistics
 from ktest.data import Data
 
-
-@pytest.fixture(scope="module")
-def data_shape():
-    """Number of rows and columns in dummy data for tests."""
-    yield (1000, 100)
-
-
-@pytest.fixture(scope="module")
-def dummy_data(data_shape):
-    """Generate dummy data for testing (two groups, no difference)"""
-    # generate random data (under H0, no separation)
-    rng = np.random.default_rng(42)
-    data_array = rng.normal(loc=0, scale=1, size=data_shape)
-
-    # create a data frame from random gaussian data
-    data = pd.DataFrame(
-        data=data_array,
-        columns=[f"col{i+1}" for i in range(data_shape[1])]
-    )
-
-    # create meta data frame indicating two groups
-    meta = pd.Series(
-        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
-    )
-
-    # output
-    yield data, meta
-
-
-@pytest.fixture(scope="module")
-def ktest_data(dummy_data):
-    """Convert pandas array to ktest `Data` type."""
-    # Original data
-    data = Data(
-        data=dummy_data[0], metadata=dummy_data[1],
-        sample_names=None,
-        dtype=t.float64
-    )
-    # Nytrom data
-    ny_data = Data(
-        data=dummy_data[0],
-        metadata=dummy_data[1],
-        sample_names=None,
-        nystrom=True,
-        n_landmarks=None,
-        landmark_method='random',
-        random_state=None,
-        dtype=t.float64
-    )
-    # outout
-    yield data, ny_data
+from .test_data import data_shape, dummy_data, ktest_data, ktest_data_nystrom
 
 
 @pytest.fixture
-def kstat(ktest_data):
+def kstat(ktest_data, ktest_data_nystrom):
     """Define a kernel statistics object."""
     # kernel stat object
     kstat = Statistics(
-        data=ktest_data[0],
+        data=ktest_data,
         kernel_function='gauss',
         bandwidth='median',
         median_coef=1,
-        data_nystrom=ktest_data[1],
+        data_nystrom=ktest_data_nystrom,
         n_anchors=None,
         anchor_basis='w',
         eps=None, clip_eigval=True
