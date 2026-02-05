@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import torch as t
+import types
 
 from ktest.kernel_statistics import Statistics
 from ktest.data import Data
@@ -27,7 +28,7 @@ def kstat(ktest_data, ktest_data_nystrom):
 
 
 class TestStatistics:
-    """Implement test for Statistics class methods."""
+    """Implement unit tests for Statistics class."""
 
     def test_ordered_eigsy(self, dummy_data):
         """Test eigen decomposition"""
@@ -111,3 +112,28 @@ class TestStatistics:
             exp_ev[:, :sp.shape[0]],
             rtol=0, atol=1e-12
         )
+
+    def test_init(self, kstat, data_shape):
+        """Testing Statictics object instantiation."""
+
+        assert isinstance(kstat.data, Data)
+        assert isinstance(kstat.data_ny, Data)
+        assert kstat.dtype == t.float64
+        assert kstat.eps is None or isinstance(kstat.eps, float)
+        assert isinstance(kstat.clip_eigval, bool) and kstat.clip_eigval
+        assert isinstance(kstat.n_anchors, int) and \
+            kstat.n_anchors == data_shape[0] // 5
+        assert isinstance(kstat.anchor_basis, str) and \
+            kstat.anchor_basis == 'w'
+        assert isinstance(kstat.kernel_function, str) and \
+            kstat.kernel_function == 'gauss'
+        assert isinstance(kstat.bandwidth, str) and kstat.bandwidth == 'median'
+        assert isinstance(kstat.median_coef, int) and kstat.median_coef == 1
+        assert isinstance(kstat.kernel, types.FunctionType)
+        assert isinstance(kstat.computed_bandwidth, t.Tensor) and \
+            len(kstat.computed_bandwidth.shape) == 0 and \
+            kstat.computed_bandwidth.dtype == t.float64
+        assert kstat.sp is None
+        assert kstat.ev is None
+        assert kstat.sp_anchors is None
+        assert kstat.ev_anchors is None
