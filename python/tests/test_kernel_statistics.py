@@ -11,8 +11,24 @@ from .test_data import data_shape, dummy_data, ktest_data, ktest_data_nystrom
 
 
 @pytest.fixture
-def kstat(ktest_data, ktest_data_nystrom):
-    """Define a kernel statistics object."""
+def kstat(ktest_data):
+    """Define a kernel statistics object without Nystrom approximation."""
+    # kernel stat object
+    kstat = Statistics(
+        data=ktest_data,
+        kernel_function='gauss',
+        bandwidth='median',
+        median_coef=1,
+        data_nystrom=None,
+        eps=None, clip_eigval=True
+    )
+    # output
+    yield kstat
+
+
+@pytest.fixture
+def kstat_nystrom(ktest_data, ktest_data_nystrom):
+    """Define a kernel statistics object using Nystrom approximation."""
     # kernel stat object
     kstat = Statistics(
         data=ktest_data,
@@ -114,16 +130,16 @@ class TestStatistics:
             rtol=0, atol=1e-12
         )
 
-    def test_init(self, kstat, data_shape):
+    def test_init(self, kstat, kstat_nystrom, data_shape):
         """Testing Statictics object instantiation."""
 
+        # no Nystrom
         assert isinstance(kstat.data, Data)
-        assert isinstance(kstat.data_ny, Data)
+        assert kstat.data_ny is None
         assert kstat.dtype == t.float64
         assert kstat.eps is None or isinstance(kstat.eps, float)
         assert isinstance(kstat.clip_eigval, bool) and kstat.clip_eigval
-        assert isinstance(kstat.n_anchors, int) and \
-            kstat.n_anchors == data_shape[0] // 5
+        assert kstat.n_anchors is None
         assert isinstance(kstat.anchor_basis, str) and \
             kstat.anchor_basis == 'w'
         assert isinstance(kstat.kernel_function, str) and \
@@ -139,9 +155,35 @@ class TestStatistics:
         assert kstat.sp_anchors is None
         assert kstat.ev_anchors is None
 
+        # Nystrom
+        assert isinstance(kstat_nystrom.data, Data)
+        assert isinstance(kstat_nystrom.data_ny, Data)
+        assert kstat_nystrom.dtype == t.float64
+        assert kstat_nystrom.eps is None or \
+            isinstance(kstat_nystrom.eps, float)
+        assert isinstance(kstat_nystrom.clip_eigval, bool) and \
+            kstat_nystrom.clip_eigval
+        assert isinstance(kstat_nystrom.n_anchors, int) and \
+            kstat_nystrom.n_anchors == data_shape[0] // 5
+        assert isinstance(kstat_nystrom.anchor_basis, str) and \
+            kstat_nystrom.anchor_basis == 'w'
+        assert isinstance(kstat_nystrom.kernel_function, str) and \
+            kstat_nystrom.kernel_function == 'gauss'
+        assert isinstance(kstat_nystrom.bandwidth, str) and \
+            kstat_nystrom.bandwidth == 'median'
+        assert isinstance(kstat_nystrom.median_coef, int) and \
+            kstat_nystrom.median_coef == 1
+        assert isinstance(kstat_nystrom.kernel, types.FunctionType)
+        assert isinstance(kstat_nystrom.computed_bandwidth, t.Tensor) and \
+            len(kstat_nystrom.computed_bandwidth.shape) == 0 and \
+            kstat_nystrom.computed_bandwidth.dtype == t.float64
+        assert kstat_nystrom.sp is None
+        assert kstat_nystrom.ev is None
+        assert kstat_nystrom.sp_anchors is None
+        assert kstat_nystrom.ev_anchors is None
+
     def test_compute_centering_matrix(self, kstat):
         """Testing centering matrix computation."""
-        assert True
 
         # compute expected centering matrix
         def _exp_cent_mat(data: Data, stacked: bool = False):
