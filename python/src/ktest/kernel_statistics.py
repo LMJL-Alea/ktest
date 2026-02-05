@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
-from torch import ones, eye, zeros, finfo
+from torch import ones, eye, zeros, finfo, vstack
 from torch.linalg import multi_dot, eigh
 import warnings
 
@@ -303,7 +303,7 @@ class Statistics(object):
             # output
             return sp, ev
 
-    def compute_centering_matrix(self, landmarks=False):
+    def compute_centering_matrix(self, landmarks=False, stacked=False):
         """
         Computes a projection matrix usefull for the kernel trick.
 
@@ -315,13 +315,23 @@ class Statistics(object):
             (or nxanchors x nyanchors and nyanchors x nxanchors if nystrom).
 
         Pn = [I1 - 1/n1 J1 ,    012     ]
-                [     021     ,I2 - 1/n2 J2]
+             [     021     ,I2 - 1/n2 J2]
+
+        If `stacked=True`, then only return
+
+        Pn = [I1 - 1/n1 J1]
+             [I2 - 1/n2 J2]
 
         Parameters
         ----------
             landmarks : bool, optional
                 False by default. If True, performs the computations on the
                 the Nystrom dataset (landmarks).
+            stacked : bool, optional
+                False by default. If True, the centering matrix for each
+                sample are returned stacked in an n x m matrix (c.f. details).
+                This mode is specific to be used by
+                `self.diagonalize_centered_gram(low_mem_footprint=True)`.
 
         Returns
         -------
@@ -331,28 +341,36 @@ class Statistics(object):
         """
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
-            In = eye(data.ntot)
-            effectifs = list(data.nobs.values())
+            if stacked:
+                # specific mode not returning a square matrix
+                effectifs = list(data.nobs.values())
 
-            cumul_effectifs = np.cumsum([0]+effectifs)
+                return vstack(
+                    [
+                        eye(nell, dtype=self.dtype) -
+                        1/nell*ones(nell, nell, dtype=self.dtype)
+                        for nell in effectifs
+                    ]
+                )
+            else:
+                # generic mode
+                In = eye(data.ntot)
+                effectifs = list(data.nobs.values())
 
-            # Computing a bloc diagonal matrix where the ith diagonal bloc is
-            # J_ni, an (ni x ni) matrix full of 1/ni where ni is the size
-            # of the ith group
-            diag_Jn_by_n = cat([
-                cat([
-                    zeros(nprec, nell, dtype=self.dtype),
-                    1/nell*ones(nell, nell, dtype=self.dtype),
-                    zeros(data.ntot - nprec - nell, nell, dtype=self.dtype)
-                ], dim=0)
-                for nell, nprec in zip(effectifs, cumul_effectifs)
-            ], dim=1)
-            print("______________ DEBUGGING CENTERING MATRIX ________________")
-            print(f"Nystrom? {landmarks}")
-            print(f"data shape {effectifs}")
-            print(f"In matrix shape {In.shape}")
-            print(f"diag_Jn_by_n matrix shape {diag_Jn_by_n.shape}")
-            return In - diag_Jn_by_n
+                cumul_effectifs = np.cumsum([0]+effectifs)
+
+                # Computing a bloc diagonal matrix where the ith diagonal bloc is
+                # J_ni, an (ni x ni) matrix full of 1/ni where ni is the size
+                # of the ith group
+                diag_Jn_by_n = cat([
+                    cat([
+                        zeros(nprec, nell, dtype=self.dtype),
+                        1/nell*ones(nell, nell, dtype=self.dtype),
+                        zeros(data.ntot - nprec - nell, nell, dtype=self.dtype)
+                    ], dim=0)
+                    for nell, nprec in zip(effectifs, cumul_effectifs)
+                ], dim=1)
+                return In - diag_Jn_by_n
         elif self.anchor_basis == 'k':
             return eye(data.ntot, dtype=self.dtype)
         elif self.anchor_basis == 's':

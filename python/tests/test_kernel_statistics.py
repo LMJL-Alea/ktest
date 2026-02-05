@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch as t
 import types
+from scipy.linalg import block_diag
 
 from ktest.kernel_statistics import Statistics
 from ktest.data import Data
@@ -137,3 +138,66 @@ class TestStatistics:
         assert kstat.ev is None
         assert kstat.sp_anchors is None
         assert kstat.ev_anchors is None
+
+    def test_compute_centering_matrix(self, kstat):
+        """Testing centering matrix computation."""
+        assert True
+
+        # compute expected centering matrix
+        def _exp_cent_mat(data: Data, stacked: bool = False):
+            """
+            Compute expected centering matrix for a given data object.
+            """
+
+            mat_block_list = []
+
+            for subdata in data.data.values():
+
+                nobs_subsample = subdata.shape[0]
+
+                subsample_block = np.eye(nobs_subsample) - \
+                    1/nobs_subsample * \
+                        np.ones((nobs_subsample, nobs_subsample))
+
+                mat_block_list.append(subsample_block)
+
+            if not stacked:
+                return block_diag(*mat_block_list)
+            else:
+                return np.vstack(mat_block_list)
+
+        # no Nystrom, standard block diagonal centering matrix
+        res = kstat.compute_centering_matrix(landmarks=False, stacked=False)
+        assert isinstance(res, t.Tensor)
+        assert len(res.shape) == 2
+
+        exp_res = _exp_cent_mat(kstat.data, stacked=False)
+
+        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+
+        # no Nystrom, stacked block centering matrix
+        res = kstat.compute_centering_matrix(landmarks=False, stacked=True)
+        assert isinstance(res, t.Tensor)
+        assert len(res.shape) == 2
+
+        exp_res = _exp_cent_mat(kstat.data, stacked=True)
+
+        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+
+        # Nystrom, standard block diagonal centering matrix
+        res = kstat.compute_centering_matrix(landmarks=True, stacked=False)
+        assert isinstance(res, t.Tensor)
+        assert len(res.shape) == 2
+
+        exp_res = _exp_cent_mat(kstat.data_ny, stacked=False)
+
+        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+
+        # Nystrom, stacked block centering matrix
+        res = kstat.compute_centering_matrix(landmarks=True, stacked=True)
+        assert isinstance(res, t.Tensor)
+        assert len(res.shape) == 2
+
+        exp_res = _exp_cent_mat(kstat.data_ny, stacked=True)
+
+        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
