@@ -50,6 +50,7 @@ include-package-data = false
 
 [dependency-groups]
 dev = [
+    "ipython>=7.16.3",
     "pytest>=7.0.1",
     "toml>=0.10.2",
 ]
