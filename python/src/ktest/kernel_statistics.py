@@ -576,10 +576,8 @@ class Statistics(object):
             Corresponds to the product PK omega in the kFDA statistic.
 
         """
-        # Calculating the bi-centering vector Omega and
-        # the centering matrix Pbi
+        # Calculating the bi-centering vector Omega
         omega = self.compute_omega()  # vector with 1/n1 and -1/n2
-        Pbi = self.compute_centering_matrix()  # Centering by block matrix
         if self.data_ny is not None:
             Lz12 = diag(self.sp_anchors**(-1/2))
             Kzx = self.compute_kmn()
@@ -587,6 +585,7 @@ class Statistics(object):
             pkm = (1 / np.sqrt(self.data_ny.ntot)
                    * mv(Lz12, mv(self.ev_anchors.T, mv(Pi, mv(Kzx, omega)))))
         else:
+            Pbi = self.compute_centering_matrix()  # Centering by block matrix
             Kx = self.compute_gram()
             pkm = mv(Pbi, mv(Kx, omega))
         return pkm
@@ -728,7 +727,6 @@ class Statistics(object):
             - normalize the vectors with respect to n_anchors as in pkm
             - separate the different nystrom approaches
         """
-        Pbi = self.compute_centering_matrix()
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
         if self.data_ny is not None:
@@ -742,6 +740,7 @@ class Statistics(object):
                                                             self.ev_anchors.T,
                                                             Kzx]).T
         else:
+            Pbi = self.compute_centering_matrix()
             Kx = self.compute_gram()
             epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
         return epk
