@@ -153,12 +153,15 @@ class Ktest(Statistics):
             'kfda_proj' contains the cumulated sum of the values in
             'kfda_proj_contrib'.
 
-        rnd_gen :  int, RandomState instance or None
+        rnd_gen : int, numpy.random.Generator instance,
+                numpy.random.RandomState instance or None
             Determines random number generation for the Nystrom approximation
-            and for the permutations. If None (default), the generator is
-            the RandomState instance used by `np.random`. To ensure the results
-            are reproducible, pass an int to instanciate the seed, or a
-            RandomState instance (recommended).
+            and for the permutations. If None (default), the default numpy
+            random generator is used.
+            To ensure that the results are reproducible, pass an integer
+            that will be used as seed for the random number generation, or
+            a Numpy random Generator instance (recommended), or a Numpy
+            RandomState instance (legacy).
     """
 
     def __init__(
@@ -180,12 +183,15 @@ class Ktest(Statistics):
         self.eps = eps
         self.clip_eigval = clip_eigval
 
-        if isinstance(random_state, np.random.RandomState):
-            self.rnd_gen = random_state
+        # random number generation
+        if random_state is None:
+            self.rnd_gen = np.random.default_rng()
         elif isinstance(random_state, int):
-            self.rnd_gen = np.random.RandomState(random_state)
+            self.rnd_gen = np.random.default_rng(random_state)
         else:
-            self.rnd_gen = np.random
+            assert isinstance(random_state, np.random.Generator) or \
+                isinstance(random_state, np.random.RandomState)
+            self.rnd_gen = random_state
 
         ### Kernel:
         self.kernel_function = kernel_function
