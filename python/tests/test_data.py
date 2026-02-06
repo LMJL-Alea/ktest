@@ -10,6 +10,7 @@ from ktest.data import Data
 def data_shape():
     """Number of rows and columns in dummy data for tests."""
     yield (1000, 100)
+    # yield (50, 20)
 
 
 @pytest.fixture
