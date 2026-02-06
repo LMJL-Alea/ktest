@@ -329,3 +329,114 @@ class TestStatistics:
         exp_res = _exp_cent_mat(kstat_nystrom.data_ny, stacked=True)
 
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+
+    def test_compute_centered_gram(self, kstat, kstat_nystrom, data_shape):
+        """
+        Testing centered Gram matrix computation,
+        with or without the computing trick to avoid storing the full
+        n x n centering matrix."""
+
+        # no Nystrom: no effect of 'low_mem_footprint' option
+        res1 = kstat.compute_centered_gram(low_mem_footprint=False)
+        res2 = kstat.compute_centered_gram(low_mem_footprint=True)
+
+        assert isinstance(res1, t.Tensor)
+        assert list(res1.shape) == [data_shape[0], data_shape[0]]
+
+        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+
+        # Nystrom
+        res1 = kstat_nystrom.compute_centered_gram(low_mem_footprint=False)
+        res2 = kstat_nystrom.compute_centered_gram(low_mem_footprint=True)
+
+        exp_dim = kstat_nystrom.sp_anchors.shape[0]
+
+        assert isinstance(res1, t.Tensor)
+        assert list(res1.shape) == [exp_dim, exp_dim]
+        assert isinstance(res2, t.Tensor)
+        assert list(res2.shape) == [exp_dim, exp_dim]
+
+        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+
+    def test_diagonalize_centered_gram(self, kstat, kstat_nystrom, data_shape):
+        """
+        Testing centered Gram matrix diagonalization,
+        with or without the computing trick to avoid storing the full
+        n x n centering matrix."""
+
+        # no Nystrom: no effect of 'low_mem_footprint' option
+        sp1, ev1 = kstat.diagonalize_centered_gram(low_mem_footprint=False)
+        sp2, ev2 = kstat.diagonalize_centered_gram(low_mem_footprint=True)
+
+        # check output
+        assert isinstance(sp1, t.Tensor)
+        assert list(sp1.shape) == [data_shape[0] - 2]
+        assert isinstance(ev1, t.Tensor)
+        assert list(ev1.shape) == [data_shape[0], data_shape[0] - 2]
+        # note: last 2 eigen values are clipped
+
+        t.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
+        t.testing.assert_close(ev1, ev2, rtol=0, atol=1e-12)
+
+        # compute eigen decomposition with numpy to compare
+        # /!\ eigen values/vectors are in reverse order
+        Kw = kstat.compute_centered_gram(low_mem_footprint=True)
+        exp_sp, exp_ev = np.linalg.eigh(Kw.numpy())
+
+        # revert order
+        exp_sp = np.flip(exp_sp)
+        exp_ev = np.flip(exp_ev, axis=1)
+
+        # check eigen values
+        np.testing.assert_allclose(
+            sp1.numpy()[sp1 >= 1e-12], exp_sp[exp_sp >= 1e-12],
+            rtol=0, atol=1e-11
+        )
+
+        # check eigen vectors for non null eigen values
+        assert_eigenvectors(
+            ev1.numpy()[:, sp1 >= 1e-12],
+            exp_ev[:, exp_sp >= 1e-12],
+            rtol=0, atol=1e-12
+        )
+
+        # Nystrom
+        sp1, ev1 = kstat_nystrom.diagonalize_centered_gram(
+            low_mem_footprint=False
+        )
+        sp2, ev2 = kstat_nystrom.diagonalize_centered_gram(
+            low_mem_footprint=True
+        )
+
+        # check output
+        assert isinstance(sp1, t.Tensor)
+        assert list(sp1.shape) == [data_shape[0] // 5 - 2]
+        assert isinstance(ev1, t.Tensor)
+        assert list(ev1.shape) == \
+            [data_shape[0] // 5 - 2, data_shape[0] // 5 - 2]
+        # note: last 2 eigen values are clipped
+
+        t.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
+        assert_eigenvectors(ev1, ev2, rtol=0, atol=1e-12)
+
+        # compute eigen decomposition with numpy to compare
+        # /!\ eigen values/vectors are in reverse order
+        Kw = kstat_nystrom.compute_centered_gram(low_mem_footprint=True)
+        exp_sp, exp_ev = np.linalg.eigh(Kw.numpy())
+
+        # revert order
+        exp_sp = np.flip(exp_sp)
+        exp_ev = np.flip(exp_ev, axis=1)
+
+        # check eigen values
+        np.testing.assert_allclose(
+            sp1.numpy()[sp1 >= 1e-12], exp_sp[exp_sp >= 1e-12],
+            rtol=0, atol=1e-11
+        )
+
+        # check eigen vectors for non null eigen values
+        assert_eigenvectors(
+            ev1.numpy()[:, sp1 >= 1e-12],
+            exp_ev[:, exp_sp >= 1e-12],
+            rtol=0, atol=1e-12
+        )

@@ -443,23 +443,32 @@ class Statistics(object):
         Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
         return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
 
-    def diagonalize_centered_gram(self):
+    def compute_centered_gram(self, low_mem_footprint=False):
         """
-        Diagonalizes the bicentered Gram matrix which shares its spectrum
+        Compute the bicentered Gram matrix which shares its spectrum
         with the within covariance operator in the RKHS.
+
+        Parameters
+        ----------
+            low_mem_footprint : bool, optional
+                True by default. If True, a little trick is used to perform
+                the computations without storing the full n x n matrix
+                centering matrix in the Nystrom case.
+                If False, the default computations requiring the full
+                n x n matrix centering matrix is used in the in Nystrom
+                computation.
+                Without effect when not using Nystrom.
+
 
         Returns
         -------
-            Eigenvalues and eigenvectors, later stored in attributes 'sp' and
-            'ev' respectively.
+            Kw : bicentered Gram matrix.
 
         """
         # Computing centering matrix P:
-        P = self.compute_centering_matrix()
-
-        print("______________ DIAGONALIZATION ________________")
-        print("centering matrix =")
-        print(P)
+        P = self.compute_centering_matrix(
+            stacked=self.data_ny is not None and low_mem_footprint
+        )
 
         # Nytrom version:
         if self.data_ny is not None:
@@ -482,18 +491,74 @@ class Statistics(object):
             # Calculating the centering matrix for the Nystrom approximation:
             Kmn = self.compute_kmn()
             Lp_inv_12 = diag(self.sp_anchors ** (-1/2))
-            Pm = self.compute_centering_matrix(landmarks=True)
+            Pm = self.compute_centering_matrix(landmarks=True, stacked=False)
 
             # Calculating the matrix to diagonalise with Nystrom:
-            Kw = (1 / (self.data.ntot * self.data_ny.ntot)
-                  * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
-                               Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
+            if low_mem_footprint:
+                # trick to avoid storing a n x n centering
+                sample_size = list(self.data.nobs.values())
 
-            print(f"Kw shape = {Kw.shape}")
+                Kw = (
+                    1 / (self.data.ntot * self.data_ny.ntot) *
+                    multi_dot([
+                        Lp_inv_12, self.ev_anchors.T, Pm,
+                        multi_dot([
+                            Kmn[:, :sample_size[0]],
+                            P[:sample_size[0], :],
+                            Kmn[:, :sample_size[0]].T
+                        ]) +
+                        multi_dot([
+                            Kmn[:, -sample_size[1]:],
+                            P[-sample_size[1]:, :],
+                            Kmn[:, -sample_size[1]:].T
+                        ]),
+                        Pm,
+                        self.ev_anchors,
+                        Lp_inv_12
+                    ])
+                )
+            else:
+                # original version
+                Kw = (
+                    1 / (self.data.ntot * self.data_ny.ntot) *
+                    multi_dot([
+                        Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
+                        Kmn.T, Pm, self.ev_anchors, Lp_inv_12
+                    ])
+                )
+
         # Standard version:
         else:
             K = self.compute_gram()
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
+
+        # output
+        return Kw
+
+    def diagonalize_centered_gram(self, low_mem_footprint=True):
+        """
+        Diagonalizes the bicentered Gram matrix which shares its spectrum
+        with the within covariance operator in the RKHS.
+
+        Parameters
+        ----------
+            low_mem_footprint : bool, optional
+                True by default. If True, a little trick is used to perform
+                the computations without storing the full n x n matrix
+                centering matrix in the Nystrom case.
+                If False, the default computations requiring the full
+                n x n matrix centering matrix is used in the in Nystrom
+                computation.
+                Without effect when not using Nystrom.
+
+        Returns
+        -------
+            Eigenvalues and eigenvectors, later stored in attributes 'sp' and
+            'ev' respectively.
+
+        """
+        # Compute the bicentered Gram matrix
+        Kw = self.compute_centered_gram(low_mem_footprint)
 
         # Diagonalisation with a function in C++:
         return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
