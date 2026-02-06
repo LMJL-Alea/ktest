@@ -303,7 +303,9 @@ class Statistics(object):
             # output
             return sp, ev
 
-    def compute_centering_matrix(self, landmarks=False, low_mem_footprint=False):
+    def compute_centering_matrix(
+        self, landmarks=False, low_mem_footprint=False
+    ):
         """
         Computes a projection matrix usefull for the kernel trick.
 
