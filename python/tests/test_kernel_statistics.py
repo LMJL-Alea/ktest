@@ -263,7 +263,7 @@ class TestStatistics:
         """Testing centering matrix computation."""
 
         # compute expected centering matrix
-        def _exp_cent_mat(data: Data, stacked: bool = False):
+        def _exp_cent_mat(data: Data, low_mem_footprint: bool = False):
             """
             Compute expected centering matrix for a given data object.
             """
@@ -280,55 +280,67 @@ class TestStatistics:
 
                 mat_block_list.append(subsample_block)
 
-            if not stacked:
+            if not low_mem_footprint:
                 return block_diag(*mat_block_list)
             else:
-                return np.vstack(mat_block_list)
+                return mat_block_list
 
         # no Nystrom, standard block diagonal centering matrix
-        res = kstat.compute_centering_matrix(landmarks=False, stacked=False)
+        res = kstat.compute_centering_matrix(
+            landmarks=False, low_mem_footprint=False
+        )
         assert isinstance(res, t.Tensor)
         assert len(res.shape) == 2
 
-        exp_res = _exp_cent_mat(kstat.data, stacked=False)
+        exp_res = _exp_cent_mat(kstat.data, low_mem_footprint=False)
 
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
 
-        # no Nystrom, stacked block centering matrix
-        res = kstat.compute_centering_matrix(landmarks=False, stacked=True)
-        assert isinstance(res, t.Tensor)
-        assert len(res.shape) == 2
+        # no Nystrom, block centering matrix in a list
+        res = kstat.compute_centering_matrix(
+            landmarks=False, low_mem_footprint=True
+        )
+        for mat in res:
+            assert isinstance(mat, t.Tensor)
+            assert len(mat.shape) == 2
 
-        exp_res = _exp_cent_mat(kstat.data, stacked=True)
+        exp_res = _exp_cent_mat(kstat.data, low_mem_footprint=True)
 
-        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+        for mat, exp_mat in zip(res, exp_res):
+            np.testing.assert_allclose(
+                mat.numpy(), exp_mat, rtol=0, atol=1e-11
+            )
 
         # Nystrom (but not available), standard block diagonal centering matrix
         txt = "Cannot use landmarks, Nystrom approximation not provided."
         with pytest.raises(ValueError, match=txt):
-            res = kstat.compute_centering_matrix(landmarks=True, stacked=False)
+            res = kstat.compute_centering_matrix(landmarks=True, low_mem_footprint=False)
 
         # Nystrom, standard block diagonal centering matrix
         res = kstat_nystrom.compute_centering_matrix(
-            landmarks=True, stacked=False
+            landmarks=True, low_mem_footprint=False
         )
         assert isinstance(res, t.Tensor)
         assert len(res.shape) == 2
 
-        exp_res = _exp_cent_mat(kstat_nystrom.data_ny, stacked=False)
+        exp_res = _exp_cent_mat(kstat_nystrom.data_ny, low_mem_footprint=False)
 
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
 
-        # Nystrom, stacked block centering matrix
+        # Nystrom, block centering matrix in a list
         res = kstat_nystrom.compute_centering_matrix(
-            landmarks=True, stacked=True
+            landmarks=True, low_mem_footprint=True
         )
-        assert isinstance(res, t.Tensor)
-        assert len(res.shape) == 2
+        for mat in res:
+            assert isinstance(mat, t.Tensor)
+            assert len(mat.shape) == 2
 
-        exp_res = _exp_cent_mat(kstat_nystrom.data_ny, stacked=True)
+        exp_res = _exp_cent_mat(kstat_nystrom.data_ny, low_mem_footprint=True)
 
-        np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
+        for mat, exp_mat in zip(res, exp_res):
+            np.testing.assert_allclose(
+                mat.numpy(), exp_mat, rtol=0, atol=1e-11
+            )
 
     def test_compute_centered_gram(self, kstat, kstat_nystrom, data_shape):
         """

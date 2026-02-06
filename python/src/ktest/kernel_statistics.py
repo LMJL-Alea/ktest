@@ -303,7 +303,7 @@ class Statistics(object):
             # output
             return sp, ev
 
-    def compute_centering_matrix(self, landmarks=False, stacked=False):
+    def compute_centering_matrix(self, landmarks=False, low_mem_footprint=False):
         """
         Computes a projection matrix usefull for the kernel trick.
 
@@ -317,19 +317,18 @@ class Statistics(object):
         Pn = [I1 - 1/n1 J1 ,    012     ]
              [     021     ,I2 - 1/n2 J2]
 
-        If `stacked=True`, then only return
+        If `low_mem_footprint=True`, then only return
 
-        Pn = [I1 - 1/n1 J1]
-             [I2 - 1/n2 J2]
+        Pn = list([I1 - 1/n1 J1], [I2 - 1/n2 J2])
 
         Parameters
         ----------
             landmarks : bool, optional
                 False by default. If True, performs the computations on the
                 the Nystrom dataset (landmarks).
-            stacked : bool, optional
+            low_mem_footprint : bool, optional
                 False by default. If True, the centering matrix for each
-                sample are returned stacked in an n x m matrix (c.f. details).
+                sample are returned in a list (c.f. details).
                 This mode is specific to be used by
                 `self.diagonalize_centered_gram(low_mem_footprint=True)`.
 
@@ -345,17 +344,15 @@ class Statistics(object):
             )
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
-            if stacked:
+            if low_mem_footprint:
                 # specific mode not returning a square matrix
                 effectifs = list(data.nobs.values())
 
-                return vstack(
-                    [
-                        eye(nell, dtype=self.dtype) -
-                        1/nell*ones(nell, nell, dtype=self.dtype)
-                        for nell in effectifs
-                    ]
-                )
+                return [
+                    eye(nell, dtype=self.dtype) -
+                    1/nell*ones(nell, nell, dtype=self.dtype)
+                    for nell in effectifs
+                ]
             else:
                 # generic mode
                 In = eye(data.ntot)
@@ -363,9 +360,9 @@ class Statistics(object):
 
                 cumul_effectifs = np.cumsum([0]+effectifs)
 
-                # Computing a bloc diagonal matrix where the ith diagonal bloc is
-                # J_ni, an (ni x ni) matrix full of 1/ni where ni is the size
-                # of the ith group
+                # Computing a bloc diagonal matrix where the ith diagonal bloc
+                # is J_ni, an (ni x ni) matrix full of 1/ni where ni is the
+                # size of the ith group
                 diag_Jn_by_n = cat([
                     cat([
                         zeros(nprec, nell, dtype=self.dtype),
@@ -467,7 +464,7 @@ class Statistics(object):
         """
         # Computing centering matrix P:
         P = self.compute_centering_matrix(
-            stacked=self.data_ny is not None and low_mem_footprint
+            low_mem_footprint=self.data_ny is not None and low_mem_footprint
         )
 
         # Nytrom version:
@@ -491,7 +488,9 @@ class Statistics(object):
             # Calculating the centering matrix for the Nystrom approximation:
             Kmn = self.compute_kmn()
             Lp_inv_12 = diag(self.sp_anchors ** (-1/2))
-            Pm = self.compute_centering_matrix(landmarks=True, stacked=False)
+            Pm = self.compute_centering_matrix(
+                landmarks=True, low_mem_footprint=False
+            )
 
             # Calculating the matrix to diagonalise with Nystrom:
             if low_mem_footprint:
@@ -504,12 +503,12 @@ class Statistics(object):
                         Lp_inv_12, self.ev_anchors.T, Pm,
                         multi_dot([
                             Kmn[:, :sample_size[0]],
-                            P[:sample_size[0], :],
+                            P[0],
                             Kmn[:, :sample_size[0]].T
                         ]) +
                         multi_dot([
                             Kmn[:, -sample_size[1]:],
-                            P[-sample_size[1]:, :],
+                            P[1],
                             Kmn[:, -sample_size[1]:].T
                         ]),
                         Pm,
