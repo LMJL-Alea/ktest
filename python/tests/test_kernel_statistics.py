@@ -10,6 +10,83 @@ from ktest.data import Data
 from .test_data import data_shape, dummy_data, ktest_data, ktest_data_nystrom
 
 
+def assert_eigenvectors(
+    a: np.ndarray | t.Tensor, b: np.ndarray | t.Tensor,
+    rtol: float = 0, atol: float = 1e-11
+):
+    """
+    Assert that two set of ordered eigen vectors (by increasing or decreasing
+    eigen value order) are identical up to a rotation of angle pi, i.e.
+    assert that for any column index j, we have `a[:, j] == b[:, j]` or
+    `a[:, j] == -b[:, j]`, meaning that scalar product
+    <a[:, j], b[:, j]> = 1 or -1.
+    """
+
+    # check type
+    assert isinstance(a, np.ndarray) and isinstance(b, np.ndarray) or \
+        isinstance(a, t.Tensor) and isinstance(b, t.Tensor)
+
+    # check dimension
+    assert a.shape == b.shape
+
+    # setup required functions
+    einsum_fun = np.einsum if isinstance(a, np.ndarray) else t.einsum
+
+    abs_fun = np.abs if isinstance(a, np.ndarray) else t.abs
+
+    def assert_eigendecomp(x):
+        """Check that a vector is equal to a vector of 1 in absolute value."""
+        return \
+            np.testing.assert_allclose(
+                x, np.ones(x.shape, dtype=x.dtype), atol=atol, rtol=rtol
+            ) if isinstance(a, np.ndarray) else \
+            t.testing.assert_close(
+                x, t.ones(x.shape, dtype=x.dtype), atol=atol, rtol=rtol
+            )
+
+    # compute column-wise scalar product
+    col_scal_prod = einsum_fun('ij,ij->j', a, b)
+
+    # check results (assert that all scalar product result are 1 or -1)
+    assert_eigendecomp(abs_fun(col_scal_prod))
+
+
+def test_assert_eigenvectors(dummy_data):
+    """Test function to compare eigen vectors."""
+
+    # get data
+    data_tensor = t.from_numpy(dummy_data[0].values)
+
+    # compute a symmetric matrix to decompose
+    sym_matrix = t.matmul(data_tensor, data_tensor.T)
+
+    # compute eigen decomposition with torch
+    sp1, ev1 = t.linalg.eigh(sym_matrix)
+
+    # compute eigen decomposition with numpy
+    sp2, ev2 = np.linalg.eigh(sym_matrix.numpy())
+
+    # check eigen values
+    np.testing.assert_allclose(
+        sp1.numpy(), sp2, rtol=0, atol=1e-11
+    )
+
+    # torch input
+    assert_eigenvectors(
+        ev1[:, sp1 >= 1e-12],
+        t.from_numpy(ev2[:, sp2 >= 1e-12]),
+        rtol=0, atol=1e-11
+    )
+
+    # numpy input
+    assert_eigenvectors(
+        ev1[:, sp1 >= 1e-12].numpy(),
+        ev2[:, sp2 >= 1e-12],
+        rtol=0, atol=1e-11
+    )
+
+
+
 @pytest.fixture
 def kstat(ktest_data):
     """Define a kernel statistics object without Nystrom approximation."""
@@ -78,7 +155,7 @@ class TestStatistics:
         )
 
         # check eigen vectors for non null eigen values
-        np.testing.assert_allclose(
+        assert_eigenvectors(
             ev.numpy()[:, sp >= 1e-12],
             exp_ev[:, exp_sp >= 1e-12],
             rtol=0, atol=1e-12
@@ -101,7 +178,7 @@ class TestStatistics:
         )
 
         # check eigen vectors for non null eigen values
-        np.testing.assert_allclose(
+        assert_eigenvectors(
             ev.numpy()[:, sp >= 1e-12],
             exp_ev[:, exp_sp >= 1e-12],
             rtol=0, atol=1e-12
@@ -124,7 +201,7 @@ class TestStatistics:
         )
 
         # check eigen vectors for non null eigen values
-        np.testing.assert_allclose(
+        assert_eigenvectors(
             ev.numpy(),
             exp_ev[:, :sp.shape[0]],
             rtol=0, atol=1e-12
