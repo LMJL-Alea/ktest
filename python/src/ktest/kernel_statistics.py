@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
-from torch import ones, eye, zeros, finfo, vstack
+from torch import ones, eye, zeros, finfo
+import torch as t
 from torch.linalg import multi_dot, eigh
 import warnings
 
@@ -303,9 +304,7 @@ class Statistics(object):
             # output
             return sp, ev
 
-    def compute_centering_matrix(
-        self, landmarks=False, low_mem_footprint=False
-    ):
+    def compute_centering_matrix(self, landmarks=False):
         """
         Computes a projection matrix usefull for the kernel trick.
 
@@ -319,20 +318,11 @@ class Statistics(object):
         Pn = [I1 - 1/n1 J1 ,    012     ]
              [     021     ,I2 - 1/n2 J2]
 
-        If `low_mem_footprint=True`, then only return
-
-        Pn = list([I1 - 1/n1 J1], [I2 - 1/n2 J2])
-
         Parameters
         ----------
             landmarks : bool, optional
                 False by default. If True, performs the computations on the
                 the Nystrom dataset (landmarks).
-            low_mem_footprint : bool, optional
-                False by default. If True, the centering matrix for each
-                sample are returned in a list (c.f. details).
-                This mode is specific to be used by
-                `self.diagonalize_centered_gram(low_mem_footprint=True)`.
 
         Returns
         -------
@@ -346,34 +336,24 @@ class Statistics(object):
             )
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
-            if low_mem_footprint:
-                # specific mode not returning a square matrix
-                effectifs = list(data.nobs.values())
 
-                return [
-                    eye(nell, dtype=self.dtype) -
-                    1/nell*ones(nell, nell, dtype=self.dtype)
-                    for nell in effectifs
-                ]
-            else:
-                # generic mode
-                In = eye(data.ntot)
-                effectifs = list(data.nobs.values())
+            In = eye(data.ntot)
+            effectifs = list(data.nobs.values())
 
-                cumul_effectifs = np.cumsum([0]+effectifs)
+            cumul_effectifs = np.cumsum([0]+effectifs)
 
-                # Computing a bloc diagonal matrix where the ith diagonal bloc
-                # is J_ni, an (ni x ni) matrix full of 1/ni where ni is the
-                # size of the ith group
-                diag_Jn_by_n = cat([
-                    cat([
-                        zeros(nprec, nell, dtype=self.dtype),
-                        1/nell*ones(nell, nell, dtype=self.dtype),
-                        zeros(data.ntot - nprec - nell, nell, dtype=self.dtype)
-                    ], dim=0)
-                    for nell, nprec in zip(effectifs, cumul_effectifs)
-                ], dim=1)
-                return In - diag_Jn_by_n
+            # Computing a bloc diagonal matrix where the ith diagonal bloc
+            # is J_ni, an (ni x ni) matrix full of 1/ni where ni is the
+            # size of the ith group
+            diag_Jn_by_n = cat([
+                cat([
+                    zeros(nprec, nell, dtype=self.dtype),
+                    1/nell*ones(nell, nell, dtype=self.dtype),
+                    zeros(data.ntot - nprec - nell, nell, dtype=self.dtype)
+                ], dim=0)
+                for nell, nprec in zip(effectifs, cumul_effectifs)
+            ], dim=1)
+            return In - diag_Jn_by_n
         elif self.anchor_basis == 'k':
             return eye(data.ntot, dtype=self.dtype)
         elif self.anchor_basis == 's':
@@ -451,23 +431,18 @@ class Statistics(object):
         ----------
             low_mem_footprint : bool, optional
                 True by default. If True, a little trick is used to perform
-                the computations without storing the full n x n matrix
+                the computations without storing the full n x n
                 centering matrix in the Nystrom case.
                 If False, the default computations requiring the full
-                n x n matrix centering matrix is used in the in Nystrom
+                n x n centering matrix is used in the Nystrom
                 computation.
                 Without effect when not using Nystrom.
-
 
         Returns
         -------
             Kw : bicentered Gram matrix.
 
         """
-        # Computing centering matrix P:
-        P = self.compute_centering_matrix(
-            low_mem_footprint=self.data_ny is not None and low_mem_footprint
-        )
 
         # Nytrom version:
         if self.data_ny is not None:
@@ -490,36 +465,41 @@ class Statistics(object):
             # Calculating the centering matrix for the Nystrom approximation:
             Kmn = self.compute_kmn()
             Lp_inv_12 = diag(self.sp_anchors ** (-1/2))
-            Pm = self.compute_centering_matrix(
-                landmarks=True, low_mem_footprint=False
-            )
+            Pm = self.compute_centering_matrix(landmarks=True)
 
             # Calculating the matrix to diagonalise with Nystrom:
-            if low_mem_footprint:
-                # trick to avoid storing a n x n centering
+            if low_mem_footprint and self.anchor_basis == 'w':
+                # trick to avoid storing a n x n centering matrix
                 sample_size = list(self.data.nobs.values())
 
+                # computing centered gram
                 Kw = (
                     1 / (self.data.ntot * self.data_ny.ntot) *
                     multi_dot([
                         Lp_inv_12, self.ev_anchors.T, Pm,
                         multi_dot([
                             Kmn[:, :sample_size[0]],
-                            P[0],
-                            Kmn[:, :sample_size[0]].T
+                            Kmn[:, :sample_size[0]].T - 1/sample_size[0] *
+                            t.sum(Kmn[:, :sample_size[0]], dim=1)
+                            # use pytorch broadcasting
                         ]) +
                         multi_dot([
                             Kmn[:, -sample_size[1]:],
-                            P[1],
-                            Kmn[:, -sample_size[1]:].T
+                            Kmn[:, -sample_size[1]:].T - 1/sample_size[1] *
+                            t.sum(Kmn[:, -sample_size[1]:], dim=1)
+                            # use pytorch broadcasting
                         ]),
                         Pm,
                         self.ev_anchors,
                         Lp_inv_12
                     ])
                 )
+
             else:
                 # original version
+                # computing centering matrix
+                P = self.compute_centering_matrix()
+                # computing centered gram
                 Kw = (
                     1 / (self.data.ntot * self.data_ny.ntot) *
                     multi_dot([
@@ -528,9 +508,13 @@ class Statistics(object):
                     ])
                 )
 
-        # Standard version:
+        # Standard version (no Nystrom):
         else:
+            # centering matrix
+            P = self.compute_centering_matrix()
+            # gram matrix
             K = self.compute_gram()
+            # centered gram
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
 
         # output
