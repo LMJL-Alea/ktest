@@ -50,11 +50,14 @@ class Data(object):
             to selecting landmarks among the observations according to the
             random uniform distribution.
 
-        random_state :  int, RandomState instance or None
+        random_state :  int, numpy.random.Generator instance,
+                numpy.random.RandomState instance or None
             Determines random number generation for the landmarks selection.
-            If None (default), the generator is the RandomState instance used
-            by `np.random`. To ensure the results are reproducible, pass an int
-            to instanciate the seed, or a RandomState instance (recommended).
+            If None (default), the default numpy random generator is used.
+            To ensure that the results are reproducible, pass an integer
+            that will be used as seed for the random number generation, or
+            a Numpy random Generator instance (recommended), or a Numpy
+            RandomState instance (legacy).
 
         dtype : torch.dtype, optional
             Floating point number type/precision used for number storage and
@@ -88,6 +91,10 @@ class Data(object):
 
         ntot : int
             Total number of variables in the dataset (sum of nobs).
+
+        dtype : torch.dtype
+            Floating point number type/precision used for number storage and
+            computations. Default is `torch.float64`.
     """
 
     def __init__(
@@ -102,6 +109,15 @@ class Data(object):
 
         # dtype
         self.dtype = dtype
+
+        # random number generation
+        if random_state is None:
+            random_state = np.random.default_rng()
+        elif isinstance(random_state, int):
+            random_state = np.random.default_rng(random_state)
+        else:
+            assert isinstance(random_state, np.random.Generator) or \
+                isinstance(random_state, np.random.RandomState)
 
         # process data
         try:
@@ -183,8 +199,9 @@ class Data(object):
                     self.nobs[n] = n_landmarks_n
                     self.index[n] = self.index[n][ny_ind]
 
-        except AttributeError:
+        except AttributeError as e:
             print(f'Unknown data type {type(data_n)}')
+            raise e
         self.ntot = sum(self.nobs.values())
 
     def __str__(self):

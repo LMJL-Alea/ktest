@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, finfo
+import torch as t
 from torch.linalg import multi_dot, eigh
 import warnings
 
@@ -48,7 +49,7 @@ def mediane(x, y=None):
             warnings.warn('warning: all your dataset is null')
         return mean
     else:
-        return dtot.median()
+        return median
 
 
 def linear_kernel(x, y):
@@ -315,7 +316,7 @@ class Statistics(object):
             (or nxanchors x nyanchors and nyanchors x nxanchors if nystrom).
 
         Pn = [I1 - 1/n1 J1 ,    012     ]
-                [     021     ,I2 - 1/n2 J2]
+             [     021     ,I2 - 1/n2 J2]
 
         Parameters
         ----------
@@ -329,16 +330,21 @@ class Statistics(object):
                 The centering matrix.
 
         """
+        if landmarks and self.data_ny is None:
+            raise ValueError(
+                "Cannot use landmarks, Nystrom approximation not provided."
+            )
         data = self.data if not landmarks else self.data_ny
         if not landmarks or self.anchor_basis == 'w':
+
             In = eye(data.ntot)
             effectifs = list(data.nobs.values())
 
             cumul_effectifs = np.cumsum([0]+effectifs)
 
-            # Computing a bloc diagonal matrix where the ith diagonal bloc is
-            # J_ni, an (ni x ni) matrix full of 1/ni where ni is the size
-            # of the ith group
+            # Computing a bloc diagonal matrix where the ith diagonal bloc
+            # is J_ni, an (ni x ni) matrix full of 1/ni where ni is the
+            # size of the ith group
             diag_Jn_by_n = cat([
                 cat([
                     zeros(nprec, nell, dtype=self.dtype),
@@ -391,6 +397,10 @@ class Statistics(object):
             K : torch.Tensor,
                 Gram matrix of interest.
         """
+        if landmarks and self.data_ny is None:
+            raise ValueError(
+                "Cannot use landmarks, Nystrom approximation not provided."
+            )
         data = self.data if not landmarks else self.data_ny
         D = cat([x for x in data.data.values()], axis=0)
         K = self.kernel(D, D)
@@ -412,19 +422,27 @@ class Statistics(object):
         Kw = 1 / self.data_ny.ntot * multi_dot([P, K, P])
         return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
 
-    def diagonalize_centered_gram(self):
+    def compute_centered_gram(self, low_mem_footprint=False):
         """
-        Diagonalizes the bicentered Gram matrix which shares its spectrum
+        Compute the bicentered Gram matrix which shares its spectrum
         with the within covariance operator in the RKHS.
+
+        Parameters
+        ----------
+            low_mem_footprint : bool, optional
+                True by default. If True, a little trick is used to perform
+                the computations without storing the full n x n
+                centering matrix in the Nystrom case.
+                If False, the default computations requiring the full
+                n x n centering matrix is used in the Nystrom
+                computation.
+                Without effect when not using Nystrom.
 
         Returns
         -------
-            Eigenvalues and eigenvectors, later stored in attributes 'sp' and
-            'ev' respectively.
+            Kw : bicentered Gram matrix.
 
         """
-        # Computing centering matrix P:
-        P = self.compute_centering_matrix()
 
         # Nytrom version:
         if self.data_ny is not None:
@@ -450,13 +468,82 @@ class Statistics(object):
             Pm = self.compute_centering_matrix(landmarks=True)
 
             # Calculating the matrix to diagonalise with Nystrom:
-            Kw = (1 / (self.data.ntot * self.data_ny.ntot)
-                  * multi_dot([Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
-                               Kmn.T, Pm, self.ev_anchors, Lp_inv_12]))
-        # Standard version:
+            if low_mem_footprint and self.anchor_basis == 'w':
+                # trick to avoid storing a n x n centering matrix
+                sample_size = list(self.data.nobs.values())
+
+                # computing centered gram
+                Kw = (
+                    1 / (self.data.ntot * self.data_ny.ntot) *
+                    multi_dot([
+                        Lp_inv_12, self.ev_anchors.T, Pm,
+                        multi_dot([
+                            Kmn[:, :sample_size[0]],
+                            Kmn[:, :sample_size[0]].T - 1/sample_size[0] *
+                            t.sum(Kmn[:, :sample_size[0]], dim=1)
+                            # use pytorch broadcasting
+                        ]) +
+                        multi_dot([
+                            Kmn[:, -sample_size[1]:],
+                            Kmn[:, -sample_size[1]:].T - 1/sample_size[1] *
+                            t.sum(Kmn[:, -sample_size[1]:], dim=1)
+                            # use pytorch broadcasting
+                        ]),
+                        Pm,
+                        self.ev_anchors,
+                        Lp_inv_12
+                    ])
+                )
+
+            else:
+                # original version
+                # computing centering matrix
+                P = self.compute_centering_matrix()
+                # computing centered gram
+                Kw = (
+                    1 / (self.data.ntot * self.data_ny.ntot) *
+                    multi_dot([
+                        Lp_inv_12, self.ev_anchors.T, Pm, Kmn, P,
+                        Kmn.T, Pm, self.ev_anchors, Lp_inv_12
+                    ])
+                )
+
+        # Standard version (no Nystrom):
         else:
+            # centering matrix
+            P = self.compute_centering_matrix()
+            # gram matrix
             K = self.compute_gram()
+            # centered gram
             Kw = 1 / self.data.ntot * multi_dot([P, K, P])
+
+        # output
+        return Kw
+
+    def diagonalize_centered_gram(self, low_mem_footprint=True):
+        """
+        Diagonalizes the bicentered Gram matrix which shares its spectrum
+        with the within covariance operator in the RKHS.
+
+        Parameters
+        ----------
+            low_mem_footprint : bool, optional
+                True by default. If True, a little trick is used to perform
+                the computations without storing the full n x n matrix
+                centering matrix in the Nystrom case.
+                If False, the default computations requiring the full
+                n x n matrix centering matrix is used in the in Nystrom
+                computation.
+                Without effect when not using Nystrom.
+
+        Returns
+        -------
+            Eigenvalues and eigenvectors, later stored in attributes 'sp' and
+            'ev' respectively.
+
+        """
+        # Compute the bicentered Gram matrix
+        Kw = self.compute_centered_gram(low_mem_footprint)
 
         # Diagonalisation with a function in C++:
         return Statistics.ordered_eigsy(Kw, self.eps, self.clip_eigval)
@@ -475,10 +562,8 @@ class Statistics(object):
             Corresponds to the product PK omega in the kFDA statistic.
 
         """
-        # Calculating the bi-centering vector Omega and
-        # the centering matrix Pbi
+        # Calculating the bi-centering vector Omega
         omega = self.compute_omega()  # vector with 1/n1 and -1/n2
-        Pbi = self.compute_centering_matrix()  # Centering by block matrix
         if self.data_ny is not None:
             Lz12 = diag(self.sp_anchors**(-1/2))
             Kzx = self.compute_kmn()
@@ -486,6 +571,7 @@ class Statistics(object):
             pkm = (1 / np.sqrt(self.data_ny.ntot)
                    * mv(Lz12, mv(self.ev_anchors.T, mv(Pi, mv(Kzx, omega)))))
         else:
+            Pbi = self.compute_centering_matrix()  # Centering by block matrix
             Kx = self.compute_gram()
             pkm = mv(Pbi, mv(Kx, omega))
         return pkm
@@ -627,7 +713,6 @@ class Statistics(object):
             - normalize the vectors with respect to n_anchors as in pkm
             - separate the different nystrom approaches
         """
-        Pbi = self.compute_centering_matrix()
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
         if self.data_ny is not None:
@@ -641,6 +726,7 @@ class Statistics(object):
                                                             self.ev_anchors.T,
                                                             Kzx]).T
         else:
+            Pbi = self.compute_centering_matrix()
             Kx = self.compute_gram()
             epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
         return epk
