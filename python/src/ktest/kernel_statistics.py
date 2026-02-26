@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
+from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt, float64
 from torch import ones, eye, zeros, finfo
 import torch as t
 from torch.linalg import multi_dot, eigh
@@ -773,12 +773,12 @@ class Statistics(object):
         pkm = self.compute_pkm()
         upk = self.compute_upk(t)
         n1, n2 = self.data.nobs.values()
-                 * matmul(centering_mat, upk)).numpy())
-            centering_mat -= ones((n, n)) / n
-        if center:
-        centering_mat = eye(n, dtype=float64) 
         n = self.data.ntot
-        proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm) 
+        if center:
+            centering_mat = eye(n, dtype=float64) 
+            centering_mat -= ones((n, n)) / n
+        proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+                 * matmul(centering_mat, upk)).numpy())
         proj_list = [proj[:n1], proj[n1:]]
         proj_kfda = {}
         proj_kpca = {}
@@ -787,7 +787,7 @@ class Statistics(object):
                                                 columns=[str(t) for t in range(1,t+1)])
             proj_kfda[name] = pd.DataFrame(proj_list[i].cumsum(axis=1), index=ind,
                                                 columns=[str(t) for t in range(1,t+1)])
-            proj_kfda[name] /= np.sqrt(self.data.ntot ** 3 * stat.values[:t]
+            proj_kfda[name] /= np.sqrt(n ** 3 * stat.values[:t]
                                        / (n1 * n2 ))
         return proj_kfda, proj_kpca 
                 

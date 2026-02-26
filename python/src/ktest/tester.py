@@ -7,7 +7,7 @@ import warnings
 from tqdm import tqdm
 import dill
 import gzip
-import torch as t
+from torch import float64
 
 from .kernel_statistics import Statistics
 from .data import Data
@@ -169,7 +169,7 @@ class Ktest(Statistics):
         kernel_function='gauss', kernel_bandwidth='median',
         kernel_median_coef=1, nystrom=False, n_landmarks=None,
         landmark_method='random', n_anchors=None, anchor_basis='w',
-        random_state=None, dtype=t.float64, eps=None, clip_eigval=True
+        random_state=None, dtype=float64, eps=None, clip_eigval=True
     ):
         self.dataset = data
         self.metadata = metadata
