@@ -532,19 +532,31 @@ class Statistics():
             epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
         return(epk)
     
-    def compute_projections(self, t=100):
+    def compute_projections(self, stat, t=100, center=True):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t. 
         
         The projection with a truncation t is given by the formula :
 
-                h^T kx =  \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
+                h^T kx = C * \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
+        where C is a normalization constant.
+        
+        Parameters
+        ----------
+        stat : Pandas.Series
+            kFDA statistics (same as the attribute `kfda_statistic` of class 
+            Ktest). Required for normalization.
+        
+        t : int, optional
+            Maximal truncation, the default is 100.
+            
+        center : bool, optional
+            If True (default), the projections are centered with respect to
+            the mean embedding.
 
         Returns
         -------
-        t : int, optional
-            Maximal truncation, the default is 100.
             
         proj_kfda : pandas.DataFrame
             Projections associated with every observation (rows) on every 
@@ -562,8 +574,12 @@ class Statistics():
         pkm = self.compute_pkm()
         upk = self.compute_upk(t)
         n1, n2 = self.data.nobs.values()
-        proj = (n1 * n2 * self.data.ntot **-2 * self.sp[:t]**(-2)
-                * mv(self.ev.T[:t], pkm) * upk).numpy()
+        n = self.data.ntot
+        centering_mat = eye(n, dtype=float64) 
+        if center:
+            centering_mat -= ones((n, n)) / n
+        proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm) 
+                 * matmul(centering_mat, upk)).numpy())
         proj_list = [proj[:n1], proj[n1:]]
         proj_kfda = {}
         proj_kpca = {}
@@ -572,6 +588,8 @@ class Statistics():
                                                 columns=[str(t) for t in range(1,t+1)])
             proj_kfda[name] = pd.DataFrame(proj_list[i].cumsum(axis=1), index=ind,
                                                 columns=[str(t) for t in range(1,t+1)])
+            proj_kfda[name] /= np.sqrt(self.data.ntot ** 3 * stat.values[:t]
+                                       / (n1 * n2 ))
         return proj_kfda, proj_kpca 
                 
                 

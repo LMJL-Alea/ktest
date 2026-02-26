@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "1.0.6"
+version = "1.1.0"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
-    {name = "Polina Arsenteva", email = "polina.arsenteva@univ-nantes.fr"},
+    {name = "Polina Arsenteva", email = "polina.arsenteva@ens-lyon.fr"},
     {name = "Ghislain Durif", email = "ghislain.durif@ens-lyon.fr"}
 ]
 license = {text = "MIT License"}
