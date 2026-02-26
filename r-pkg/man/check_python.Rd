@@ -4,7 +4,7 @@
 \alias{check_python}
 \title{Check Python availability}
 \usage{
-check_python(version = "3.5", verbose = TRUE)
+check_python(version = "3.12", verbose = TRUE)
 }
 \arguments{
 \item{version}{character string, Python required version (e.g. \code{"3.5"},
@@ -17,7 +17,8 @@ boolean value indicating if the required Python version is available
 on the system.
 }
 \description{
-Check if Python is available on the system and if its version is sufficient.
+Check if Python is available on the system and if its version is sufficient
+(which should be automatically managed by \code{reticulate}).
 }
 \details{
 This function is just a wrapper around \code{\link[reticulate:py_available]{reticulate::py_available()}} and

@@ -4,6 +4,7 @@
 # ktest R package
 
 <!-- badges: start -->
+
 <!-- badges: end -->
 
 Kernel based statistical testing
@@ -11,6 +12,87 @@ Kernel based statistical testing
 > :warning: To install and configure the `ktest` R package, see the
 > “Installation and configuration” section
 > [below](#installation-and-configuration). :warning:
+
+------------------------------------------------------------------------
+
+# Installation and configuration
+
+## Package requirements
+
+- R version 4.1+
+- Python version 3.12+
+
+**Important:** Python is a requirement as an intern machinery for the
+package to work but you will not need to create nor manipulate Python
+codes to use the `ktest` R package.
+
+The `ktest` R package is using the `ktest` Python package under the hood
+thanks to the
+[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
+that provides an “R Interface to Python”.
+
+> **Note:** `reticulate` manages Python program and Python packages by
+> using [`uv`](https://docs.astral.sh/uv/) Python package and project
+> manager. If `uv` is not available on your system, then `reticulate`
+> will install it seamlessly. If you encounter any issue (related to
+> `reticulate` not being able to find a working Python on your system),
+> then you can install `uv` manually to solve it (see `uv` installation
+> [documentation](https://docs.astral.sh/uv/getting-started/installation/)).
+> Also, see
+> [here](https://rstudio.github.io/reticulate/articles/python_packages.html)
+> and
+> [here](https://rstudio.github.io/reticulate/reference/py_require.html)
+> for more details about how Python is managed by `reticulate` in
+> `ktest` package.
+
+## Installation
+
+You can install the development version of `ktest` with the following
+commands:
+
+``` r
+install.packages("remotes")
+remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
+```
+
+> **Note:** `ktest` is not available on CRAN at the moment but will be
+> shortly.
+
+## Usage
+
+Once the `ktest` package is installed and configured, to use it, you
+only need (1) to load it like any other R package and (2) to fix
+`reticulate` setup by doing the following:
+
+``` r
+# load ktest R package
+library(ktest)
+
+# fix reticulate setup
+reticulate::py_config()
+```
+
+> **Note:** the second step will trigger a Python environment setup and
+> Python requirement installation ( for the first time use only), which
+> could take some time.
+
+You can check that every thing is working by doing:
+
+``` r
+# check ktest configuration
+check_ktest()
+```
+
+Then you can use `ktest` package:
+
+``` r
+# load data...
+
+# define a ktest object and run an analysis
+kt <- ktest(...) # see other vignettes
+```
+
+------------------------------------------------------------------------
 
 # Using ktest
 
@@ -33,15 +115,26 @@ library(tibble)         # manage data.frame
 
 ## Getting started
 
-> :warning: For package installation and setup, including Python
-> environment configuration, see the dedicated vignette
-> `vignette("install_ktest", package = "ktest")`. :warning:
+> :warning: For package installation and setup, see the dedicated
+> vignette `vignette("install_ktest", package = "ktest")`. :warning:
 
 We load the `ktest` package and the configured Python environment:
 
 ``` r
+# load ktest R package
 library(ktest)
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# fix Python with reticulate
+reticulate::py_config()
+#> python:         /home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5/bin/python
+#> libpython:      /home/drg/.cache/R/reticulate/uv/python/cpython-3.12.11-linux-x86_64-gnu/lib/libpython3.12.so
+#> pythonhome:     /home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5:/home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5
+#> virtualenv:     /home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5/bin/activate_this.py
+#> version:        3.12.11 (main, Jul 11 2025, 22:43:48) [Clang 20.1.4 ]
+#> numpy:          /home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5/lib/python3.12/site-packages/numpy
+#> numpy_version:  2.3.4
+#> ktest:          /home/drg/.cache/R/reticulate/uv/cache/archive-v0/MdKPRqbMYpuuq1G_4SNf5/lib/python3.12/site-packages/ktest
+#> 
+#> NOTE: Python version was forced by VIRTUAL_ENV
 ```
 
 We check that it is working:
@@ -57,9 +150,6 @@ check_ktest()
 ``` r
 # data loading
 tmp <- load_example_data()
-#> New names:
-#> New names:
-#> • `` -> `...1`
 # gene expression data table (344 cells and 83 genes)
 data_tab <- tmp$data_tab
 # metadata table with sampling conditions (for the 344 cells)
@@ -159,16 +249,16 @@ print(kt_1)
 #> MMD:
 #> not computed, run ktest.test.
 #> kFDA:
-#> Truncation 1: 0.25768122893254786. P-value:
-#> asymptotic: 0.6117176755322093, permutation: 0.576.
-#> Truncation 2: 36.65831702676734. P-value:
-#> asymptotic: 1.0958411375934492e-08, permutation: 0.0.
-#> Truncation 3: 74.86728462307967. P-value:
-#> asymptotic: 3.8685719368137556e-16, permutation: 0.0.
-#> Truncation 4: 111.77209285817722. P-value:
-#> asymptotic: 3.047924268172892e-23, permutation: 0.0.
-#> Truncation 5: 120.74602538674806. P-value:
-#> asymptotic: 2.181256318092915e-24, permutation: 0.0.
+#> Truncation 1: 0.06324761704941312. P-value:
+#> asymptotic: 0.8014346825718801, permutation: 0.794.
+#> Truncation 2: 37.23297311875312. P-value:
+#> asymptotic: 8.22171872274361e-09, permutation: 0.0.
+#> Truncation 3: 42.70101052795479. P-value:
+#> asymptotic: 2.8483132734694386e-09, permutation: 0.0.
+#> Truncation 4: 78.27658982147045. P-value:
+#> asymptotic: 4.036578556002547e-16, permutation: 0.0.
+#> Truncation 5: 110.13490469091309. P-value:
+#> asymptotic: 3.8369916450687886e-22, permutation: 0.0.
 ```
 
 ### Extract statistics
@@ -340,12 +430,11 @@ as_tibble(proj_contrib[[2]])
 #> #   `39` <dbl>, `40` <dbl>, `41` <dbl>, `42` <dbl>, `43` <dbl>, `44` <dbl>, …
 ```
 
-## Note for Python users
+## Advance usage
 
-If you are used to using the `ktest` Python package, you can do pretty
-much the same things in R thanks to `reticulate` using a `$` character
-instead of a `.` character to access the `Ktest` class attributes and
-member functions, e.g.:
+You can directly manipulate Python kernel test objects in R thanks to
+`reticulate` using a `$` character instead of a `.` character to access
+the `Ktest` class attributes and member functions, e.g.:
 
 ``` r
 # run test
@@ -366,6 +455,59 @@ kt_1$kfda_proj_contrib
 > **Note**: you can refer to this [notebook
 > tutorial](https://github.com/LMJL-Alea/ktest/blob/main/tutorials/demo_ktest.ipynb)
 > to discover more about the `ktest` Python package.
+
+### Gram matrix and eigen decomposition
+
+You can compute the related Gram matrix with the following (note the
+`$numpy()` to convert it from a `torch.tensor` to a standard
+`numpy.array` which is automatically converted to an R matrix):
+
+``` r
+kt_1$kstat$compute_gram()$numpy()
+```
+
+Then, you can compute its eigen decomposition with:
+
+``` r
+res <- kt_1$kstat$diagonalize_centered_gram()
+res[[1]]$numpy() # eigen values
+res[[2]]$numpy() # eigen vectors
+```
+
+In practice the eigen decomposition is also directly available after a
+call to the `test()` function (c.f.
+[above](#kernel-based-two-sample-test)):
+
+``` r
+kt_1$kstat$sp$numpy() # eigen values
+kt_1$kstat$ev$numpy() # eigen vectors
+```
+
+### Saving the resutls
+
+Since `ktest` R package is basically a wrapper around the `ktest` Python
+package, we manipulate Python objects directly in R:
+
+``` r
+class(kt_1)
+## [1] "ktest.tester.Ktest"   "ktest.kernel_statistics.Statistics"
+## [3] "python.builtin.object"
+```
+
+Such type of objects cannot be saved and loaded using the standard
+`save()` and `load()` function in R.
+
+You need to use the dedicated `save_ktest()` and `load_ktest()`
+functions from the package to do so:
+
+``` r
+# save test result
+save_ktest(kt_1, filename = "kt_1.pkl", compress=TRUE)
+# will create 'kt_1.pkl.gz' file if compress=TRUE and 'kt_1.pkl' file otherwise
+
+# load test result
+kt_2 <- load_ktest(filename = "kt_1.pkl.gz", compressed=TRUE)
+```
 
 ## Figures
 
@@ -518,124 +660,6 @@ Biol. 20(1):155.
 [PMID: 35794592](https://pubmed.ncbi.nlm.nih.gov/35794592/); [PMCID:
 PMC9258043](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9258043/);
 [hal-04134084v1](https://hal.science/hal-04134084v1).
-
----
-
-# Installation and configuration
-
-``` r
-knitr::opts_chunk$set(eval = TRUE)
-```
-
-## Package requirements
-
-- R version 4+
-- Python version 3+
-
-**Important:** Python is a requirement as an intern machinery for the
-package to work but you will not need to create nor manipulate Python
-codes to use the `ktest` R package.
-
-> **Note:** if you don’t have Python on your system: when configuring
-> the `ktest` R package (c.f. [below](#first-time-configuration)), the
-> `reticulate` R package will offer to install Python on your system.
-
-The `ktest` R package is using the `ktest` Python package under the hood
-thanks to the
-[`reticulate`](https://CRAN.R-project.org/package=reticulate) R package
-that provides an “R Interface to Python”.
-
-## Installation
-
-You can install the development version of `ktest` with the following
-commands:
-
-``` r
-install.packages("remotes")
-remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
-```
-
-> **Note:** `ktest` is not available on CRAN at the moment but will be
-> shortly.
-
-## First-time configuration
-
-After installing the `ktest` R package, you need to run the following
-commands (**once**) to complete the setup (and install the `ktest`
-Python package on your system):
-
-> :warning: To avoid messing with your Python system or user
-> environment, we recommend to use a dedicated Python environment for
-> `ktest` (c.f. [next section](#using-a-python-environment)) :warning:
-
-``` r
-# load ktest R package
-library(ktest)
-# install ktest package python requirements
-install_ktest()
-# check ktest configuration
-check_ktest()
-```
-
-### Using a Python environment
-
-Here are the commands to be run (once) to configure the `ktest` package
-using a dedicated Python **virtual environment**:
-
-``` r
-# load ktest R package
-library(ktest)
-# create dedicated Python virtual environment
-reticulate::virtualenv_create("ktest")
-# activate the python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-# verify python version
-reticulate::py_config()
-# install ktest package python requirements
-install_ktest(method = "virtualenv", envname = "ktest")
-# check ktest configuration
-check_ktest()
-```
-
-> **Note:** if you are a Miniconda/Anaconda Python distribution user,
-> you can either user a Python virtual environment (c.f. above) or a
-> **Conda environment** with the same results. Please refer to the
-> `reticulate`
-> [documentation](https://rstudio.github.io/reticulate/articles/versions.html#providing-hints)
-> in this case.
-
-### Managing Python
-
-To check which **version of Python** you are using through `reticulate`,
-you can run:
-
-``` r
-reticulate::py_discover_config()
-```
-
-> **Note:** To get more information about **managing** which **version
-> of Python** you are using, you can refer to `reticulate`
-> [documentation](https://rstudio.github.io/reticulate/articles/versions.html)
-> about “Python Version Configuration”.
-
-## Usage
-
-Once the `ktest` package is installed and configured, to use it, you
-only need to load it like any other R package:
-
-``` r
-library(ktest)
-kt <- ktest(...) # see other vignettes
-```
-
-:warning: If you are using a **dedicated Python environment**, you also
-need to load it every time before using `ktest`:
-
-``` r
-library(ktest)
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-kt <- ktest(...) # see other vignettes
-```
 
 [^1]: the previous result without permutation are not lost, the object
     is just updated with the new permutation-based result

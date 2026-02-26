@@ -68,12 +68,12 @@ load_example_data <- function() {
     data_dir <- file.path(fs::path_package("ktest"), "extdata")
     # expression data table
     data_tab <- readr::read_csv(
-        file.path(data_dir, "data.csv"), show_col_types = FALSE) %>%
+        file.path(data_dir, "data.csv"), show_col_types = FALSE) |>
         dplyr::select(!1)
     # metadata table
     metadata_tab <- readr::read_csv(
-        file.path(data_dir, "metadata.csv"), show_col_types = FALSE) %>%
-        dplyr::select(.data$condition)
+        file.path(data_dir, "metadata.csv"), show_col_types = FALSE) |>
+        dplyr::select("condition")
     # output
     return(tibble::lst(data_tab, metadata_tab))
 }

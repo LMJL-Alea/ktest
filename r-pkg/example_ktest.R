@@ -8,29 +8,19 @@ library(stringr)        # process character string
 library(tibble)         # manipulate data.frame
 
 
-#---- Install and configuration (to be done once!) ----------------------------#
+#---- Install (to be done once!) ----------------------------------------------#
 # install ktest
 install.packages("remotes")
 remotes::install_github("LMJL-Alea/ktest", ref = "main", subdir = "r-pkg")
+
+#---- Load ktest for regular use (before every use) ---------------------------#
 # load ktest R package
 library(ktest)
-# create dedicated Python virtual environment
-reticulate::virtualenv_create("ktest")
-# activate the python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-# verify python version
+# fix Python with reticulate
 reticulate::py_config()
-# install ktest package python requirements
-install_ktest(method = "virtualenv", envname = "ktest")
+
 # check ktest configuration
 check_ktest()
-
-#---- loading the package for regular use -------------------------------------#
-library(ktest)
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-
-check_ktest()
-
 
 #---- Data import -------------------------------------------------------------#
 # download dataset
@@ -62,7 +52,7 @@ kt_1 = ktest_init(
     sample_names = c('0H','48HREV')
 )
 
-# run test without permuation-based p-value computing
+# run test without permutation-based p-value computing
 test(
     kt = kt_1, 
     stat = 'kfda', 
@@ -70,7 +60,7 @@ test(
     verbose = 1
 )
 
-# run test with permuation-based p-value computing
+# run test with permutation-based p-value computing
 test(
     kt = kt_1, 
     stat = 'kfda', 

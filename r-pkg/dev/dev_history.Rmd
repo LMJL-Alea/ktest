@@ -6,6 +6,16 @@ editor_options:
   chunk_output_type: console
 ---
 
+## Dev requirements
+
+```{r dev-deps}
+install.packages("usethis")
+install.packages("xml2")
+install.packages("roxygen2")
+install.packages("devtools")
+install.packages("rprojroot")
+```
+
 ## Usethis setup
 
 ```{r dev-setup}
@@ -15,30 +25,25 @@ usethis::proj_set(pkg_dir, force = TRUE)
 usethis::proj_sitrep()
 ```
 
-## Reticulate config
+## Install package requirements
 
-To be done once:
-```{r dev-reticulate-setup}
-# create virtualenv
-reticulate::virtualenv_create("ktest")
-# install Python package (to do once)
-reticulate::virtualenv_install(
-    envname = "ktest",
-    packages = "ktest @ git+https://github.com/AnthoOzier/ktest@main#subdirectory=python"
-)
+```{r dev-pkg-deps}
+devtools::install_deps(pkg_dir, upgrade = TRUE)
 ```
+
+## Reticulate config
 
 To be always done when starting a new R session:
 ```{r dev-reticulate-load}
 # activate python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+pkgload::load_all(pkg_dir)
 # check Python config
 reticulate::py_config()
 ```
 
 ## Package development
 
-### Initialization (to be run once)
+### Initialization (already done, no need to repeat, kept for documentation)
 
 ```{r dev-init}
 # create package template
@@ -95,11 +100,11 @@ usethis::use_testthat(3)
 ### Documentation
 
 ```{r dev-doc}
-# Simulate package installation
+# load package
 pkgload::load_all(pkg_dir)
 
-# Generate documentation and deal with dependencies
-attachment::att_amend_desc(path = pkg_dir)
+# generate documentation
+devtools::document(pkg_dir)
 ```
 
 ```{r dev-vignette}
@@ -118,6 +123,8 @@ pkgdown::build_site(pkg = pkg_dir)
 ### Test and check
 
 ```{r dev-test}
+# load package
+pkgload::load_all(pkg_dir)
 # run the unit tests
 devtools::test(pkg_dir)
 ```

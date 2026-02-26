@@ -13,14 +13,11 @@ check_ktest(verbose = TRUE)
 boolean value indicating if the \code{ktest} package is ready.
 }
 \description{
-In practice, check if \code{ktest} Python package is installed (which should be
-done by the \code{\link[=install_ktest]{install_ktest()}} function).
+Check if \code{ktest} Python package is installed (which should be automatically
+managed by \code{reticulate}).
 }
 \examples{
 \dontrun{
 check_ktest()
 }
-}
-\seealso{
-\code{\link[=install_ktest]{install_ktest()}}
 }

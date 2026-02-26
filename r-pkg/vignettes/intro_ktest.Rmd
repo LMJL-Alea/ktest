@@ -49,26 +49,15 @@ library(tibble)         # manage data.frame
 
 ## Getting started
 
-```{r package_install, include=FALSE}
-# load ktest R package
-library(ktest)
-# create dedicated Python virtual environment
-reticulate::virtualenv_create("ktest")
-# activate the python environment
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
-# verify python version
-reticulate::py_config()
-# install ktest package python requirements
-install_ktest(method = "virtualenv", envname = "ktest")
-```
-
-> :warning: For package installation and setup, including Python environment configuration, see the dedicated vignette `vignette("install_ktest", package = "ktest")`. :warning:
+> :warning: For package installation and setup, see the dedicated vignette `vignette("install_ktest", package = "ktest")`. :warning:
 
 We load the `ktest` package and the configured Python environment:
 
 ```{r setup}
+# load ktest R package
 library(ktest)
-reticulate::use_virtualenv(virtualenv = "ktest", required = TRUE)
+# fix Python with reticulate
+reticulate::py_config()
 ```
 
 We check that it is working:
@@ -91,17 +80,7 @@ data_tab <- tmp$data_tab
 metadata_tab <- tmp$metadata_tab
 ```
 
-This dataset originates from a study that investigated the molecular mechanisms 
-underlying cell differentiation and reversion, by measuring cell 
-transcriptomes at four time points: undifferentiated T2EC maintained in a 
-self-renewal medium (condition `"0H"`), then put in a differentiation-inducing 
-medium for 24h (condition `"24H"`). This population was then split into 
-a first population maintained in the same medium for another 24h to achieve 
-differentiation (condition `"48HDIFF"`), and the second population was put 
-back in the self-renewal medium to investigate potential reversion 
-(condition `"48HREV"`). Cell transcriptomes were measured using 
-scRT-qPCR on 83 genes selected to be involved in the differentiation 
-process.
+This dataset originates from a study that investigated the molecular mechanisms underlying cell differentiation and reversion, by measuring cell transcriptomes at four time points: undifferentiated T2EC maintained in a self-renewal medium (condition `"0H"`), then put in a differentiation-inducing medium for 24h (condition `"24H"`). This population was then split into a first population maintained in the same medium for another 24h to achieve differentiation (condition `"48HDIFF"`), and the second population was put back in the self-renewal medium to investigate potential reversion (condition `"48HREV"`). Cell transcriptomes were measured using scRT-qPCR on 83 genes selected to be involved in the differentiation process.
 
 See Zreika et al (2022) and Ozier-Lafontaine et al (2024) for more details.
 
@@ -197,9 +176,9 @@ as_tibble(proj_contrib[[1]])
 as_tibble(proj_contrib[[2]])
 ```
 
-## Note for Python users
+## Advance usage
 
-If you are used to using the `ktest` Python package, you can do pretty much the same things in R thanks to `reticulate` using a `$` character instead of a `.` character to access the `Ktest` class attributes and member functions, e.g.:
+You can directly manipulate Python kernel test objects in R thanks to `reticulate` using a `$` character instead of a `.` character to access the `Ktest` class attributes and member functions, e.g.:
 
 ```{r direct_call, eval=FALSE}
 # run test
@@ -218,6 +197,47 @@ kt_1$kfda_proj_contrib
 ```
 
 > **Note**: you can refer to this [notebook tutorial](https://github.com/LMJL-Alea/ktest/blob/main/tutorials/demo_ktest.ipynb) to discover more about the `ktest` Python package.
+
+### Gram matrix and eigen decomposition
+
+You can compute the related Gram matrix with the following (note the `$numpy()` to convert it from a `torch.tensor` to a standard `numpy.array` which is automatically converted to an R matrix):
+```{r gram, eval=FALSE}
+kt_1$kstat$compute_gram()$numpy()
+```
+
+Then, you can compute its eigen decomposition with:
+```{r diag_gram, eval=FALSE}
+res <- kt_1$kstat$diagonalize_centered_gram()
+res[[1]]$numpy() # eigen values
+res[[2]]$numpy() # eigen vectors
+```
+
+In practice the eigen decomposition is also directly available after a call to the `test()` function (c.f. [above](#kernel-based-two-sample-test)):
+```{r diag_gram2, eval=FALSE}
+kt_1$kstat$sp$numpy() # eigen values
+kt_1$kstat$ev$numpy() # eigen vectors
+```
+
+### Saving the resutls
+
+Since `ktest` R package is basically a wrapper around the `ktest` Python package, we manipulate Python objects directly in R:
+```{r class, eval=FALSE}
+class(kt_1)
+## [1] "ktest.tester.Ktest"   "ktest.kernel_statistics.Statistics"
+## [3] "python.builtin.object"
+```
+
+Such type of objects cannot be saved and loaded using the standard `save()` and `load()` function in R.
+
+You need to use the dedicated `save_ktest()` and `load_ktest()` functions from the package to do so:
+```{r saving-loading, eval=FALSE}
+# save test result
+save_ktest(kt_1, filename = "kt_1.pkl", compress=TRUE)
+# will create 'kt_1.pkl.gz' file if compress=TRUE and 'kt_1.pkl' file otherwise
+
+# load test result
+kt_2 <- load_ktest(filename = "kt_1.pkl.gz", compressed=TRUE)
+```
 
 ## Figures
 

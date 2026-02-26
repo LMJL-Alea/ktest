@@ -10,5 +10,11 @@
 pyktest <- NULL
 
 .onLoad <- function(libname, pkgname) {
+    # prepare local Python environment
+    reticulate::py_require(
+        packages = "ktest @ git+https://github.com/LMJL-Alea/ktest@main#subdirectory=python",
+        python_version = "3.12"
+    )
+    # load Python ktest
     pyktest <<- reticulate::import("ktest", delay_load = TRUE)
 }
