@@ -738,25 +738,26 @@ class Statistics(object):
 
         The projection with a truncation t is given by the formula :
 
-                h^T kx = C * \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K  
+        h^T kx = C * \\sum_{p=1:t} n1*n2 / ( lp*n)^2 [up^T PK omega] up^T P K
+
         where C is a normalization constant.
-        
+
         Parameters
             the mean embedding.
             If True (default), the projections are centered with respect to
         center : bool, optional
-            
+
         t : int, optional
             Maximal truncation, the default is 100.
-        
-            kFDA statistics (same as the attribute `kfda_statistic` of class 
+
+            kFDA statistics (same as the attribute `kfda_statistic` of class
             Ktest). Required for normalization.
         stat : Pandas.Series
         ----------
 
         Returns
         -------
-            
+
         proj_kfda : pandas.DataFrame
             Projections associated with every observation (rows) on every
             eigendirection (columns).
@@ -775,7 +776,7 @@ class Statistics(object):
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
         if center:
-            centering_mat = eye(n, dtype=float64) 
+            centering_mat = eye(n, dtype=float64)
             centering_mat -= ones((n, n)) / n
         proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
                  * matmul(centering_mat, upk)).numpy())
@@ -783,12 +784,15 @@ class Statistics(object):
         proj_kfda = {}
         proj_kpca = {}
         for i, (name, ind) in enumerate(self.data.index.items()):
-            proj_kpca[name] = pd.DataFrame(proj_list[i], index=ind,
-                                                columns=[str(t) for t in range(1,t+1)])
-            proj_kfda[name] = pd.DataFrame(proj_list[i].cumsum(axis=1), index=ind,
-                                                columns=[str(t) for t in range(1,t+1)])
-            proj_kfda[name] /= np.sqrt(n ** 3 * stat.values[:t]
-                                       / (n1 * n2 ))
-        return proj_kfda, proj_kpca 
-                
-                
+            proj_kpca[name] = pd.DataFrame(
+                proj_list[i], index=ind,
+                columns=[str(t) for t in range(1, t+1)]
+            )
+            proj_kfda[name] = pd.DataFrame(
+                proj_list[i].cumsum(axis=1), index=ind,
+                columns=[str(t) for t in range(1, t+1)]
+            )
+            proj_kfda[name] /= np.sqrt(
+                n ** 3 * stat.values[:t] / (n1 * n2)
+            )
+        return proj_kfda, proj_kpca

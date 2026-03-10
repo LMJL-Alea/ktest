@@ -458,6 +458,7 @@ class Ktest(Statistics):
                     "Possible values : 'kfda','mmd'"
 
                 )
+
     def project(self, t=100, center=True):
         """
         Computes the vector of projection of the embeddings on the discriminant
@@ -470,7 +471,7 @@ class Ktest(Statistics):
         ----------
         t : int, optional
             Maximal truncation for projections calculation, the default is 100.
-            
+
         center : bool, optional
             If True (default), the projections are centered with respect to
             the mean embedding.
@@ -478,11 +479,11 @@ class Ktest(Statistics):
         """
         if self.kfda_statistic is None:
             self.test(stat='kfda')
-        (self.kfda_proj, 
-         self.kfda_proj_contrib) = self.kstat.compute_projections(self.kfda_statistic, 
-                                                                  t=t,
-                                                                  center=center)
-                
+        (self.kfda_proj,
+         self.kfda_proj_contrib) = self.kstat.compute_projections(
+             self.kfda_statistic, t=t, center=center
+        )
+
     def plot_density(
         self, t=None, t_max=100, colors=None, labels=None, alpha=.5,
         legend_fontsize=15, font_family='serif'
