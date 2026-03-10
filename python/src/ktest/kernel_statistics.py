@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt, float64
+from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, finfo
 import torch as t
 from torch.linalg import multi_dot, eigh
@@ -776,7 +776,7 @@ class Statistics(object):
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
         if center:
-            centering_mat = eye(n, dtype=float64)
+            centering_mat = eye(n, dtype=self.dtype)
             centering_mat -= ones((n, n)) / n
         proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
                  * matmul(centering_mat, upk)).numpy())
