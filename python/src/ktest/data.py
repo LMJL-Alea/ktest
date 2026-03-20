@@ -63,6 +63,20 @@ class Data(object):
             Floating point number type/precision used for number storage and
             computations. Default is `torch.float64`.
 
+        safe_subsample : bool
+            Implement safe subsampling for Nystrom approximation, i.e. check
+            that not all variables are constant in subsampled data. If not,
+            subsampling is redone for at most `n_subsample_trial` times.
+            Default is `True`.
+
+        n_subsample_trial : integer, optional
+            Number of times to retry subsampling in case all columns
+            have constant values after subsampling. Default is `100`.
+
+        verbose : int | bool, optional
+            Verbosity level, see `ktest.utils.verbosity()` for more details.
+            Default is `0` and no verbosity output.
+
     Attributes
     ----------
         sample_names : 1-dimensional array-like
@@ -95,12 +109,18 @@ class Data(object):
         dtype : torch.dtype
             Floating point number type/precision used for number storage and
             computations. Default is `torch.float64`.
+
+        verbose : int | bool, optional
+            Verbosity level, see `ktest.utils.verbosity()` for more details.
+            Default is `0` and no verbosity output.
+
     """
 
     def __init__(
         self, data, metadata, sample_names=None, nystrom=False,
         n_landmarks=None, landmark_method='kmeans++', random_state=None,
-        dtype=t.float64
+        dtype=t.float64, safe_subsample=True, n_subsample_trial=100,
+        verbose=0
     ):
         # init
         self.data = {}
@@ -110,16 +130,38 @@ class Data(object):
         # dtype
         self.dtype = dtype
 
-        # random number generation
-        if random_state is None:
-            random_state = np.random.default_rng()
-        elif isinstance(random_state, int):
-            random_state = np.random.default_rng(random_state)
-        else:
-            assert isinstance(random_state, np.random.Generator) or \
-                isinstance(random_state, np.random.RandomState)
+        # Nystrom subsampling setup
+        self.verbose = verbose
 
         # process data
+        self._process_data(
+            data, metadata, sample_names, nystrom,
+            n_landmarks, landmark_method, random_state,
+            safe_subsample, n_subsample_trial
+        )
+
+
+    def __str__(self):
+        s = f"\n{self.nvar} features across {self.ntot} observations"
+        s += "\nComparison: "
+        s += f"{self.sample_names[0]} "
+        s += f"({self.nobs[self.sample_names[0]]} observations)"
+        s += f" and {self.sample_names[1]} "
+        s += f"({self.nobs[self.sample_names[1]]} observations)."
+        return s
+
+    def _process_data(
+        self, data, metadata, sample_names, nystrom,
+        n_landmarks, landmark_method, random_state,
+        safe_subsample, n_subsample_trial
+    ):
+        """
+        Process input data when initializing object.
+
+        Note: internal function, see `ktest.data.Data` documentation for
+        input argument description.
+        """
+
         try:
             assert len(data.squeeze().shape) <= 2, \
                 'Data has to be at most 2-dimensional'
@@ -177,38 +219,93 @@ class Data(object):
                         data_n.copy()
                     self.data[n] = t.from_numpy(X).type(self.dtype)
 
-                if nystrom:
-                    n_ = meta_fmt.isin(self.sample_names).sum()
-                    n_landmarks_n = (min(n_landmarks * self.nobs[n] // n_,
-                                         self.nobs[n])
-                                     if n_landmarks is not None
-                                     else self.nobs[n] // 5)
-                    if landmark_method == 'random':
-                        ny_ind = random_state.choice(self.nobs[n],
-                                                     size=n_landmarks_n,
-                                                     replace=False)
-                    if landmark_method == 'kmeans++':
-                        rnd_st = random_state \
-                            if isinstance(
-                                random_state, (np.random.RandomState, int)
-                            ) else None
-                        _, ny_ind = kmeans_plusplus(self.data[n].numpy(),
-                                                    n_clusters=n_landmarks_n,
-                                                    random_state=rnd_st)
-                    self.data[n] = self.data[n][ny_ind]
-                    self.nobs[n] = n_landmarks_n
-                    self.index[n] = self.index[n][ny_ind]
-
         except AttributeError as e:
             print(f'Unknown data type {type(data_n)}')
             raise e
+
+        # total retained observations in selected subsamples
         self.ntot = sum(self.nobs.values())
 
-    def __str__(self):
-        s = f"\n{self.nvar} features across {self.ntot} observations"
-        s += "\nComparison: "
-        s += f"{self.sample_names[0]} "
-        s += f"({self.nobs[self.sample_names[0]]} observations)"
-        s += f" and {self.sample_names[1]} "
-        s += f"({self.nobs[self.sample_names[1]]} observations)."
-        return s
+        # Nystrom
+        if nystrom:
+            self._subsample(
+                n_landmarks, landmark_method, random_state, safe_subsample,
+                n_subsample_trial
+            )
+
+    def _subsample(
+        self, n_landmarks, landmark_method, random_state, safe_subsample,
+        n_subsample_trial
+    ):
+        """
+        Subsampling data for Nystrom approximation.
+
+        Note: internal function, see `ktest.data.Data` documentation for
+        input argument description.
+        """
+        # random number generation
+        if random_state is None:
+            random_state = np.random.default_rng()
+        elif isinstance(random_state, int):
+            random_state = np.random.default_rng(random_state)
+        else:
+            assert isinstance(random_state, np.random.Generator) or \
+                isinstance(random_state, np.random.RandomState)
+            random_state = random_state
+
+        # iterate through samples
+        for n, data_n in self.data.items():
+
+            # number for landmarks in sample
+            n_landmarks_n = (
+                min(
+                    n_landmarks * self.nobs[n] // self.ntot,
+                    self.nobs[n]
+                ) if n_landmarks is not None else self.nobs[n] // 5
+            )
+
+            # check variance in subsample to avoid any constant column
+            # and re-do subsampling if needed
+            for counter in range(n_subsample_trial):
+
+                if landmark_method == 'random':
+                    ny_ind = random_state.choice(
+                        self.nobs[n],
+                        size=n_landmarks_n,
+                        replace=False
+                    )
+                elif landmark_method == 'kmeans++':
+                    rnd_st = random_state \
+                        if isinstance(
+                            random_state, (np.random.RandomState, int)
+                        ) else None
+                    _, ny_ind = kmeans_plusplus(
+                        self.data[n].numpy(),
+                        n_clusters=n_landmarks_n,
+                        random_state=rnd_st
+                    )
+                else:
+                    raise ValueError("unsupported 'landmark_method'")
+
+                # variance check (if required)
+                if (
+                    not safe_subsample or
+                    t.any(t.var(self.data[n][ny_ind], dim=0) > 0)
+                ):
+                    break
+                elif counter == n_subsample_trial - 1:
+                    msg = " ".join([
+                        "Subsampling failed after",
+                        f"{n_subsample_trial} trials.",
+                        "All variables have constant values",
+                        "in at leat one subsample."
+                    ])
+                    raise RuntimeError(msg)
+
+            # save subsamping
+            self.data[n] = self.data[n][ny_ind]
+            self.nobs[n] = n_landmarks_n
+            self.index[n] = self.index[n][ny_ind]
+
+        # update total retained observations in selected subsamples
+        self.ntot = sum(self.nobs.values())
