@@ -10,7 +10,7 @@ def verbosity(msg: str, msg_type: str = "print", verbose: int | bool = 0):
         msg (str): message to print.
         msg_type (str): type of message among `"print"`, `"warning"`.
         verbose (int | bool): verbosity level, `0` means no output,
-            `1` means only print, `>=2` means print and warning.
+            `1` means print only, `>=2` means print and warning.
             Note: `verbose=False` is equivalent to `verbose=0` and
             `verbose=True` is equivalent to `verbose=1`
 
