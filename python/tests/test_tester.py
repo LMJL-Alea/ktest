@@ -9,36 +9,10 @@ import warnings
 
 from ktest.tester import Ktest
 
-
-@pytest.fixture(scope="module")
-def data_shape():
-    """Number of rows and columns in dummy data for tests."""
-    yield (1000, 100)
+from .test_data import data_shape, dummy_data, dummy_zidata
 
 
-@pytest.fixture(scope="module")
-def dummy_data(data_shape):
-    """Generate dummy data for testing (two groups, no difference)"""
-    # generate random data (under H0, no separation)
-    rng = np.random.default_rng()
-    data_array = rng.normal(loc=0, scale=1, size=data_shape)
-
-    # create a data frame from random gaussian data
-    data = pd.DataFrame(
-        data=data_array,
-        columns=[f"col{i+1}" for i in range(data_shape[1])]
-    )
-
-    # create meta data frame indicating two groups
-    meta = pd.Series(
-        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
-    )
-
-    # output
-    yield data, meta
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture
 def dummy_ktest(dummy_data):
     """
     Function to create Ktest object from dummy data for testing using a given
@@ -51,7 +25,7 @@ def dummy_ktest(dummy_data):
             dtype=dtype
         )
         # run kfda test
-        kt.test()
+        kt.test(verbose=0)
         # output
         return kt
     # fixture output
@@ -162,7 +136,7 @@ def test_save_load(dummy_ktest, output_file, assert_equal_ktest):
     assert_equal_ktest(kt, kt_2, atol=1e-9)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def exp_data():
     """Data and metadata from experimental transcriptomic dataset."""
     # data frame
@@ -176,7 +150,7 @@ def exp_data():
     yield data, meta, sample_names
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def kt_data(exp_data):
     """Create Ktest object from dummy data for testing."""
     # init object
@@ -184,7 +158,7 @@ def kt_data(exp_data):
         data=exp_data[0], metadata=exp_data[1], sample_names=exp_data[2]
     )
     # run kfda test
-    kt.test()
+    kt.test(verbose=0)
     # output
     yield kt
 
@@ -203,3 +177,56 @@ def test_num_stability(kt_data, assert_equal_ktest):
         assert_equal_ktest(
             kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic), atol=1e-8
         )
+
+
+@pytest.mark.parametrize("nystrom", [False, True])
+def test_constant_var(dummy_data, data_shape, nystrom):
+    """Testing the case of data with a constant column."""
+
+    # collect input data
+    data, metadata = dummy_data
+
+    # insert one constant column in data
+    data[data.columns[0]].values[:] = 0
+
+    # init object
+    kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+    # run kfda test
+    kt.test(verbose=0)
+
+    # insert constant columns in data (except final one)
+    for col in data.columns[:99]:
+        data[col].values[:] = 0
+
+    # init object
+    kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+    # run kfda test
+    kt.test(verbose=0)
+
+    # insert constant columns in data (all)
+    data[data.columns[99]].values[::2] = 0
+
+    if nystrom:  # not subsampling otherwise and thus no issue
+        err_msg = "Subsampling failed after 100 trials. " + \
+            "All variables have constant values in at leat one subsample."
+        with pytest.raises(RuntimeError) as excinfo:
+            # init object
+            kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+            # run kfda test
+            kt.test(verbose=0)
+        assert str(excinfo.value) == err_msg
+    else:
+        # init object
+        kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+        # run kfda test
+        kt.test(verbose=0)
+
+
+@pytest.mark.parametrize("nystrom", [False, True])
+def test_zi_data(dummy_zidata, data_shape, nystrom):
+    """Testing the case of data with zero-inflation."""
+
+    # init object
+    kt = Ktest(data=dummy_zidata[0], metadata=dummy_zidata[1], nystrom=nystrom)
+    # run kfda test
+    kt.test(verbose=0)

@@ -302,8 +302,6 @@ class Ktest(Statistics):
 
         """
         kstatistics = kstat if kstat is not None else self.kstat
-        if verbose <= 0:
-            warnings.simplefilter("ignore")
         if stat == 'kfda':
             test_res = kstatistics.compute_kfda()
         elif stat == 'mmd':
@@ -351,13 +349,11 @@ class Ktest(Statistics):
         if stat == 'kfda' and not permutation:
             if verbose > 0:
                 print('- Computing asymptotic p-values')
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
-                return pd.Series(
-                    pval, index=self.kfda_statistic.index,
-                    dtype=str(self.dtype).replace('torch.', '')
-                )
+            pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
+            return pd.Series(
+                pval, index=self.kfda_statistic.index,
+                dtype=str(self.dtype).replace('torch.', '')
+            )
         else:
             if verbose > 0:
                 print('- Performing permutations to compute p-values:')
@@ -383,6 +379,7 @@ class Ktest(Statistics):
                         landmark_method=self.landmark_method,
                         random_state=self.rnd_gen
                     )
+
                 kstat_perm = Statistics(
                     data_perm,
                     kernel_function=self.kernel_function,
@@ -393,11 +390,11 @@ class Ktest(Statistics):
                     anchor_basis=self.anchor_basis,
                     eps=self.eps, clip_eigval=self.clip_eigval
                 )
-                if verbose >= 3:
-                    warnings.simplefilter("always")
+
                 perm_stats_res = self.compute_test_statistic(
                     stat=stat, kstat=kstat_perm, verbose=verbose-1
                 )
+
                 if stat == 'kfda':
                     stats_count += perm_stats_res[0].ge(self.kfda_statistic)
                 elif stat == 'mmd':
@@ -430,36 +427,40 @@ class Ktest(Statistics):
             - 3: warnings are printed every time they appear.
 
         """
-        if stat == 'kfda':
-            if verbose > 0:
-                print('- Computing kFDA statistic')
-            self.kfda_statistic, self.kfda_statistic_contrib = \
-                self.compute_test_statistic(verbose=verbose)
-            if not permutation:
-                self.kfda_pval_asymp = self.compute_pvalue(verbose=verbose)
-            else:
-                self.kfda_pval_perm = self.compute_pvalue(
-                    permutation=permutation, n_permutations=n_permutations,
-                    verbose=verbose
+        with warnings.catch_warnings():
+            if verbose < 2:
+                warnings.simplefilter("ignore")
+            elif verbose >= 3:
+                warnings.simplefilter("always")
+
+            if stat == 'kfda':
+                if verbose > 0:
+                    print('- Computing kFDA statistic')
+                self.kfda_statistic, self.kfda_statistic_contrib = \
+                    self.compute_test_statistic(verbose=verbose)
+                if not permutation:
+                    self.kfda_pval_asymp = self.compute_pvalue(verbose=verbose)
+                else:
+                    self.kfda_pval_perm = self.compute_pvalue(
+                        permutation=permutation, n_permutations=n_permutations,
+                        verbose=verbose
+                    )
+            elif stat == 'mmd':
+                if verbose > 0:
+                    print('- Computing MMD statistic')
+                self.mmd_statistic = self.compute_test_statistic(
+                    stat=stat, verbose=verbose
                 )
-        elif stat == 'mmd':
-            if verbose > 0:
-                print('- Computing MMD statistic')
-            self.mmd_statistic = self.compute_test_statistic(
-                stat=stat, verbose=verbose
-            )
-            self.mmd_pval_perm = self.compute_pvalue(
-                stat=stat, verbose=verbose, n_permutations=n_permutations
-            )
-        else:
-            if verbose > 0:
-                print(
+                self.mmd_pval_perm = self.compute_pvalue(
+                    stat=stat, verbose=verbose, n_permutations=n_permutations
+                )
+            else:
+                raise ValueError(
                     f"Statistic '{stat}' not recognized. " +
                     "Possible values : 'kfda','mmd'"
-
                 )
 
-    def project(self, t=100, center=True):
+    def project(self, t=100, center=True, verbose=1):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -477,12 +478,18 @@ class Ktest(Statistics):
             the mean embedding.
 
         """
-        if self.kfda_statistic is None:
-            self.test(stat='kfda')
-        (self.kfda_proj,
-         self.kfda_proj_contrib) = self.kstat.compute_projections(
-             self.kfda_statistic, t=t, center=center
-        )
+        with warnings.catch_warnings():
+            if verbose < 2:
+                warnings.simplefilter("ignore")
+            elif verbose >= 3:
+                warnings.simplefilter("always")
+
+            if self.kfda_statistic is None:
+                self.test(stat='kfda')
+            (self.kfda_proj, self.kfda_proj_contrib) = \
+                self.kstat.compute_projections(
+                    self.kfda_statistic, t=t, center=center
+                )
 
     def plot_density(
         self, t=None, t_max=100, colors=None, labels=None, alpha=.5,
