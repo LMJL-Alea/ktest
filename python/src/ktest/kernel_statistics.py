@@ -743,17 +743,19 @@ class Statistics(object):
         where C is a normalization constant.
 
         Parameters
-            the mean embedding.
-            If True (default), the projections are centered with respect to
-        center : bool, optional
+        ----------
+
+        stat : Pandas.Series
 
         t : int, optional
             Maximal truncation, the default is 100.
 
             kFDA statistics (same as the attribute `kfda_statistic` of class
             Ktest). Required for normalization.
-        stat : Pandas.Series
-        ----------
+
+        center : bool, optional
+            If True (default), the projections are centered with respect to
+            the mean embedding.
 
         Returns
         -------
