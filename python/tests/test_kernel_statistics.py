@@ -259,6 +259,50 @@ class TestStatistics:
         assert kstat_nystrom.sp_anchors is None
         assert kstat_nystrom.ev_anchors is None
 
+    def test_init_nystrom_constant_var(self, dummy_data, data_shape):
+        """Testing the case of data with a constant column."""
+
+        # collect input data
+        data, metadata = dummy_data
+
+        # insert constant column in data
+        data[data.columns[0]].values[:] = 0
+
+        # init data object with nystrom
+        ny_data = Data(
+            data=data,
+            metadata=metadata,
+            sample_names=None,
+            nystrom=True,
+            n_landmarks=None,
+            landmark_method='random',
+            random_state=None,
+            dtype=t.float64
+        )
+
+        # init data object without nystrom
+        base_data = Data(
+            data=data,
+            metadata=metadata,
+            sample_names=None,
+            dtype=t.float64
+        )
+
+        # kernel stat object
+        kstat = Statistics(
+            data=base_data,
+            kernel_function='gauss',
+            bandwidth='median',
+            median_coef=1,
+            data_nystrom=ny_data,
+            n_anchors=None,
+            anchor_basis='w',
+            eps=None, clip_eigval=True
+        )
+
+        # try to compute kfda
+        kstat.compute_kfda()
+
     def test_compute_centering_matrix(self, kstat, kstat_nystrom):
         """Testing centering matrix computation."""
 

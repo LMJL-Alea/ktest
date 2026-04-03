@@ -277,9 +277,6 @@ class TestData:
         )
 
         # insert constant columns in data (all)
-        for col in data.columns[:99]:
-            data[col].values[:] = 0
-
         data[data.columns[99]].values[::2] = 0
 
         # init data object without nystrom
