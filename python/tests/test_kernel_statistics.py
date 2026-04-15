@@ -437,6 +437,42 @@ class TestStatistics:
         assert K.shape == (data_shape[0]//5, new_obs.shape[0])
         t.testing.assert_close(K, expected)
 
+    def test_compute_kmn(self, kstat, kstat_nystrom, data_shape):
+        # Case 0 – not using Nystrom
+        with pytest.raises(
+            AttributeError, match="'NoneType' object has no attribute 'data'"
+        ):
+            Kmn = kstat.compute_kmn()
+
+        # Case 1 – full data, no new_obs
+        # default: new_obs=None
+        Kmn = kstat_nystrom.compute_kmn()
+
+        # Expected Gram matrix using the same gaussian kernel
+        landmarks = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = t.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
+        expected = kstat_nystrom.kernel(landmarks, D)
+
+        assert isinstance(Kmn, t.Tensor)
+        assert Kmn.shape == (landmarks.shape[0], data_shape[0])
+        t.testing.assert_close(Kmn, expected)
+
+
+        # Case 2 – compute K(landmarks, new_obs)
+        # New observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+
+        Kmn = kstat_nystrom.compute_kmn(new_obs=new_obs)
+
+        # Expected Gram matrix using the same gaussian kernel
+        landmarks = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = t.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
+        expected = kstat_nystrom.kernel(landmarks, new_obs)
+
+        assert isinstance(Kmn, t.Tensor)
+        assert Kmn.shape == (landmarks.shape[0], new_obs.shape[0])
+        t.testing.assert_close(Kmn, expected)
+
     def test_compute_centered_gram(self, kstat, kstat_nystrom, data_shape):
         """
         Testing centered Gram matrix computation,

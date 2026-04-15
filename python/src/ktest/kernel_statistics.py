@@ -412,12 +412,21 @@ class Statistics(object):
             K = self.kernel(D, D)
         return K
 
-    def compute_kmn(self):
+    def compute_kmn(self, new_obs=None):
         """
         Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix.
 
+        Parameters
+        ----------
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                landmarks and `new_obs` is computed.
+
         """
-        data = cat([x for x in self.data.data.values()], axis=0)
+        if new_obs is not None:
+            data = new_obs
+        else:
+            data = cat([x for x in self.data.data.values()], axis=0)
         landmarks = cat([x for x in self.data_ny.data.values()], axis=0)
         kmn = self.kernel(landmarks, data)
         return kmn
