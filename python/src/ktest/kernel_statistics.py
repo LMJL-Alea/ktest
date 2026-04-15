@@ -414,7 +414,7 @@ class Statistics(object):
 
     def compute_kmn(self, new_obs=None):
         """
-        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix.
+        Computes an (nxlandmarks+nylandmarks)x(ndata) conversion gram matrix.
 
         Parameters
         ----------
