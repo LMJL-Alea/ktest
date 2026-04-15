@@ -377,7 +377,7 @@ class Statistics(object):
         m_mu2 = 1/n2 * ones(n2, dtype=self.dtype)
         return cat((m_mu1, m_mu2), dim=0)
 
-    def compute_gram(self, landmarks=False):
+    def compute_gram(self, landmarks=False, new_obs=None):
         """
         Computes the Gram matrix of the data in question.
 
@@ -391,6 +391,9 @@ class Statistics(object):
             landmarks : bool, optional
                 False by default. If True, performs the computations on the
                 the Nystrom dataset (landmarks).
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                data and `new_obs` is computed.
 
         Returns
         -------
@@ -403,7 +406,10 @@ class Statistics(object):
             )
         data = self.data if not landmarks else self.data_ny
         D = cat([x for x in data.data.values()], axis=0)
-        K = self.kernel(D, D)
+        if new_obs is not None:
+            K = self.kernel(D, new_obs)
+        else:
+            K = self.kernel(D, D)
         return K
 
     def compute_kmn(self):

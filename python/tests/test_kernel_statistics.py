@@ -381,6 +381,62 @@ class TestStatistics:
 
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
 
+    def test_compute_gram(self, kstat, kstat_nystrom, data_shape):
+        # Case 1 – full data, no landmarks, no new_obs
+        # default: landmarks=False, new_obs=None
+        K = kstat.compute_gram()
+
+        # Expected Gram matrix using the same gaussian kernel
+        D = t.cat(tuple(kstat.data.data.values()), dim=0)
+        expected = kstat.kernel(D, D)
+
+        assert isinstance(K, t.Tensor)
+        assert K.shape == (data_shape[0], data_shape[0])
+        t.testing.assert_close(K, expected)
+
+        # Case 2 – compute K(D, new_obs)
+        # New observations: use one population subsample
+        new_obs = list(kstat.data.data.values())[0]
+
+        K = kstat.compute_gram(new_obs=new_obs)
+
+        # Expected Gram matrix using the same gaussian kernel
+        D = t.cat(tuple(kstat.data.data.values()), dim=0)
+        expected = kstat.kernel(D, new_obs)
+
+        assert isinstance(K, t.Tensor)
+        assert K.shape == (data_shape[0], new_obs.shape[0])
+        t.testing.assert_close(K, expected)
+
+        # Case 3 – landmarks=True and a Nyström dataset is provided
+        K = kstat_nystrom.compute_gram(landmarks=True)
+
+        # Expected Gram matrix using the same gaussian kernel
+        D = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        expected = kstat_nystrom.kernel(D, D)
+
+        assert isinstance(K, t.Tensor)
+        assert K.shape == (data_shape[0]//5, data_shape[0]//5)
+        t.testing.assert_close(K, expected)
+
+        # Case 4 – landmarks=True but a Nyström dataset is not provided
+        with pytest.raises(ValueError, match="Cannot use landmarks"):
+            K = kstat.compute_gram(landmarks=True)
+
+        # Case 5 – compute K(D, new_obs) with landmarks=True
+        # New observations: use one population subsample
+        new_obs = list(kstat.data.data.values())[0]
+
+        K = kstat_nystrom.compute_gram(landmarks=True, new_obs=new_obs)
+
+        # Expected Gram matrix using the same gaussian kernel
+        D = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        expected = kstat_nystrom.kernel(D, new_obs)
+
+        assert isinstance(K, t.Tensor)
+        assert K.shape == (data_shape[0]//5, new_obs.shape[0])
+        t.testing.assert_close(K, expected)
+
     def test_compute_centered_gram(self, kstat, kstat_nystrom, data_shape):
         """
         Testing centered Gram matrix computation,
