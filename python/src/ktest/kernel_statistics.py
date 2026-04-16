@@ -718,7 +718,7 @@ class Statistics(object):
             mmd = dot(mv(K, m), m) ** 2
         return mmd.item()
 
-    def compute_upk(self, t):
+    def compute_upk(self, t, new_obs=None):
         """
         epk is an alias for the product ePK that appears when projecting the
         data on the discriminant axis. This functions computes the
@@ -727,26 +727,35 @@ class Statistics(object):
         warning: some work remains to be done to :
             - normalize the vectors with respect to n_anchors as in pkm
             - separate the different nystrom approaches
+        FIXME: seems to be ok
+
+        Parameters
+        ----------
+            t : int
+                Maximal truncation.
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                landmarks and `new_obs` is computed.
         """
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
         if self.data_ny is not None:
-            Kzx = self.compute_kmn()
+            Kzx = self.compute_kmn(new_obs=new_obs)
             if self.sp_anchors is None and self.ev_anchors is None:
                 self.sp_anchors, self.ev_anchors = \
                     self.compute_nystrom_anchors()
             Lz12 = diag(self.sp_anchors**-(1/2))
-            epk = 1 / self.data_ny.ntot**(1/2) * multi_dot([self.ev.T[:t],
-                                                            Lz12,
-                                                            self.ev_anchors.T,
-                                                            Kzx]).T
+            epk = 1 / self.data_ny.ntot**(1/2) * \
+                multi_dot([
+                    self.ev.T[:t], Lz12, self.ev_anchors.T, Kzx
+                ]).T
         else:
             Pbi = self.compute_centering_matrix()
-            Kx = self.compute_gram()
+            Kx = self.compute_gram(new_obs=new_obs)
             epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
         return epk
 
-    def compute_projections(self, stat, t=100, center=True):
+    def compute_projections(self, stat, t=100, center=True, new_obs=None):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -761,16 +770,19 @@ class Statistics(object):
         ----------
 
         stat : Pandas.Series
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for normalization.
 
         t : int, optional
             Maximal truncation, the default is 100.
 
-            kFDA statistics (same as the attribute `kfda_statistic` of class
-            Ktest). Required for normalization.
-
         center : bool, optional
             If True (default), the projections are centered with respect to
             the mean embedding.
+
+        new_obs : torch.tensor, optional
+            Unused by default. If not None, then the projections for the
+            `new_obs` data are computed.
 
         Returns
         -------
@@ -785,22 +797,45 @@ class Statistics(object):
             cumulated sum of the values in 'proj_kpca'.
 
         """
+        # diagonalize centered Gram matrix if needed
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
+        # fix truncation if needed
         t = min(t, len(self.sp))
+        # compute intermediate quantities
         pkm = self.compute_pkm()
-        upk = self.compute_upk(t)
+        upk = self.compute_upk(t, new_obs=new_obs)
+        # number of observations in training data
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
-        centering_mat = eye(n, dtype=self.dtype)
+        # number of observations in projected data
+        if new_obs is not None:
+            n_obs = new_obs.shape[0]
+        else:
+            n_obs = n
+        # define centering matrix (identity if no centering)
+        centering_mat = eye(n_obs, dtype=self.dtype)
         if center:
-            centering_mat -= ones((n, n), dtype=self.dtype) / n
+            centering_mat -= ones((n_obs, n_obs), dtype=self.dtype) / n_obs
+        # compute projections
         proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
                  * matmul(centering_mat, upk)).numpy())
-        proj_list = [proj[:n1], proj[n1:]]
+        # post-processing
+        # (manage training data vs new obsercations differently)
+        if new_obs is not None:
+            proj_list = [proj]
+        else:
+            proj_list = [proj[:n1], proj[n1:]]
+        # init output
         proj_kfda = {}
         proj_kpca = {}
-        for i, (name, ind) in enumerate(self.data.index.items()):
+        # group index (create a new one for new_obs if needed)
+        if new_obs is not None:
+            index_dict = {"new_obs": pd.Index(range(new_obs.shape[0]))}
+        else:
+            index_dict = self.data.index
+        # iterate through groups
+        for i, (name, ind) in enumerate(index_dict.items()):
             proj_kpca[name] = pd.DataFrame(
                 proj_list[i], index=ind,
                 columns=[str(t) for t in range(1, t+1)]

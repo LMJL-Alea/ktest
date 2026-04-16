@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 import torch as t
 import types
@@ -382,7 +383,7 @@ class TestStatistics:
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
 
     def test_compute_gram(self, kstat, kstat_nystrom, data_shape):
-        # Case 1 – full data, no landmarks, no new_obs
+        # Case 1 - full data, no landmarks, no new_obs
         # default: landmarks=False, new_obs=None
         K = kstat.compute_gram()
 
@@ -394,8 +395,8 @@ class TestStatistics:
         assert K.shape == (data_shape[0], data_shape[0])
         t.testing.assert_close(K, expected)
 
-        # Case 2 – compute K(D, new_obs)
-        # New observations: use one population subsample
+        # Case 2 - compute K(D, new_obs)
+        # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
 
         K = kstat.compute_gram(new_obs=new_obs)
@@ -408,7 +409,7 @@ class TestStatistics:
         assert K.shape == (data_shape[0], new_obs.shape[0])
         t.testing.assert_close(K, expected)
 
-        # Case 3 – landmarks=True and a Nyström dataset is provided
+        # Case 3 - landmarks=True and a Nyström dataset is provided
         K = kstat_nystrom.compute_gram(landmarks=True)
 
         # Expected Gram matrix using the same gaussian kernel
@@ -419,12 +420,12 @@ class TestStatistics:
         assert K.shape == (data_shape[0]//5, data_shape[0]//5)
         t.testing.assert_close(K, expected)
 
-        # Case 4 – landmarks=True but a Nyström dataset is not provided
+        # Case 4 - landmarks=True but a Nyström dataset is not provided
         with pytest.raises(ValueError, match="Cannot use landmarks"):
             K = kstat.compute_gram(landmarks=True)
 
-        # Case 5 – compute K(D, new_obs) with landmarks=True
-        # New observations: use one population subsample
+        # Case 5 - compute K(D, new_obs) with landmarks=True
+        # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
 
         K = kstat_nystrom.compute_gram(landmarks=True, new_obs=new_obs)
@@ -438,13 +439,13 @@ class TestStatistics:
         t.testing.assert_close(K, expected)
 
     def test_compute_kmn(self, kstat, kstat_nystrom, data_shape):
-        # Case 0 – not using Nystrom
+        # Case 0 - not using Nystrom
         with pytest.raises(
             AttributeError, match="'NoneType' object has no attribute 'data'"
         ):
             Kmn = kstat.compute_kmn()
 
-        # Case 1 – full data, no new_obs
+        # Case 1 - full data, no new_obs
         # default: new_obs=None
         Kmn = kstat_nystrom.compute_kmn()
 
@@ -458,8 +459,8 @@ class TestStatistics:
         t.testing.assert_close(Kmn, expected)
 
 
-        # Case 2 – compute K(landmarks, new_obs)
-        # New observations: use one population subsample
+        # Case 2 - compute K(landmarks, new_obs)
+        # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
 
         Kmn = kstat_nystrom.compute_kmn(new_obs=new_obs)
@@ -611,3 +612,133 @@ class TestStatistics:
             exp_ev[:, exp_sp >= 1e-12],
             rtol=0, atol=1e-12
         )
+
+    def test_compute_upk(self, kstat, kstat_nystrom, data_shape):
+        # FIXME: only result format is tested, not result values
+
+        # Case 1 - full data (no Nystrom), no new_obs
+        # default: new_obs=None
+        upk = kstat.compute_upk(t=10)
+
+        assert isinstance(upk, t.Tensor)
+        assert upk.shape == (data_shape[0], 10)
+
+        # Case 2 - providing new obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+
+        upk = kstat.compute_upk(t=10, new_obs=new_obs)
+
+        assert isinstance(upk, t.Tensor)
+        assert upk.shape == (new_obs.shape[0], 10)
+
+        # Case 3 - Nystrom, no new_obs
+        # default: new_obs=None
+        upk = kstat_nystrom.compute_upk(t=10)
+
+        assert isinstance(upk, t.Tensor)
+        assert upk.shape == (data_shape[0], 10)
+
+        # Case 4 - Nystrom, providing new obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+
+        upk = kstat_nystrom.compute_upk(t=10, new_obs=new_obs)
+
+        assert isinstance(upk, t.Tensor)
+        assert upk.shape == (new_obs.shape[0], 10)
+
+    def test_compute_projections(self, kstat, kstat_nystrom):
+        # FIXME: only result format is tested, not result values
+
+        def _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val):
+            """Function to check projection results on the fly."""
+            assert isinstance(proj_kfda, dict)
+            assert len(proj_kfda) == len(n_obs_val)
+            assert isinstance(proj_kpca, dict)
+            assert len(proj_kpca) == len(n_obs_val)
+
+            for proj_kfda_tab, proj_kpca_tab, n_obs in zip(
+                proj_kfda.values(), proj_kpca.values(), n_obs_val
+            ):
+                assert isinstance(proj_kfda_tab, pd.DataFrame)
+                assert proj_kfda_tab.shape == (n_obs, t_val)
+                assert isinstance(proj_kpca_tab, pd.DataFrame)
+                assert proj_kpca_tab.shape == (n_obs, t_val)
+
+        # Case 1 - full data (no Nystrom), no centering, no new_obs
+        # default: new_obs=None
+        stat_val, _ = kstat.compute_kfda()
+        proj_kfda, proj_kpca = kstat.compute_projections(
+            stat=stat_val, t=10, center=False
+        )
+        n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 2 - full data (no Nystrom), centering, no new_obs
+        # default: new_obs=None
+        stat_val, _ = kstat.compute_kfda()
+        proj_kfda, proj_kpca = kstat.compute_projections(
+            stat=stat_val, t=10, center=True
+        )
+        n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 3 - full data (no Nystrom), no centering, providing new_obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+        stat_val, _ = kstat.compute_kfda()
+        proj_kfda, proj_kpca = kstat.compute_projections(
+            stat=stat_val, t=10, center=False, new_obs=new_obs
+        )
+        n_obs_val = [new_obs.shape[0]]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 4 - full data (no Nystrom), centering, providing new_obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+        stat_val, _ = kstat.compute_kfda()
+        proj_kfda, proj_kpca = kstat.compute_projections(
+            stat=stat_val, t=10, center=True, new_obs=new_obs
+        )
+        n_obs_val = [new_obs.shape[0]]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 5 - full data (no Nystrom), no centering, no new_obs
+        # default: new_obs=None
+        stat_val, _ = kstat_nystrom.compute_kfda()
+        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+            stat=stat_val, t=10, center=False
+        )
+        n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 6 - full data (no Nystrom), centering, no new_obs
+        # default: new_obs=None
+        stat_val, _ = kstat_nystrom.compute_kfda()
+        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+            stat=stat_val, t=10, center=True
+        )
+        n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 7 - full data (no Nystrom), no centering, providing new_obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+        stat_val, _ = kstat_nystrom.compute_kfda()
+        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+            stat=stat_val, t=10, center=False, new_obs=new_obs
+        )
+        n_obs_val = [new_obs.shape[0]]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+
+        # Case 8 - full data (no Nystrom), centering, providing new_obs
+        # new observations: use one population subsample
+        new_obs = list(kstat_nystrom.data.data.values())[0]
+        stat_val, _ = kstat_nystrom.compute_kfda()
+        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+            stat=stat_val, t=10, center=True, new_obs=new_obs
+        )
+        n_obs_val = [new_obs.shape[0]]
+        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+

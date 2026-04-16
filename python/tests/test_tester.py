@@ -34,7 +34,7 @@ def dummy_ktest(dummy_data):
 
 @pytest.mark.parametrize("nystrom", [False, True])
 @pytest.mark.parametrize("dtype", [t.float64, t.float32])
-def test_Ktest(dummy_ktest, dummy_data, nystrom, dtype):
+def test_ktest(dummy_ktest, dummy_data, nystrom, dtype):
     """Testing Ktest class."""
     # create ktest objects
     kt = dummy_ktest(nystrom, dtype)
@@ -230,3 +230,148 @@ def test_zi_data(dummy_zidata, data_shape, nystrom):
     kt = Ktest(data=dummy_zidata[0], metadata=dummy_zidata[1], nystrom=nystrom)
     # run kfda test
     kt.test(verbose=0)
+
+
+def test_ktest_project(dummy_ktest):
+    """Testing projection in Ktest class."""
+    # create ktest objects
+    kt = dummy_ktest()
+
+    # Case 1 - centering, no new obs
+    proj_kfda, proj_kpca = kt.project(
+        t=10, center=True, verbose=1, new_obs=None
+    )
+
+    # expected results
+    stat_val, _ = kt.kstat.compute_kfda()
+    exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
+        stat=stat_val, t=10, center=True
+    )
+
+    # check
+    assert isinstance(proj_kfda, dict)
+    assert len(proj_kfda) == len(exp_proj_kfda)
+    assert proj_kfda.keys() == exp_proj_kfda.keys()
+    assert isinstance(proj_kpca, dict)
+    assert len(proj_kpca) == len(exp_proj_kpca)
+    assert proj_kpca.keys() == exp_proj_kpca.keys()
+
+    for (
+        proj_kfda_tab, exp_proj_kfda_tab,
+        proj_kpca_tab, exp_proj_kpca_tab,
+        data_tab
+    ) in zip(
+        proj_kfda.values(), exp_proj_kfda.values(),
+        proj_kpca.values(), exp_proj_kpca.values(),
+        kt.data.data.values()
+    ):
+        assert isinstance(proj_kfda_tab, pd.DataFrame)
+        assert proj_kfda_tab.shape == (data_tab.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kfda_tab, exp_proj_kfda_tab)
+        assert isinstance(proj_kpca_tab, pd.DataFrame)
+        assert proj_kpca_tab.shape == (data_tab.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kpca_tab, exp_proj_kpca_tab)
+
+    # Case 2 - not centering, no new obs
+    proj_kfda, proj_kpca = kt.project(
+        t=10, center=False, verbose=1, new_obs=None
+    )
+
+    # expected results
+    stat_val, _ = kt.kstat.compute_kfda()
+    exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
+        stat=stat_val, t=10, center=False
+    )
+
+    # check
+    assert isinstance(proj_kfda, dict)
+    assert len(proj_kfda) == len(exp_proj_kfda)
+    assert proj_kfda.keys() == exp_proj_kfda.keys()
+    assert isinstance(proj_kpca, dict)
+    assert len(proj_kpca) == len(exp_proj_kpca)
+    assert proj_kpca.keys() == exp_proj_kpca.keys()
+
+    for (
+        proj_kfda_tab, exp_proj_kfda_tab,
+        proj_kpca_tab, exp_proj_kpca_tab,
+        data_tab
+    ) in zip(
+        proj_kfda.values(), exp_proj_kfda.values(),
+        proj_kpca.values(), exp_proj_kpca.values(),
+        kt.data.data.values()
+    ):
+        assert isinstance(proj_kfda_tab, pd.DataFrame)
+        assert proj_kfda_tab.shape == (data_tab.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kfda_tab, exp_proj_kfda_tab)
+        assert isinstance(proj_kpca_tab, pd.DataFrame)
+        assert proj_kpca_tab.shape == (data_tab.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kpca_tab, exp_proj_kpca_tab)
+
+    # Case 3 - centering, providing new obs
+    new_obs = list(kt.kstat.data.data.values())[0]
+    proj_kfda, proj_kpca = kt.project(
+        t=10, center=True, verbose=1, new_obs=new_obs
+    )
+
+    # expected results
+    stat_val, _ = kt.kstat.compute_kfda()
+    exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
+        stat=stat_val, t=10, center=True, new_obs=new_obs
+    )
+
+    # check
+    assert isinstance(proj_kfda, dict)
+    assert len(proj_kfda) == len(exp_proj_kfda)
+    assert proj_kfda.keys() == exp_proj_kfda.keys()
+    assert isinstance(proj_kpca, dict)
+    assert len(proj_kpca) == len(exp_proj_kpca)
+    assert proj_kpca.keys() == exp_proj_kpca.keys()
+
+    for (
+        proj_kfda_tab, exp_proj_kfda_tab,
+        proj_kpca_tab, exp_proj_kpca_tab
+    ) in zip(
+        proj_kfda.values(), exp_proj_kfda.values(),
+        proj_kpca.values(), exp_proj_kpca.values()
+    ):
+        assert isinstance(proj_kfda_tab, pd.DataFrame)
+        assert proj_kfda_tab.shape == (new_obs.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kfda_tab, exp_proj_kfda_tab)
+        assert isinstance(proj_kpca_tab, pd.DataFrame)
+        assert proj_kpca_tab.shape == (new_obs.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kpca_tab, exp_proj_kpca_tab)
+
+    # Case 4 - not centering, providing new obs
+    new_obs = list(kt.kstat.data.data.values())[0]
+    proj_kfda, proj_kpca = kt.project(
+        t=10, center=False, verbose=1, new_obs=new_obs
+    )
+
+    # expected results
+    stat_val, _ = kt.kstat.compute_kfda()
+    exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
+        stat=stat_val, t=10, center=False, new_obs=new_obs
+    )
+
+    # check
+    assert isinstance(proj_kfda, dict)
+    assert len(proj_kfda) == len(exp_proj_kfda)
+    assert proj_kfda.keys() == exp_proj_kfda.keys()
+    assert isinstance(proj_kpca, dict)
+    assert len(proj_kpca) == len(exp_proj_kpca)
+    assert proj_kpca.keys() == exp_proj_kpca.keys()
+
+    for (
+        proj_kfda_tab, exp_proj_kfda_tab,
+        proj_kpca_tab, exp_proj_kpca_tab
+    ) in zip(
+        proj_kfda.values(), exp_proj_kfda.values(),
+        proj_kpca.values(), exp_proj_kpca.values()
+    ):
+        assert isinstance(proj_kfda_tab, pd.DataFrame)
+        assert proj_kfda_tab.shape == (new_obs.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kfda_tab, exp_proj_kfda_tab)
+        assert isinstance(proj_kpca_tab, pd.DataFrame)
+        assert proj_kpca_tab.shape == (new_obs.shape[0], 10)
+        pd.testing.assert_frame_equal(proj_kpca_tab, exp_proj_kpca_tab)
+

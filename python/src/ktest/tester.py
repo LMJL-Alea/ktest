@@ -460,7 +460,7 @@ class Ktest(Statistics):
                     "Possible values : 'kfda','mmd'"
                 )
 
-    def project(self, t=100, center=True, verbose=1):
+    def project(self, t=100, center=True, verbose=1, new_obs=None):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -477,6 +477,21 @@ class Ktest(Statistics):
             If True (default), the projections are centered with respect to
             the mean embedding.
 
+        new_obs : torch.tensor, optional
+            Unused by default. If not None, then the projections for the
+            `new_obs` data are computed.
+
+        Returns
+        -------
+
+        proj_kfda : pandas.DataFrame
+            Projections associated with every observation (rows) on every
+            eigendirection (columns).
+
+        proj_kpca : pandas.DataFrame
+            Contributions of each eigendirection (columns) to projections
+            associated with every observation (rows). 'proj_kfda' contains the
+            cumulated sum of the values in 'proj_kpca'.
         """
         with warnings.catch_warnings():
             if verbose < 2:
@@ -486,10 +501,19 @@ class Ktest(Statistics):
 
             if self.kfda_statistic is None:
                 self.test(stat='kfda')
-            (self.kfda_proj, self.kfda_proj_contrib) = \
+
+            # compute projections
+            kfda_proj, kfda_proj_contrib = \
                 self.kstat.compute_projections(
-                    self.kfda_statistic, t=t, center=center
+                    self.kfda_statistic, t=t, center=center, new_obs=new_obs
                 )
+
+            # record projections only when projecting training data
+            self.kfda_proj = kfda_proj
+            self.kfda_proj_contrib = kfda_proj_contrib
+
+            # output
+            return kfda_proj, kfda_proj_contrib
 
     def plot_density(
         self, t=None, t_max=100, colors=None, labels=None, alpha=.5,
