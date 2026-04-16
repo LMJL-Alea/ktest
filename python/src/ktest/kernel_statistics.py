@@ -792,9 +792,9 @@ class Statistics(object):
         upk = self.compute_upk(t)
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
+        centering_mat = eye(n, dtype=self.dtype)
         if center:
-            centering_mat = eye(n, dtype=self.dtype)
-            centering_mat -= ones((n, n)) / n
+            centering_mat -= ones((n, n), dtype=self.dtype) / n
         proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
                  * matmul(centering_mat, upk)).numpy())
         proj_list = [proj[:n1], proj[n1:]]
