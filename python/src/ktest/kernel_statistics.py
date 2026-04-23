@@ -858,7 +858,7 @@ class Statistics(object):
             )
         return proj_kfda, proj_kpca
 
-    def kfda_loss(self, t=100, new_obs=None):
+    def kfda_loss(self, t=100, new_obs=None, stat=None):
         """
         Compute the two compartments (one for each group) of the kFDA loss
         function associated to the prediction for each observations (either in
@@ -878,6 +878,12 @@ class Statistics(object):
             Unused by default. If not None, then the loss function for the
             `new_obs` data are computed.
 
+        stat : Pandas.Series, optional
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for projection normalization. Can be provided as
+            input argument to avoid re-computing it. If `None` (default), then
+            the kFDA statistics is re-computed.
+
         Returns
         -------
 
@@ -895,7 +901,8 @@ class Statistics(object):
         """
 
         # get kFDA stat Value
-        stat, _ = self.compute_kfda()
+        if stat is None:
+            stat, _ = self.compute_kfda()
 
         # compute kfda projection for training data
         proj_kfda, _ = self.compute_projections(
@@ -937,7 +944,7 @@ class Statistics(object):
         # output
         return distance_group1, distance_group2
 
-    def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5):
+    def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5, stat=None):
         """
         Compute prediction for each observations according to kFDA, i.e.
         assign each observations to one of the two groups depending on
@@ -960,6 +967,12 @@ class Statistics(object):
             predicting only second group. Default value is `0.5` and no bias is
             introduced. Useful for ROC curve and AUC computations.
             If Iterable, the prediction is computed for each threshold value.
+
+        stat : Pandas.Series, optional
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for projection normalization. Can be provided as
+            input argument to avoid re-computing it. If `None` (default), then
+            the kFDA statistics is re-computed.
 
         Returns
         -------
@@ -996,7 +1009,7 @@ class Statistics(object):
                 raise ValueError(msg)
 
         # compute loss function associated to kFDA prediction
-        distance_group1, distance_group2 = self.kfda_loss(t, new_obs)
+        distance_group1, distance_group2 = self.kfda_loss(t, new_obs, stat)
 
         # init output (list of dictionaries)
         pred = []

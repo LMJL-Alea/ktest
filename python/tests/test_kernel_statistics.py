@@ -757,9 +757,31 @@ class TestStatistics(object):
     ):
         """Testing kFDA prediction computation."""
 
-        # Case 1 - full data (no Nystrom), no new_obs
+        # Case 1a - full data (no Nystrom), no new_obs
         # default: new_obs=None
         dist_g1, dist_g2 = kstat.kfda_loss(t=10)
+
+        assert isinstance(dist_g1, dict)
+        assert isinstance(dist_g2, dict)
+        assert dist_g1.keys() == kstat.data.data.keys()
+        assert dist_g2.keys() == kstat.data.data.keys()
+
+        for group in kstat.data.data.keys():
+            n_obs = kstat.data.data[group].shape[0]
+
+            assert isinstance(dist_g1[group], to.Tensor)
+            assert isinstance(dist_g2[group], to.Tensor)
+
+            assert list(dist_g1[group].shape) == [n_obs, 10]
+            assert list(dist_g2[group].shape) == [n_obs, 10]
+
+            assert np.issubdtype(dist_g1[group].numpy().dtype, np.floating)
+            assert np.issubdtype(dist_g2[group].numpy().dtype, np.floating)
+
+        # Case 1b - full data (no Nystrom), no new_obs, providing stat value
+        # default: new_obs=None
+        stat_val, _ = kstat.compute_kfda()
+        dist_g1, dist_g2 = kstat.kfda_loss(t=10, stat=stat_val)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
