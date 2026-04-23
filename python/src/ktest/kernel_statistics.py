@@ -1,10 +1,10 @@
+import warnings
 import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, finfo
-import torch as t
+import torch as to
 from torch.linalg import multi_dot, eigh
-import warnings
 
 
 def distances(x, y=None):
@@ -495,13 +495,13 @@ class Statistics(object):
                         multi_dot([
                             Kmn[:, :sample_size[0]],
                             Kmn[:, :sample_size[0]].T - 1/sample_size[0] *
-                            t.sum(Kmn[:, :sample_size[0]], dim=1)
+                            to.sum(Kmn[:, :sample_size[0]], dim=1)
                             # use pytorch broadcasting
                         ]) +
                         multi_dot([
                             Kmn[:, -sample_size[1]:],
                             Kmn[:, -sample_size[1]:].T - 1/sample_size[1] *
-                            t.sum(Kmn[:, -sample_size[1]:], dim=1)
+                            to.sum(Kmn[:, -sample_size[1]:], dim=1)
                             # use pytorch broadcasting
                         ]),
                         Pm,
