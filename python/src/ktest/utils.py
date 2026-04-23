@@ -1,5 +1,7 @@
 from numbers import Number
 import warnings
+import numpy as np
+import torch as to
 
 
 def verbosity(msg: str, msg_type: str = "print", verbose: int | bool = 0):
@@ -33,3 +35,36 @@ def verbosity(msg: str, msg_type: str = "print", verbose: int | bool = 0):
             print(msg)
         elif msg_type == "warning":
             warnings.warn(msg, UserWarning)
+
+
+def pred_threshold_fun(
+    x: float,
+    left_val: float | np.ndarray | to.Tensor,
+    right_val: float | np.ndarray | to.Tensor
+):
+    """
+    Define a piecewise linear function that fit the following points:
+    [0, -left_val], [1/2, 0] and [1, right_val] to compute the prediction
+    bias in kFDA.
+
+    x -> y = 2*left_val*x - left_val if x < 1/2
+         y = 2*right_val*x - right_val if x >= 1/2
+
+    Note: if array-like object, `left_val` and `right_val` should have the
+    same shape.
+
+    Input:
+        x (float): input number between 0 and 1.
+        left_val (float | np.ndarray | t.Tensor): positive number or
+            array of positive numbers corresponding to the y-axis value
+            for x = 0.
+        right_val (float | np.ndarray | t.Tensor): positive number or
+            array of positive numbers corresponding to the y-axis value
+            for x = 1.
+
+    Output: result value or array of result values when the piecewise linear
+        function is applied to input x.
+    """
+
+    return (x < 1/2) * (2 * left_val * x - left_val) + \
+        (x >= 1/2) * (2 * right_val * x - right_val)
