@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+from numbers import Real
 import warnings
 import numpy as np
 import pandas as pd
@@ -5,6 +7,8 @@ from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, finfo
 import torch as to
 from torch.linalg import multi_dot, eigh
+
+from .utils import pred_threshold_fun
 
 
 def distances(x, y=None):
@@ -853,3 +857,188 @@ class Statistics(object):
                 n ** 3 * stat.values[:t] / (n1 * n2)
             )
         return proj_kfda, proj_kpca
+
+    def kfda_loss(self, t=100, new_obs=None):
+        """
+        Compute the two compartments (one for each group) of the kFDA loss
+        function associated to the prediction for each observations (either in
+        training data or for provided new observations) depending on kFDA axis
+        projection.
+
+        The loss is the difference between the distance to each group mean
+        embedding. The function computes each element of this difference.
+
+        Parameters
+        ----------
+
+        t: int, optional
+            Maximal truncation, the default is 100.
+
+        new_obs: torch.tensor, optional
+            Unused by default. If not None, then the loss function for the
+            `new_obs` data are computed.
+
+        Returns
+        -------
+
+        distance_group1: dict
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 1 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+
+        distance_group2: dict
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 2 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+        """
+
+        # get kFDA stat Value
+        stat, _ = self.compute_kfda()
+
+        # compute kfda projection for training data
+        proj_kfda, _ = self.compute_projections(
+            stat, t, center=False, new_obs=None
+        )
+
+        # compute mean embedding for training data (in the two groups)
+        mean_embed = []
+        for group in proj_kfda.keys():
+            mean_embed.append(proj_kfda[group].mean(axis=0))
+        mean_embed = pd.DataFrame(mean_embed)
+        # cast back to torch object
+        mean_embed = to.from_numpy(mean_embed.values)
+
+        # if new observation, compute corresponding projection
+        if new_obs is not None:
+            proj_kfda, _ = self.compute_projections(
+                stat, t, center=False, new_obs=new_obs
+            )
+
+        # init output
+        distance_group1 = {}
+        distance_group2 = {}
+
+        # compute loss function compartments for each observation set
+        # iterate through group (or new obs)
+        for i, (group, proj_tab) in enumerate(proj_kfda.items()):
+
+            # cast back to torch object
+            proj_tab = to.from_numpy(proj_tab.values)
+
+            # distance to each group
+            distance_g1_val = to.abs(proj_tab - mean_embed[0,:])  # group 1
+            distance_g2_val = to.abs(proj_tab - mean_embed[1,:])  # group 2
+
+            distance_group1[group] = distance_g1_val
+            distance_group2[group] = distance_g2_val
+
+        # output
+        return distance_group1, distance_group2
+
+    def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5):
+        """
+        Compute prediction for each observations according to kFDA, i.e.
+        assign each observations to one of the two groups depending on
+        kFDA axis projection.
+
+        Parameters
+        ----------
+
+        stat : Pandas.Series
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for normalization.
+
+        t : int, optional
+            Maximal truncation, the default is 100.
+
+        pred_threshold : float or Iterable, optional
+            Number (or Iterable containing numbers) between `0` an 1 to bias
+            prediction towards first group or second group (in appearence order
+            in the data). `0` means predicting only first group and `1`
+            predicting only second group. Default value is `0.5` and no bias is
+            introduced. Useful for ROC curve and AUC computations.
+            If Iterable, the prediction is computed for each threshold value.
+
+        Returns
+        -------
+
+        pred: dict or list of dict
+            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
+            kFDA predictions for each observation and increasing truncation,
+            either for each group in the training data or for the new
+            observations. If `pred_threshold` input argument is an Iterable,
+            then `pred` is a list corresponding to prediction dictionaries for
+            each element in `pred_threshold`.
+
+        loss: dict or list of dict
+            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
+            kFDA loss function values for each observation and increasing
+            truncation, either for each group in the training data or for the
+            new observations. If `pred_threshold` input argument is an
+            Iterable, then `pred` is a list corresponding to prediction
+            dictionaries for each element in `pred_threshold`.
+        """
+
+        # check threshold input and convert to list if scalar
+        msg = "'pred_threshold' should be a number or an iterable " + \
+            "containing numbers between 0 and 1"
+        if not isinstance(pred_threshold, (Real, Iterable)):
+            raise TypeError(msg)
+        if not isinstance(pred_threshold, Iterable):
+            pred_threshold = [pred_threshold]
+            if not all(
+                isinstance(item, Real) and
+                item >= 0 and item <= 1
+                for item in pred_threshold
+            ):
+                raise ValueError(msg)
+
+        # compute loss function associated to kFDA prediction
+        distance_group1, distance_group2 = self.kfda_loss(t, new_obs)
+
+        # init output (list of dictionaries)
+        pred = []
+        loss = []
+
+        # iterate through threshold value
+        for thres_val in pred_threshold:
+
+            # init intermediate results
+            pred_inter = {}
+            loss_inter = {}
+
+            # compute prediction for each observation set
+            # iterate through group (or new obs)
+            for i, (group, dist_g1, dist_g2) in enumerate(zip(
+                distance_group1.keys(),
+                distance_group1.values(),
+                distance_group2.values()
+            )):
+
+                # prediction loss
+                loss_val = dist_g1 - dist_g2 - \
+                    pred_threshold_fun(thres_val, dist_g2, dist_g1)
+                # loss > 0 ?
+                # loss < 0 -> group 1
+                # loss > 0 -> group 2
+
+                # convert loss to group name prediction
+                group_name = np.array(list(self.data.index.keys()))
+                pred_val = group_name[(1 - (loss_val < 0).int()).numpy()]
+
+                # store prediction and loss for current set of observations
+                pred_inter[group] = pred_val
+                loss_inter[group] = loss_val.numpy()
+
+            # store results
+            pred.append(pred_inter)
+            loss.append(loss_inter)
+
+        if len(pred_threshold) == 1:
+            pred = pred[0]
+            loss = loss[0]
+
+        # output
+        return pred, loss
