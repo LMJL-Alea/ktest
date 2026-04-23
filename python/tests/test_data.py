@@ -36,6 +36,36 @@ def dummy_data(data_shape):
 
 
 @pytest.fixture
+def dummy_separated_data(data_shape):
+    """Generate dummy data for testing (two groups, significant difference)"""
+    # generate random data with different mean in different the 2 groups
+    # for 10 features, and only noise in other features
+    rng = np.random.default_rng(42)
+    loc = np.hstack([
+        np.tile(
+            np.array([-2, 2])[np.arange(data_shape[0]) % 2][:, np.newaxis],
+            (1, 10)
+        ) + rng.normal(loc=0, scale=1, size=[data_shape[0], 10]),
+        np.zeros([data_shape[0], data_shape[1] - 10], dtype=np.float64)
+    ])
+    data_array = rng.normal(loc=loc, scale=1, size=data_shape)
+
+    # create a data frame from random gaussian data
+    data = pd.DataFrame(
+        data=data_array,
+        columns=[f"col{i+1}" for i in range(data_shape[1])]
+    )
+
+    # create meta data frame indicating two groups
+    meta = pd.Series(
+        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
+    )
+
+    # output
+    yield data, meta
+
+
+@pytest.fixture
 def dummy_zidata(data_shape):
     """
     Generate dummy zero-inflated data for testing (two groups, no difference).
@@ -92,9 +122,40 @@ def ktest_data_nystrom(dummy_data):
     yield ny_data
 
 
+@pytest.fixture
+def ktest_separated_data(dummy_separated_data):
+    """Convert pandas array to ktest `Data` type."""
+    data = Data(
+        data=dummy_separated_data[0],
+        metadata=dummy_separated_data[1],
+        sample_names=None,
+        nystrom=False,
+        dtype=t.float64
+    )
+
+    yield data
+
+
+@pytest.fixture
+def ktest_separated_data_nystrom(dummy_separated_data):
+    """Convert pandas array to ktest `Data` type."""
+    data = Data(
+        data=dummy_separated_data[0],
+        metadata=dummy_separated_data[1],
+        sample_names=None,
+        nystrom=True,
+        n_landmarks=None,
+        landmark_method='random',
+        random_state=None,
+        dtype=t.float64
+    )
+
+    yield data
+
+
 def _check_ktest_data_object(
-        data_obj, data_tab, metadata_tab, data_tab_shape, nystrom=False
-    ):
+    data_obj, data_tab, metadata_tab, data_tab_shape, nystrom=False
+):
     """
     Function to check a ktest data object with or without Nystrom
     approximation.
