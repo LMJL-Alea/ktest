@@ -813,13 +813,18 @@ class Statistics(object):
             n_obs = new_obs.shape[0]
         else:
             n_obs = n
-        # define centering matrix (identity if no centering)
-        centering_mat = eye(n_obs, dtype=self.dtype)
-        if center:
-            centering_mat -= ones((n_obs, n_obs), dtype=self.dtype) / n_obs
         # compute projections
-        proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
-                 * matmul(centering_mat, upk)).numpy())
+        if center:
+            # define centering matrix (identity if no centering)
+            centering_mat = eye(n_obs, dtype=self.dtype) \
+                - ones((n_obs, n_obs), dtype=self.dtype) / n_obs
+            # project
+            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+                    * matmul(centering_mat, upk)).numpy()
+        else:
+            # project
+            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+                    * upk).numpy()
         # post-processing
         # (manage training data vs new obsercations differently)
         if new_obs is not None:
