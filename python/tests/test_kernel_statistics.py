@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-import torch as t
+import torch as to
 import types
 from scipy.linalg import block_diag
 
@@ -12,7 +12,7 @@ from .test_data import data_shape, dummy_data, ktest_data, ktest_data_nystrom
 
 
 def assert_eigenvectors(
-    a: np.ndarray | t.Tensor, b: np.ndarray | t.Tensor,
+    a: np.ndarray | to.Tensor, b: np.ndarray | to.Tensor,
     rtol: float = 0, atol: float = 1e-11
 ):
     """
@@ -25,15 +25,15 @@ def assert_eigenvectors(
 
     # check type
     assert isinstance(a, np.ndarray) and isinstance(b, np.ndarray) or \
-        isinstance(a, t.Tensor) and isinstance(b, t.Tensor)
+        isinstance(a, to.Tensor) and isinstance(b, to.Tensor)
 
     # check dimension
     assert a.shape == b.shape
 
     # setup required functions
-    einsum_fun = np.einsum if isinstance(a, np.ndarray) else t.einsum
+    einsum_fun = np.einsum if isinstance(a, np.ndarray) else to.einsum
 
-    abs_fun = np.abs if isinstance(a, np.ndarray) else t.abs
+    abs_fun = np.abs if isinstance(a, np.ndarray) else to.abs
 
     def assert_eigendecomp(x):
         """Check that a vector is equal to a vector of 1 in absolute value."""
@@ -41,8 +41,8 @@ def assert_eigenvectors(
             np.testing.assert_allclose(
                 x, np.ones(x.shape, dtype=x.dtype), atol=atol, rtol=rtol
             ) if isinstance(a, np.ndarray) else \
-            t.testing.assert_close(
-                x, t.ones(x.shape, dtype=x.dtype), atol=atol, rtol=rtol
+            to.testing.assert_close(
+                x, to.ones(x.shape, dtype=x.dtype), atol=atol, rtol=rtol
             )
 
     # compute column-wise scalar product
@@ -56,13 +56,13 @@ def test_assert_eigenvectors(dummy_data):
     """Test function to compare eigen vectors."""
 
     # get data
-    data_tensor = t.from_numpy(dummy_data[0].values)
+    data_tensor = to.from_numpy(dummy_data[0].values)
 
     # compute a symmetric matrix to decompose
-    sym_matrix = t.matmul(data_tensor, data_tensor.T)
+    sym_matrix = to.matmul(data_tensor, data_tensor.T)
 
     # compute eigen decomposition with torch
-    sp1, ev1 = t.linalg.eigh(sym_matrix)
+    sp1, ev1 = to.linalg.eigh(sym_matrix)
 
     # compute eigen decomposition with numpy
     sp2, ev2 = np.linalg.eigh(sym_matrix.numpy())
@@ -75,7 +75,7 @@ def test_assert_eigenvectors(dummy_data):
     # torch input
     assert_eigenvectors(
         ev1[:, sp1 >= 1e-12],
-        t.from_numpy(ev2[:, sp2 >= 1e-12]),
+        to.from_numpy(ev2[:, sp2 >= 1e-12]),
         rtol=0, atol=1e-11
     )
 
@@ -122,24 +122,24 @@ def kstat_nystrom(ktest_data, ktest_data_nystrom):
     yield kstat
 
 
-class TestStatistics:
+class TestStatistics(object):
     """Implement unit tests for Statistics class."""
 
     def test_ordered_eigsy(self, dummy_data):
         """Test eigen decomposition"""
         # get data
-        data_tensor = t.from_numpy(dummy_data[0].values)
+        data_tensor = to.from_numpy(dummy_data[0].values)
 
         # compute a symmetric matrix to decompose
-        sym_matrix = t.matmul(data_tensor, data_tensor.T)
+        sym_matrix = to.matmul(data_tensor, data_tensor.T)
 
         # compute eigen decomposition (without clipping)
         sp, ev = Statistics.ordered_eigsy(sym_matrix, eps=None, clip=False)
 
         # check output
-        assert isinstance(sp, t.Tensor)
+        assert isinstance(sp, to.Tensor)
         assert list(sp.shape) == [sym_matrix.shape[0]]
-        assert isinstance(ev, t.Tensor)
+        assert isinstance(ev, to.Tensor)
         assert list(ev.shape) == [sym_matrix.shape[0], sym_matrix.shape[0]]
 
         # compute eigen decomposition with numpy to compare
@@ -168,9 +168,9 @@ class TestStatistics:
             sp, ev = Statistics.ordered_eigsy(sym_matrix, eps=None, clip=True)
 
         # check output
-        assert isinstance(sp, t.Tensor)
+        assert isinstance(sp, to.Tensor)
         assert list(sp.shape) < [sym_matrix.shape[0]]
-        assert isinstance(ev, t.Tensor)
+        assert isinstance(ev, to.Tensor)
         assert list(ev.shape) == [sym_matrix.shape[0], sp.shape[0]]
 
         # check eigen values
@@ -191,9 +191,9 @@ class TestStatistics:
             sp, ev = Statistics.ordered_eigsy(sym_matrix, eps=1e-12, clip=True)
 
         # check output
-        assert isinstance(sp, t.Tensor)
+        assert isinstance(sp, to.Tensor)
         assert list(sp.shape) < [sym_matrix.shape[0]]
-        assert isinstance(ev, t.Tensor)
+        assert isinstance(ev, to.Tensor)
         assert list(ev.shape) == [sym_matrix.shape[0], sp.shape[0]]
 
         # check eigen values
@@ -214,7 +214,7 @@ class TestStatistics:
         # no Nystrom
         assert isinstance(kstat.data, Data)
         assert kstat.data_ny is None
-        assert kstat.dtype == t.float64
+        assert kstat.dtype == to.float64
         assert kstat.eps is None or isinstance(kstat.eps, float)
         assert isinstance(kstat.clip_eigval, bool) and kstat.clip_eigval
         assert kstat.n_anchors is None
@@ -227,7 +227,7 @@ class TestStatistics:
         assert isinstance(kstat.kernel, types.FunctionType)
         assert isinstance(kstat.computed_bandwidth, t.Tensor) and \
             len(kstat.computed_bandwidth.shape) == 0 and \
-            kstat.computed_bandwidth.dtype == t.float64
+            kstat.computed_bandwidth.dtype == to.float64
         assert kstat.sp is None
         assert kstat.ev is None
         assert kstat.sp_anchors is None
@@ -236,7 +236,7 @@ class TestStatistics:
         # Nystrom
         assert isinstance(kstat_nystrom.data, Data)
         assert isinstance(kstat_nystrom.data_ny, Data)
-        assert kstat_nystrom.dtype == t.float64
+        assert kstat_nystrom.dtype == to.float64
         assert kstat_nystrom.eps is None or \
             isinstance(kstat_nystrom.eps, float)
         assert isinstance(kstat_nystrom.clip_eigval, bool) and \
@@ -252,9 +252,9 @@ class TestStatistics:
         assert isinstance(kstat_nystrom.median_coef, int) and \
             kstat_nystrom.median_coef == 1
         assert isinstance(kstat_nystrom.kernel, types.FunctionType)
-        assert isinstance(kstat_nystrom.computed_bandwidth, t.Tensor) and \
+        assert isinstance(kstat_nystrom.computed_bandwidth, to.Tensor) and \
             len(kstat_nystrom.computed_bandwidth.shape) == 0 and \
-            kstat_nystrom.computed_bandwidth.dtype == t.float64
+            kstat_nystrom.computed_bandwidth.dtype == to.float64
         assert kstat_nystrom.sp is None
         assert kstat_nystrom.ev is None
         assert kstat_nystrom.sp_anchors is None
@@ -278,7 +278,7 @@ class TestStatistics:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         # init data object without nystrom
@@ -286,7 +286,7 @@ class TestStatistics:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         # kernel stat object
@@ -329,7 +329,7 @@ class TestStatistics:
 
         # no Nystrom
         res = kstat.compute_centering_matrix(landmarks=False)
-        assert isinstance(res, t.Tensor)
+        assert isinstance(res, to.Tensor)
         assert len(res.shape) == 2
 
         exp_dim = kstat.data.ntot
@@ -346,7 +346,7 @@ class TestStatistics:
 
         # Nystrom: anchor_basis == 'w' (default mode)
         res = kstat_nystrom.compute_centering_matrix(landmarks=True)
-        assert isinstance(res, t.Tensor)
+        assert isinstance(res, to.Tensor)
         assert len(res.shape) == 2
 
         exp_dim = kstat_nystrom.data_ny.ntot
@@ -359,7 +359,7 @@ class TestStatistics:
         # Nystrom: anchor_basis == 'k'
         kstat_nystrom.anchor_basis = 'k'
         res = kstat_nystrom.compute_centering_matrix(landmarks=True)
-        assert isinstance(res, t.Tensor)
+        assert isinstance(res, to.Tensor)
         assert len(res.shape) == 2
 
         exp_dim = kstat_nystrom.data_ny.ntot
@@ -372,7 +372,7 @@ class TestStatistics:
         # Nystrom: anchor_basis == 's'
         kstat_nystrom.anchor_basis = 's'
         res = kstat_nystrom.compute_centering_matrix(landmarks=True)
-        assert isinstance(res, t.Tensor)
+        assert isinstance(res, to.Tensor)
         assert len(res.shape) == 2
 
         exp_dim = kstat_nystrom.data_ny.ntot
@@ -383,17 +383,18 @@ class TestStatistics:
         np.testing.assert_allclose(res.numpy(), exp_res, rtol=0, atol=1e-11)
 
     def test_compute_gram(self, kstat, kstat_nystrom, data_shape):
+        """Testing Gram matrix computation."""
         # Case 1 - full data, no landmarks, no new_obs
         # default: landmarks=False, new_obs=None
         K = kstat.compute_gram()
 
         # Expected Gram matrix using the same gaussian kernel
-        D = t.cat(tuple(kstat.data.data.values()), dim=0)
+        D = to.cat(tuple(kstat.data.data.values()), dim=0)
         expected = kstat.kernel(D, D)
 
-        assert isinstance(K, t.Tensor)
+        assert isinstance(K, to.Tensor)
         assert K.shape == (data_shape[0], data_shape[0])
-        t.testing.assert_close(K, expected)
+        to.testing.assert_close(K, expected)
 
         # Case 2 - compute K(D, new_obs)
         # new observations: use one population subsample
@@ -402,23 +403,23 @@ class TestStatistics:
         K = kstat.compute_gram(new_obs=new_obs)
 
         # Expected Gram matrix using the same gaussian kernel
-        D = t.cat(tuple(kstat.data.data.values()), dim=0)
+        D = to.cat(tuple(kstat.data.data.values()), dim=0)
         expected = kstat.kernel(D, new_obs)
 
-        assert isinstance(K, t.Tensor)
+        assert isinstance(K, to.Tensor)
         assert K.shape == (data_shape[0], new_obs.shape[0])
-        t.testing.assert_close(K, expected)
+        to.testing.assert_close(K, expected)
 
         # Case 3 - landmarks=True and a Nyström dataset is provided
         K = kstat_nystrom.compute_gram(landmarks=True)
 
         # Expected Gram matrix using the same gaussian kernel
-        D = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = to.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
         expected = kstat_nystrom.kernel(D, D)
 
-        assert isinstance(K, t.Tensor)
+        assert isinstance(K, to.Tensor)
         assert K.shape == (data_shape[0]//5, data_shape[0]//5)
-        t.testing.assert_close(K, expected)
+        to.testing.assert_close(K, expected)
 
         # Case 4 - landmarks=True but a Nyström dataset is not provided
         with pytest.raises(ValueError, match="Cannot use landmarks"):
@@ -431,14 +432,15 @@ class TestStatistics:
         K = kstat_nystrom.compute_gram(landmarks=True, new_obs=new_obs)
 
         # Expected Gram matrix using the same gaussian kernel
-        D = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = to.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
         expected = kstat_nystrom.kernel(D, new_obs)
 
-        assert isinstance(K, t.Tensor)
+        assert isinstance(K, to.Tensor)
         assert K.shape == (data_shape[0]//5, new_obs.shape[0])
-        t.testing.assert_close(K, expected)
+        to.testing.assert_close(K, expected)
 
     def test_compute_kmn(self, kstat, kstat_nystrom, data_shape):
+        """Testing Gram matrix computation between landmarks and data."""
         # Case 0 - not using Nystrom
         with pytest.raises(
             AttributeError, match="'NoneType' object has no attribute 'data'"
@@ -450,14 +452,13 @@ class TestStatistics:
         Kmn = kstat_nystrom.compute_kmn()
 
         # Expected Gram matrix using the same gaussian kernel
-        landmarks = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
-        D = t.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
+        landmarks = to.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = to.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
         expected = kstat_nystrom.kernel(landmarks, D)
 
-        assert isinstance(Kmn, t.Tensor)
+        assert isinstance(Kmn, to.Tensor)
         assert Kmn.shape == (landmarks.shape[0], data_shape[0])
-        t.testing.assert_close(Kmn, expected)
-
+        to.testing.assert_close(Kmn, expected)
 
         # Case 2 - compute K(landmarks, new_obs)
         # new observations: use one population subsample
@@ -466,13 +467,13 @@ class TestStatistics:
         Kmn = kstat_nystrom.compute_kmn(new_obs=new_obs)
 
         # Expected Gram matrix using the same gaussian kernel
-        landmarks = t.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
-        D = t.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
+        landmarks = to.cat(tuple(kstat_nystrom.data_ny.data.values()), dim=0)
+        D = to.cat(tuple(kstat_nystrom.data.data.values()), dim=0)
         expected = kstat_nystrom.kernel(landmarks, new_obs)
 
-        assert isinstance(Kmn, t.Tensor)
+        assert isinstance(Kmn, to.Tensor)
         assert Kmn.shape == (landmarks.shape[0], new_obs.shape[0])
-        t.testing.assert_close(Kmn, expected)
+        to.testing.assert_close(Kmn, expected)
 
     def test_compute_centered_gram(self, kstat, kstat_nystrom, data_shape):
         """
@@ -484,10 +485,10 @@ class TestStatistics:
         res1 = kstat.compute_centered_gram(low_mem_footprint=False)
         res2 = kstat.compute_centered_gram(low_mem_footprint=True)
 
-        assert isinstance(res1, t.Tensor)
+        assert isinstance(res1, to.Tensor)
         assert list(res1.shape) == [data_shape[0], data_shape[0]]
 
-        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+        to.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
 
         # Nystrom: anchor_basis == 'w' (default mode)
         res1 = kstat_nystrom.compute_centered_gram(low_mem_footprint=False)
@@ -495,12 +496,12 @@ class TestStatistics:
 
         exp_dim = kstat_nystrom.sp_anchors.shape[0]
 
-        assert isinstance(res1, t.Tensor)
+        assert isinstance(res1, to.Tensor)
         assert list(res1.shape) == [exp_dim, exp_dim]
-        assert isinstance(res2, t.Tensor)
+        assert isinstance(res2, to.Tensor)
         assert list(res2.shape) == [exp_dim, exp_dim]
 
-        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+        to.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
 
         # Nystrom: anchor_basis == 'k'
         kstat_nystrom.anchor_basis = 'k'
@@ -509,12 +510,12 @@ class TestStatistics:
 
         exp_dim = kstat_nystrom.sp_anchors.shape[0]
 
-        assert isinstance(res1, t.Tensor)
+        assert isinstance(res1, to.Tensor)
         assert list(res1.shape) == [exp_dim, exp_dim]
-        assert isinstance(res2, t.Tensor)
+        assert isinstance(res2, to.Tensor)
         assert list(res2.shape) == [exp_dim, exp_dim]
 
-        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+        to.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
 
         # Nystrom: anchor_basis == 's'
         kstat_nystrom.anchor_basis = 's'
@@ -523,32 +524,33 @@ class TestStatistics:
 
         exp_dim = kstat_nystrom.sp_anchors.shape[0]
 
-        assert isinstance(res1, t.Tensor)
+        assert isinstance(res1, to.Tensor)
         assert list(res1.shape) == [exp_dim, exp_dim]
-        assert isinstance(res2, t.Tensor)
+        assert isinstance(res2, to.Tensor)
         assert list(res2.shape) == [exp_dim, exp_dim]
 
-        t.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
+        to.testing.assert_close(res1, res2, rtol=0, atol=1e-12)
 
     def test_diagonalize_centered_gram(self, kstat, kstat_nystrom, data_shape):
         """
         Testing centered Gram matrix diagonalization,
         with or without the computing trick to avoid storing the full
-        n x n centering matrix."""
+        n x n centering matrix.
+        """
 
         # no Nystrom: no effect of 'low_mem_footprint' option
         sp1, ev1 = kstat.diagonalize_centered_gram(low_mem_footprint=False)
         sp2, ev2 = kstat.diagonalize_centered_gram(low_mem_footprint=True)
 
         # check output
-        assert isinstance(sp1, t.Tensor)
+        assert isinstance(sp1, to.Tensor)
         assert list(sp1.shape) == [data_shape[0] - 2]
-        assert isinstance(ev1, t.Tensor)
+        assert isinstance(ev1, to.Tensor)
         assert list(ev1.shape) == [data_shape[0], data_shape[0] - 2]
         # note: last 2 eigen values are clipped
 
-        t.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
-        t.testing.assert_close(ev1, ev2, rtol=0, atol=1e-12)
+        to.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
+        to.testing.assert_close(ev1, ev2, rtol=0, atol=1e-12)
 
         # compute eigen decomposition with numpy to compare
         # /!\ eigen values/vectors are in reverse order
@@ -581,14 +583,14 @@ class TestStatistics:
         )
 
         # check output
-        assert isinstance(sp1, t.Tensor)
+        assert isinstance(sp1, to.Tensor)
         assert list(sp1.shape) == [data_shape[0] // 5 - 2]
-        assert isinstance(ev1, t.Tensor)
+        assert isinstance(ev1, to.Tensor)
         assert list(ev1.shape) == \
             [data_shape[0] // 5 - 2, data_shape[0] // 5 - 2]
         # note: last 2 eigen values are clipped
 
-        t.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
+        to.testing.assert_close(sp1, sp2, rtol=0, atol=1e-12)
         assert_eigenvectors(ev1, ev2, rtol=0, atol=1e-12)
 
         # compute eigen decomposition with numpy to compare
@@ -614,13 +616,14 @@ class TestStatistics:
         )
 
     def test_compute_upk(self, kstat, kstat_nystrom, data_shape):
+        """Testing uPK product computation."""
         # FIXME: only result format is tested, not result values
 
         # Case 1 - full data (no Nystrom), no new_obs
         # default: new_obs=None
         upk = kstat.compute_upk(t=10)
 
-        assert isinstance(upk, t.Tensor)
+        assert isinstance(upk, to.Tensor)
         assert upk.shape == (data_shape[0], 10)
 
         # Case 2 - providing new obs
@@ -629,14 +632,14 @@ class TestStatistics:
 
         upk = kstat.compute_upk(t=10, new_obs=new_obs)
 
-        assert isinstance(upk, t.Tensor)
+        assert isinstance(upk, to.Tensor)
         assert upk.shape == (new_obs.shape[0], 10)
 
         # Case 3 - Nystrom, no new_obs
         # default: new_obs=None
         upk = kstat_nystrom.compute_upk(t=10)
 
-        assert isinstance(upk, t.Tensor)
+        assert isinstance(upk, to.Tensor)
         assert upk.shape == (data_shape[0], 10)
 
         # Case 4 - Nystrom, providing new obs
@@ -645,10 +648,11 @@ class TestStatistics:
 
         upk = kstat_nystrom.compute_upk(t=10, new_obs=new_obs)
 
-        assert isinstance(upk, t.Tensor)
+        assert isinstance(upk, to.Tensor)
         assert upk.shape == (new_obs.shape[0], 10)
 
     def test_compute_projections(self, kstat, kstat_nystrom):
+        """Testing kFDA axis projection computation."""
         # FIXME: only result format is tested, not result values
 
         def _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val):
