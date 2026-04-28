@@ -915,58 +915,67 @@ class TestStatistics(object):
         for group in kstat.data.data.keys():
             n_obs = kstat.data.data[group].shape[0]
 
-            assert isinstance(pred[group], np.ndarray)
-            assert isinstance(loss[group], np.ndarray)
+            assert isinstance(pred[group], list)
+            assert isinstance(loss[group], list)
 
-            assert list(pred[group].shape) == [n_obs, 10]
-            assert list(loss[group].shape) == [n_obs, 10]
+            assert len(pred[group]) == 1
+            assert len(loss[group]) == 1
 
-            assert np.all(np.isin(pred[group], list(kstat.data.data.keys())))
-            assert np.issubdtype(loss[group].dtype, np.floating)
+            pred_val = pred[group][0]
+            loss_val = loss[group][0]
+
+            assert isinstance(pred_val, np.ndarray)
+            assert isinstance(loss_val, np.ndarray)
+
+            assert list(pred_val.shape) == [n_obs, 10]
+            assert list(loss_val.shape) == [n_obs, 10]
+
+            assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+            assert np.issubdtype(loss_val.dtype, np.floating)
 
             # group 1 and 2 are similar so we expect 50%-50% prediction
-            count_pred = np.count_nonzero(pred[group] == group, axis=0)
+            count_pred = np.count_nonzero(pred_val == group, axis=0)
             np.testing.assert_allclose(count_pred / n_obs, 1/2, atol=0.1)
 
         # Case 1b - full data (no Nystrom), no new_obs,
         # with a list of threshold values
         # default: new_obs=None
+        threshold_values = np.linspace(0, 1, 11)
         pred, loss = kstat.kfda_predict(
-            t=10, pred_threshold=np.linspace(0, 1, 11)
+            t=10, pred_threshold=threshold_values
         )
 
-        assert isinstance(pred, list)
-        assert isinstance(loss, list)
+        assert isinstance(pred, dict)
+        assert isinstance(loss, dict)
+        assert pred.keys() == kstat.data.data.keys()
+        assert loss.keys() == kstat.data.data.keys()
 
-        for pred_item, loss_item, pred_threshold in zip(
-            pred, loss, np.linspace(0, 1, 11)
-        ):
+        for group_ind, group in enumerate(kstat.data.data.keys()):
+            n_obs = kstat.data.data[group].shape[0]
 
-            assert isinstance(pred_item, dict)
-            assert isinstance(loss_item, dict)
-            assert pred_item.keys() == kstat.data.data.keys()
-            assert loss_item.keys() == kstat.data.data.keys()
+            assert isinstance(pred[group], list)
+            assert isinstance(loss[group], list)
 
-            for group_ind, group in enumerate(kstat.data.data.keys()):
-                n_obs = kstat.data.data[group].shape[0]
+            assert len(pred[group]) == len(threshold_values)
+            assert len(loss[group]) == len(threshold_values)
 
-                assert isinstance(pred_item[group], np.ndarray)
-                assert isinstance(loss_item[group], np.ndarray)
+            for pred_val, loss_val, pred_threshold in zip(
+                pred[group], loss[group], threshold_values
+            ):
 
-                assert list(pred_item[group].shape) == [n_obs, 10]
-                assert list(loss_item[group].shape) == [n_obs, 10]
+                assert isinstance(pred_val, np.ndarray)
+                assert isinstance(loss_val, np.ndarray)
 
-                assert np.all(np.isin(
-                    pred_item[group], list(kstat.data.data.keys())
-                ))
-                assert np.issubdtype(loss_item[group].dtype, np.floating)
+                assert list(pred_val.shape) == [n_obs, 10]
+                assert list(loss_val.shape) == [n_obs, 10]
+
+                assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+                assert np.issubdtype(loss_val.dtype, np.floating)
 
                 # group 1 and 2 are similar so we expect a prediction
                 # corresponding to the bias
                 # (or 1 - bias depending on the group)
-                count_pred = np.count_nonzero(
-                    pred_item[group] == group, axis=0
-                )
+                count_pred = np.count_nonzero(pred_val == group, axis=0)
                 np.testing.assert_allclose(
                     count_pred / n_obs,
                     (1 - group_ind) * pred_threshold +
@@ -989,17 +998,26 @@ class TestStatistics(object):
         group = "new_obs"
         n_obs = new_obs.shape[0]
 
-        assert isinstance(pred[group], np.ndarray)
-        assert isinstance(loss[group], np.ndarray)
+        assert isinstance(pred[group], list)
+        assert isinstance(loss[group], list)
 
-        assert list(pred[group].shape) == [n_obs, 10]
-        assert list(loss[group].shape) == [n_obs, 10]
+        assert len(pred[group]) == 1
+        assert len(loss[group]) == 1
 
-        assert np.all(np.isin(pred[group], list(kstat.data.data.keys())))
-        assert np.issubdtype(loss[group].dtype, np.floating)
+        pred_val = pred[group][0]
+        loss_val = loss[group][0]
+
+        assert isinstance(pred_val, np.ndarray)
+        assert isinstance(loss_val, np.ndarray)
+
+        assert list(pred_val.shape) == [n_obs, 10]
+        assert list(loss_val.shape) == [n_obs, 10]
+
+        assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+        assert np.issubdtype(loss_val.dtype, np.floating)
 
         # group 1 and 2 are similar so we expect 50%-50% prediction
-        count_pred = np.count_nonzero(pred[group] == "c1", axis=0)
+        count_pred = np.count_nonzero(pred_val == "c1", axis=0)
         np.testing.assert_allclose(count_pred / n_obs, 1/2, atol=0.1)
 
         # Case 2b - full data (no Nystrom), providing new_obs,
@@ -1018,17 +1036,26 @@ class TestStatistics(object):
         group = "new_obs"
         n_obs = new_obs.shape[0]
 
-        assert isinstance(pred[group], np.ndarray)
-        assert isinstance(loss[group], np.ndarray)
+        assert isinstance(pred[group], list)
+        assert isinstance(loss[group], list)
 
-        assert list(pred[group].shape) == [n_obs, 10]
-        assert list(loss[group].shape) == [n_obs, 10]
+        assert len(pred[group]) == 1
+        assert len(loss[group]) == 1
 
-        assert np.all(np.isin(pred[group], list(kstat.data.data.keys())))
-        assert np.issubdtype(loss[group].dtype, np.floating)
+        pred_val = pred[group][0]
+        loss_val = loss[group][0]
+
+        assert isinstance(pred_val, np.ndarray)
+        assert isinstance(loss_val, np.ndarray)
+
+        assert list(pred_val.shape) == [n_obs, 10]
+        assert list(loss_val.shape) == [n_obs, 10]
+
+        assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+        assert np.issubdtype(loss_val.dtype, np.floating)
 
         # we expect only "group 2" prediction
-        count_pred = np.count_nonzero(pred[group] == "c1", axis=0)
+        count_pred = np.count_nonzero(pred_val == "c1", axis=0)
         np.testing.assert_allclose(count_pred / n_obs, 0, atol=0)
 
         # Case 2c - full data (no Nystrom), providing new_obs,
@@ -1047,17 +1074,26 @@ class TestStatistics(object):
         group = "new_obs"
         n_obs = new_obs.shape[0]
 
-        assert isinstance(pred[group], np.ndarray)
-        assert isinstance(loss[group], np.ndarray)
+        assert isinstance(pred[group], list)
+        assert isinstance(loss[group], list)
 
-        assert list(pred[group].shape) == [n_obs, 10]
-        assert list(loss[group].shape) == [n_obs, 10]
+        assert len(pred[group]) == 1
+        assert len(loss[group]) == 1
 
-        assert np.all(np.isin(pred[group], list(kstat.data.data.keys())))
-        assert np.issubdtype(loss[group].dtype, np.floating)
+        pred_val = pred[group][0]
+        loss_val = loss[group][0]
+
+        assert isinstance(pred_val, np.ndarray)
+        assert isinstance(loss_val, np.ndarray)
+
+        assert list(pred_val.shape) == [n_obs, 10]
+        assert list(loss_val.shape) == [n_obs, 10]
+
+        assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+        assert np.issubdtype(loss_val.dtype, np.floating)
 
         # we expect only "group 1" prediction
-        count_pred = np.count_nonzero(pred[group] == "c1", axis=0)
+        count_pred = np.count_nonzero(pred_val == "c1", axis=0)
         np.testing.assert_allclose(count_pred / n_obs, 1, atol=0)
 
         # Case 3 - Nystrom approximation, no new_obs
@@ -1069,22 +1105,31 @@ class TestStatistics(object):
         assert pred.keys() == kstat_nystrom.data.data.keys()
         assert loss.keys() == kstat_nystrom.data.data.keys()
 
-        for group in kstat_nystrom.data.data.keys():
+        for group in kstat.data.data.keys():
             n_obs = kstat_nystrom.data.data[group].shape[0]
 
-            assert isinstance(pred[group], np.ndarray)
-            assert isinstance(loss[group], np.ndarray)
+            assert isinstance(pred[group], list)
+            assert isinstance(loss[group], list)
 
-            assert list(pred[group].shape) == [n_obs, 10]
-            assert list(loss[group].shape) == [n_obs, 10]
+            assert len(pred[group]) == 1
+            assert len(loss[group]) == 1
 
-            assert np.all(
-                np.isin(pred[group], list(kstat_nystrom.data.data.keys()))
-            )
-            assert np.issubdtype(loss[group].dtype, np.floating)
+            pred_val = pred[group][0]
+            loss_val = loss[group][0]
+
+            assert isinstance(pred_val, np.ndarray)
+            assert isinstance(loss_val, np.ndarray)
+
+            assert list(pred_val.shape) == [n_obs, 10]
+            assert list(loss_val.shape) == [n_obs, 10]
+
+            assert np.all(np.isin(
+                pred_val, list(kstat_nystrom.data.data.keys())
+            ))
+            assert np.issubdtype(loss_val.dtype, np.floating)
 
             # group 1 and 2 are similar so we expect 50%-50% prediction
-            count_pred = np.count_nonzero(pred[group] == group, axis=0)
+            count_pred = np.count_nonzero(pred_val == group, axis=0)
             np.testing.assert_allclose(count_pred / n_obs, 1/2, atol=0.1)
 
         # Case 4 - Nystrom approximation, providing new_obs
@@ -1102,19 +1147,26 @@ class TestStatistics(object):
         group = "new_obs"
         n_obs = new_obs.shape[0]
 
-        assert isinstance(pred[group], np.ndarray)
-        assert isinstance(loss[group], np.ndarray)
+        assert isinstance(pred[group], list)
+        assert isinstance(loss[group], list)
 
-        assert list(pred[group].shape) == [n_obs, 10]
-        assert list(loss[group].shape) == [n_obs, 10]
+        assert len(pred[group]) == 1
+        assert len(loss[group]) == 1
 
-        assert np.all(
-            np.isin(pred[group], list(kstat_nystrom.data.data.keys()))
-        )
-        assert np.issubdtype(loss[group].dtype, np.floating)
+        pred_val = pred[group][0]
+        loss_val = loss[group][0]
+
+        assert isinstance(pred_val, np.ndarray)
+        assert isinstance(loss_val, np.ndarray)
+
+        assert list(pred_val.shape) == [n_obs, 10]
+        assert list(loss_val.shape) == [n_obs, 10]
+
+        assert np.all(np.isin(pred_val, list(kstat.data.data.keys())))
+        assert np.issubdtype(loss_val.dtype, np.floating)
 
         # group 1 and 2 are similar so we expect 50%-50% prediction
-        count_pred = np.count_nonzero(pred[group] == "c1", axis=0)
+        count_pred = np.count_nonzero(pred_val == "c1", axis=0)
         np.testing.assert_allclose(count_pred / n_obs, 1/2, atol=0.1)
 
         # Case 5 - separated data (Nystrom approximation, no new_obs)
@@ -1141,20 +1193,29 @@ class TestStatistics(object):
         for i, group in enumerate(kstat_sep.data.data.keys()):
             n_obs = kstat_sep.data.data[group].shape[0]
 
-            assert isinstance(pred[group], np.ndarray)
-            assert isinstance(loss[group], np.ndarray)
+            assert isinstance(pred[group], list)
+            assert isinstance(loss[group], list)
 
-            assert list(pred[group].shape) == [n_obs, 50]
-            assert list(loss[group].shape) == [n_obs, 50]
+            assert len(pred[group]) == 1
+            assert len(loss[group]) == 1
 
-            assert np.all(
-                np.isin(pred[group], list(kstat_sep.data.data.keys()))
-            )
-            assert np.issubdtype(loss[group].dtype, np.floating)
+            pred_val = pred[group][0]
+            loss_val = loss[group][0]
+
+            assert isinstance(pred_val, np.ndarray)
+            assert isinstance(loss_val, np.ndarray)
+
+            assert list(pred_val.shape) == [n_obs, 50]
+            assert list(loss_val.shape) == [n_obs, 50]
+
+            assert np.all(np.isin(
+                pred_val, list(kstat_nystrom.data.data.keys())
+            ))
+            assert np.issubdtype(loss_val.dtype, np.floating)
 
             # group 1 and 2 are very different so we expect 100%
             # prediction on each group (at least for large truncations)
             count_pred = np.count_nonzero(
-                pred[group][:, -10:] == group, axis=0
+                pred_val[:, -10:] == group, axis=0
             )
             np.testing.assert_allclose(count_pred / n_obs, 1, atol=0.1)

@@ -977,21 +977,19 @@ class Statistics(object):
         Returns
         -------
 
-        pred: dict or list of dict
-            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
-            kFDA predictions for each observation and increasing truncation,
+        pred: dict
+            dictionary containing list of prediction arrays (np.ndarray),
             either for each group in the training data or for the new
-            observations. If `pred_threshold` input argument is an Iterable,
-            then `pred` is a list corresponding to prediction dictionaries for
-            each element in `pred_threshold`.
+            observations, each array stores kFDA predictions for each
+            considered observation and increasing truncation values, for a
+            given prediction threshold given by `pred_threshold`.
 
-        loss: dict or list of dict
-            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
-            kFDA loss function values for each observation and increasing
-            truncation, either for each group in the training data or for the
-            new observations. If `pred_threshold` input argument is an
-            Iterable, then `pred` is a list corresponding to prediction
-            dictionaries for each element in `pred_threshold`.
+        loss: dict
+            dictionary containing list of loss value arrays (np.ndarray),
+            either for each group in the training data or for the new
+            observations, each array stores kFDA loss function values for each
+            considered observation and increasing truncation values, for a
+            given prediction threshold given by `pred_threshold`.
         """
 
         # check threshold input and convert to list if scalar
@@ -1011,27 +1009,29 @@ class Statistics(object):
         # compute loss function associated to kFDA prediction
         distance_group1, distance_group2 = self.kfda_loss(t, new_obs, stat)
 
-        # init output (list of dictionaries)
-        pred = []
-        loss = []
+        # init output (dictionaries)
+        pred = {}
+        loss = {}
 
-        # iterate through threshold value
-        for thres_val in pred_threshold:
+        # compute prediction for each observation set
+        # iterate through group (or new obs)
+        for i, (group, dist_g1, dist_g2) in enumerate(zip(
+            distance_group1.keys(),
+            distance_group1.values(),
+            distance_group2.values()
+        )):
+            # init intermediate results (for each threshold value)
+            pred_inter = []
+            loss_inter = []
 
-            # init intermediate results
-            pred_inter = {}
-            loss_inter = {}
+            # compare distances to group 1 and group 2
+            diff_g1_g2 = dist_g1 - dist_g2
 
-            # compute prediction for each observation set
-            # iterate through group (or new obs)
-            for i, (group, dist_g1, dist_g2) in enumerate(zip(
-                distance_group1.keys(),
-                distance_group1.values(),
-                distance_group2.values()
-            )):
+            # iterate through threshold value
+            for thres_val in pred_threshold:
 
-                # prediction loss
-                loss_val = dist_g1 - dist_g2 - \
+                # compute loss value
+                loss_val = diff_g1_g2 - \
                     pred_threshold_fun(thres_val, dist_g2, dist_g1)
                 # loss > 0 ?
                 # loss < 0 -> group 1
@@ -1042,16 +1042,12 @@ class Statistics(object):
                 pred_val = group_name[(1 - (loss_val < 0).int()).numpy()]
 
                 # store prediction and loss for current set of observations
-                pred_inter[group] = pred_val
-                loss_inter[group] = loss_val.numpy()
+                pred_inter.append(pred_val)
+                loss_inter.append(loss_val.numpy())
 
             # store results
-            pred.append(pred_inter)
-            loss.append(loss_inter)
-
-        if len(pred_threshold) == 1:
-            pred = pred[0]
-            loss = loss[0]
+            pred[group] = pred_inter
+            loss[group] = loss_inter
 
         # output
         return pred, loss
