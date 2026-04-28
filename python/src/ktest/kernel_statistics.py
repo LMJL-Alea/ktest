@@ -946,19 +946,19 @@ class Statistics(object):
 
     def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5, stat=None):
         """
-        Compute prediction for each observations according to kFDA, i.e.
-        assign each observations to one of the two groups depending on
-        kFDA axis projection.
+        Compute prediction for each observations according to kFDA and with
+        increasing truncation values, i.e. assign each observations to one of
+        the two groups using projections on kFDA axis.
 
         Parameters
         ----------
 
-        stat : Pandas.Series
-            kFDA statistics (same as the attribute `kfda_statistic` of class
-            Ktest). Required for normalization.
-
         t : int, optional
             Maximal truncation, the default is 100.
+
+        new_obs: torch.tensor, optional
+            Unused by default. If not None, then the prediction for the
+            `new_obs` data is computed.
 
         pred_threshold : float or Iterable, optional
             Number (or Iterable containing numbers) between `0` an 1 to bias
