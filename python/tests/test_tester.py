@@ -9,7 +9,9 @@ import warnings
 
 from ktest.tester import Ktest
 
-from .test_data import data_shape, dummy_data, dummy_zidata
+from .test_data import (
+    data_shape, dummy_data_array, dummy_data, dummy_zidata, dummy_separated_data
+)
 
 
 @pytest.fixture
@@ -375,3 +377,202 @@ def test_ktest_project(dummy_ktest):
         assert proj_kpca_tab.shape == (new_obs.shape[0], 10)
         pd.testing.assert_frame_equal(proj_kpca_tab, exp_proj_kpca_tab)
 
+
+def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
+    """Test cross-validation for kFDA prediction."""
+
+    # Case 1a - data under H0, a single prediction bias (threshold) value
+    # no bias
+    # create ktest objects
+    kt = dummy_ktest()
+    # run CV
+    accuracy, true_pos, true_neg = kt.cv(
+        t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
+        random_state=None, verbose=1
+    )
+    # check stdout (expect output)
+    captured = capsys.readouterr()
+    assert captured.out == 'Starting cross-validation...' + \
+        '\nSplit 0\nSplit 1\nSplit 2\nSplit 3\nSplit 4\n' + \
+        '...Aggregating CV fold results\n'
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    assert len(accuracy) == 1
+    assert len(true_pos) == 1
+    assert len(true_neg) == 1
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (50,)
+        assert true_pos_tab.shape == (50,)
+        assert true_neg_tab.shape == (50,)
+
+        # value (expect 50%-50% accuracy)
+        np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
+        np.testing.assert_allclose(true_pos_tab, 1/2, atol=0.1)
+        np.testing.assert_allclose(true_neg_tab, 1/2, atol=0.1)
+
+    # Case 1b - data under H0, a single prediction bias (threshold) value
+    # bias towards ref group
+    # create ktest objects
+    kt = dummy_ktest()
+    # run CV
+    accuracy, true_pos, true_neg = kt.cv(
+        t=50, pred_threshold=1, n_fold=5, n_repeat=1,
+        random_state=None, verbose=0
+    )
+
+    # check stdout (expect no output)
+    captured = capsys.readouterr()
+    assert captured.out == ''
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    assert len(accuracy) == 1
+    assert len(true_pos) == 1
+    assert len(true_neg) == 1
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (50,)
+        assert true_pos_tab.shape == (50,)
+        assert true_neg_tab.shape == (50,)
+
+        # value (expect 50%-50% accuracy but biased sens/spec)
+        np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
+        np.testing.assert_allclose(true_pos_tab, 1, atol=0.1)
+        np.testing.assert_allclose(true_neg_tab, 0, atol=0.1)
+
+    # Case 1c - data under H0, a single prediction bias (threshold) value
+    # bias towards non ref group
+    # create ktest objects
+    kt = dummy_ktest()
+    # run CV
+    accuracy, true_pos, true_neg = kt.cv(
+        t=50, pred_threshold=0, n_fold=5, n_repeat=1,
+        random_state=None, verbose=0
+    )
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    assert len(accuracy) == 1
+    assert len(true_pos) == 1
+    assert len(true_neg) == 1
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (50,)
+        assert true_pos_tab.shape == (50,)
+        assert true_neg_tab.shape == (50,)
+
+        # value (expect 50%-50% accuracy but biased sens/spec)
+        np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
+        np.testing.assert_allclose(true_pos_tab, 0, atol=0.1)
+        np.testing.assert_allclose(true_neg_tab, 1, atol=0.1)
+
+    # Case 2 - data under H0, multiple prediction bias (threshold) values
+    # create ktest objects
+    kt = dummy_ktest()
+    # run CV
+    threshold_values = np.linspace(0, 1, 11)
+    accuracy, true_pos, true_neg = kt.cv(
+        t=50, pred_threshold=threshold_values, n_fold=5, n_repeat=1,
+        random_state=None, verbose=0
+    )
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    assert len(accuracy) == len(threshold_values)
+    assert len(true_pos) == len(threshold_values)
+    assert len(true_neg) == len(threshold_values)
+
+    for accuracy_tab, true_pos_tab, true_neg_tab, pred_threshold in zip(
+        accuracy, true_pos, true_neg, threshold_values
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (50,)
+        assert true_pos_tab.shape == (50,)
+        assert true_neg_tab.shape == (50,)
+
+        # value (expect 50%-50% accuracy)
+        np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
+        np.testing.assert_allclose(true_pos_tab, pred_threshold, atol=0.3)
+        np.testing.assert_allclose(true_neg_tab, 1-pred_threshold, atol=0.3)
+
+    # Case 3 - data under H1
+    # create ktest objects
+    kt = Ktest(
+        data=dummy_separated_data[0],
+        metadata=dummy_separated_data[1],
+        nystrom=True
+    )
+    # run CV
+    accuracy, true_pos, true_neg = kt.cv(
+        t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
+        random_state=None, verbose=1
+    )
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    assert len(accuracy) == 1
+    assert len(true_pos) == 1
+    assert len(true_neg) == 1
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (50,)
+        assert true_pos_tab.shape == (50,)
+        assert true_neg_tab.shape == (50,)
+
+        # value (expect almost 100% accuracy for non-small truncations)
+        np.testing.assert_allclose(accuracy_tab[10:], 1, atol=0.1)
+        np.testing.assert_allclose(true_pos_tab[10:], 1, atol=0.1)
+        np.testing.assert_allclose(true_neg_tab[10:], 1, atol=0.1)
