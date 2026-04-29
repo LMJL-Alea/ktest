@@ -6,12 +6,14 @@ from matplotlib import rc
 import numpy as np
 import pandas as pd
 from scipy.stats import chi2, gaussian_kde
+from sklearn.model_selection import RepeatedStratifiedKFold
 from torch import float64
 import torch as to
 from tqdm import tqdm
 
 from .data import Data
 from .kernel_statistics import Statistics
+from .utils import compute_accuracy
 
 
 class Ktest(Statistics):
@@ -540,6 +542,290 @@ class Ktest(Statistics):
 
             # output
             return kfda_proj, kfda_proj_contrib
+
+    def predict(self, t=100, new_obs=None, pred_threshold=0.5, verbose=1):
+        """
+        Compute prediction for each observations according to kFDA and with
+        increasing truncation values, i.e. assign each observations to one of
+        the two groups using projections on kFDA axis.
+
+        Parameters
+        ----------
+
+        t : int, optional
+            Maximal truncation, the default is 100.
+
+        new_obs: array-like, pandas.DataFrame or torch.Tensor or numpy.array,
+            optional
+            Unused by default. If not None, then the prediction for the
+            `new_obs` data is computed.
+
+        pred_threshold : float or Iterable, optional
+            Number (or Iterable containing numbers) between `0` an 1 to bias
+            prediction towards first group or second group (in appearence order
+            in the data). `0` means predicting only first group and `1`
+            predicting only second group. Default value is `0.5` and no bias is
+            introduced. Useful for ROC curve and AUC computations.
+            If Iterable, the prediction is computed for each threshold value.
+
+        verbose : int, optional
+            The higher the verbosity, the more messages keeping track of
+            computations. The default is 1.
+            - < 1: no messages,
+            - 1: progress bar with computation time,
+            - 2: warnings are printed once,
+            - 3: warnings are printed every time they appear.
+
+        Returns
+        -------
+
+        pred: dict or list of dict
+            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
+            kFDA predictions for each observation and increasing truncation,
+            either for each group in the training data or for the new
+            observations. If `pred_threshold` input argument is an Iterable,
+            then `pred` is a list corresponding to prediction dictionaries for
+            each element in `pred_threshold`.
+
+        loss: dict or list of dict
+            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
+            kFDA loss function values for each observation and increasing
+            truncation, either for each group in the training data or for the
+            new observations. If `pred_threshold` input argument is an
+            Iterable, then `pred` is a list corresponding to prediction
+            dictionaries for each element in `pred_threshold`.
+        """
+
+        with warnings.catch_warnings():
+            if verbose < 2:
+                warnings.simplefilter("ignore")
+            elif verbose >= 3:
+                warnings.simplefilter("always")
+
+            # compute statistic if needed
+            if self.kfda_statistic is None:
+                self.test(stat='kfda')
+
+            # check new_obs input convert and to torch.Tensor
+            if new_obs is not None:
+                if not (
+                    isinstance(new_obs, pd.DataFrame) or
+                    isinstance(new_obs, np.ndarray) or
+                    isinstance(new_obs, to.Tensor)
+                ) and new_obs.shape[1] != self.dataset.shape[1]:
+                    msg = "'new_obs' should be an array-like object with " + \
+                        "the same number of columns as the original " + \
+                        "training data."
+                    raise ValueError(msg)
+
+                if isinstance(new_obs, pd.DataFrame):
+                    new_obs = to.from_numpy(new_obs.to_numpy())
+                elif isinstance(new_obs, np.ndarray):
+                    new_obs = to.from_numpy(new_obs)
+
+            # compute prediction
+            kfda_pred, kfda_loss = self.kstat.kfda_predict(
+                t=t, new_obs=new_obs, pred_threshold=pred_threshold,
+                stat=self.kfda_statistic
+            )
+
+            # output
+            return kfda_pred, kfda_loss
+
+    def cv(
+        self, t=100, pred_threshold=0.5, n_fold=5, n_repeat=1, ref=None,
+        random_state=None, verbose=1
+    ):
+        """
+        Compute prediction and prediction error by V-fold cross-validation,
+        for each observations according to kFDA and with increasing truncation
+        values.
+
+        Parameters
+        ----------
+
+        t : int, optional
+            Maximal truncation, the default is 100.
+
+        pred_threshold : float or Iterable, optional
+            Number (or Iterable containing numbers) between `0` an 1 to bias
+            prediction towards first group or second group (in appearence order
+            in the data). `0` means predicting only first group and `1`
+            predicting only second group. Default value is `0.5` and no bias is
+            introduced. Useful for ROC curve and AUC computations.
+            If Iterable, the prediction is computed for each threshold value.
+
+        n_fold : int, default=5
+            Number of folds in cross-validation. Should be at least 2.
+
+        n_repeat : int, default=1
+            Number of times cross-validation will be repeated.
+
+        ref : str or None, default=None
+            Reference group/class/subsample for computing true positive rates.
+            The other group/class/subsample will be used for computing true
+            negative rate.
+            `ref` should be among input metadata. If None, then the reference
+            is chosen to be the first group by order of appearence in the data.
+
+        random_state : int, numpy.random.RandomState or None, default=None
+            Controls the generation of the random states for cross-validation
+            subsampling. Pass an int for reproducible output across multiple
+            function calls.
+
+        verbose : int, optional
+            The higher the verbosity, the more messages keeping track of
+            computations. The default is 1.
+            - < 1: no messages,
+            - 1: progress bar with computation time,
+            - 2: warnings are printed once,
+            - 3: warnings are printed every time they appear.
+
+        Returns
+        -------
+
+        accuracy : list of numpy.ndarray
+            list of 1-D arrays of average accuracy over cross-validation
+            for increasing truncation values, corresponding to each prediction
+            threshold bias value(s) provided in input.
+
+        true_pos : list of numpy.ndarray
+            list of 1-D arrays of average true positive rates over
+            cross-validation for increasing truncation values, corresponding
+            to each prediction threshold bias value(s) provided in input.
+        true_neg : numpy.ndarray
+            list of 1-D arrays of average true negative rates over
+            cross-validation for increasing truncation values, corresponding
+            to each prediction threshold bias value(s) provided in input.
+        """
+
+        with warnings.catch_warnings():
+            if verbose < 2:
+                warnings.simplefilter("ignore")
+            elif verbose >= 3:
+                warnings.simplefilter("always")
+
+            # check input
+            if ref is not None and not ref in self.data.sample_names:
+                msg = "`ref` is not a valid class/group/subsample " + \
+                    "reference name."
+                raise ValueError(msg)
+            else:
+                ref = self.data.sample_names[0]
+
+            # compute test statistics if not done
+            if self.kfda_statistic is None:
+                self.test(stat='kfda')
+
+            # cross-validation sub-subsampling
+            cv_setup = RepeatedStratifiedKFold(
+                n_splits=n_fold, n_repeats=n_repeat, random_state=random_state
+            )
+            cv_split = cv_setup.split(self.dataset, self.metadata)
+
+            # init result storage over fold
+            fold_res = []
+
+            # verbosity
+            verbose >= 1 and print(f"Starting cross-validation...")
+
+            # iterate trough data partitions
+            for i, (train_index, test_index) in enumerate(cv_split):
+                verbose >= 1 and print(f"Split {i}")
+
+                # prepare training data
+                train_data = Data(
+                    data=self.dataset.iloc[train_index],
+                    metadata=self.metadata.iloc[train_index],
+                    sample_names=self.sample_names
+                )
+
+                # Nystrom subsampling if needed
+                train_data_nystrom = None
+                if self.data_nystrom is not None:
+                    train_data_nystrom = Data(
+                        data=self.dataset.iloc[train_index],
+                        metadata=self.metadata.iloc[train_index],
+                        sample_names=self.sample_names,
+                        nystrom=True, n_landmarks=self.n_landmarks,
+                        landmark_method=self.landmark_method,
+                        random_state=self.rnd_gen
+                    )
+
+                # define statistic object for training data
+                kstat_perm = Statistics(
+                    train_data,
+                    kernel_function=self.kernel_function,
+                    bandwidth=self.kernel_bandwidth,
+                    median_coef=self.kernel_median_coef,
+                    data_nystrom=train_data_nystrom,
+                    n_anchors=self.n_anchors,
+                    anchor_basis=self.anchor_basis,
+                    eps=self.eps, clip_eigval=self.clip_eigval
+                )
+
+                # compute prediction
+                kfda_pred, kfda_loss = kstat_perm.kfda_predict(
+                    t=t,
+                    new_obs=to.from_numpy(self.dataset.iloc[test_index].to_numpy()),
+                    pred_threshold=pred_threshold,
+                    stat=None
+                )
+
+                # compute accuracy
+                accuracy_res, true_pos_res, true_neg_res = compute_accuracy(
+                    kfda_pred["new_obs"],
+                    self.metadata.iloc[test_index].to_numpy(),
+                    ref=ref
+                )
+
+                # store prediction results
+                fold_res.append({
+                    "accuracy": accuracy_res,
+                    "true_pos": true_pos_res,
+                    "true_neg": true_neg_res,
+                    "test_index": test_index
+                })
+
+            # verbosity
+            verbose >= 1 and print(f"...Aggregating CV fold results")
+
+            # reformat cv result storage
+            # input: `fold_res` is a list of dictionaries containing list of
+            # arrays storing a metric for each pred_threshold values
+            # output: `<metric>_list` is a list of <metric> arrays for each
+            # pred_threshold values
+            # accuracy_list = [
+            #     list(accuracy_tab) for accuracy_tab in
+            #     zip(*[d["accuracy"] for d in fold_res])
+            # ]
+            accuracy_list = list(map(
+                list, zip(*[d["accuracy"] for d in fold_res])
+            ))
+            true_pos_list = list(map(
+                list, zip(*[d["true_pos"] for d in fold_res])
+            ))
+            true_neg_list = list(map(
+                list, zip(*[d["true_neg"] for d in fold_res])
+            ))
+
+            # compute average accuracy, true pos rate and true neg rate over
+            # all folds
+            accuracy = [
+                np.mean(np.vstack(accuracy_tab_list), axis=0)
+                for accuracy_tab_list in accuracy_list
+            ]
+            true_pos = [
+                np.mean(np.vstack(true_pos_tab_list), axis=0)
+                for true_pos_tab_list in true_pos_list
+            ]
+            true_neg = [
+                np.mean(np.vstack(true_neg_tab_list), axis=0)
+                for true_neg_tab_list in true_neg_list
+            ]
+
+            # output
+            return accuracy, true_pos, true_neg
 
     def plot_density(
         self, t=None, t_max=100, colors=None, labels=None, alpha=.5,
