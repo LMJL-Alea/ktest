@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import chi2, gaussian_kde
 from torch import float64
+import torch as to
 from tqdm import tqdm
 
 from .data import Data
@@ -460,7 +461,7 @@ class Ktest(Statistics):
                     "Possible values : 'kfda','mmd'"
                 )
 
-    def project(self, t=100, center=True, verbose=1, new_obs=None):
+    def project(self, t=100, center=True, new_obs=None, verbose=1):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -477,9 +478,18 @@ class Ktest(Statistics):
             If True (default), the projections are centered with respect to
             the mean embedding.
 
-        new_obs : torch.tensor, optional
+        new_obs: array-like, pandas.DataFrame or torch.Tensor or numpy.array,
+            optional
             Unused by default. If not None, then the projections for the
-            `new_obs` data are computed.
+            `new_obs` data is computed.
+
+        verbose : int, optional
+            The higher the verbosity, the more messages keeping track of
+            computations. The default is 1.
+            - < 1: no messages,
+            - 1: progress bar with computation time,
+            - 2: warnings are printed once,
+            - 3: warnings are printed every time they appear.
 
         Returns
         -------
@@ -502,11 +512,27 @@ class Ktest(Statistics):
             if self.kfda_statistic is None:
                 self.test(stat='kfda')
 
+            # check new_obs input convert and to torch.Tensor
+            if new_obs is not None:
+                if not (
+                    isinstance(new_obs, pd.DataFrame) or
+                    isinstance(new_obs, np.ndarray) or
+                    isinstance(new_obs, to.Tensor)
+                ) and new_obs.shape[1] != self.dataset.shape[1]:
+                    msg = "'new_obs' should be an array-like object with " + \
+                        "the same number of columns as the original " + \
+                        "training data."
+                    raise ValueError(msg)
+
+                if isinstance(new_obs, pd.DataFrame):
+                    new_obs = to.from_numpy(new_obs.to_numpy())
+                elif isinstance(new_obs, np.ndarray):
+                    new_obs = to.from_numpy(new_obs)
+
             # compute projections
-            kfda_proj, kfda_proj_contrib = \
-                self.kstat.compute_projections(
-                    self.kfda_statistic, t=t, center=center, new_obs=new_obs
-                )
+            kfda_proj, kfda_proj_contrib = self.kstat.compute_projections(
+                self.kfda_statistic, t=t, center=center, new_obs=new_obs
+            )
 
             # record projections only when projecting training data
             self.kfda_proj = kfda_proj
