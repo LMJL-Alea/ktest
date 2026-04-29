@@ -230,7 +230,7 @@ class TestStatistics(object):
         assert isinstance(kstat.bandwidth, str) and kstat.bandwidth == 'median'
         assert isinstance(kstat.median_coef, int) and kstat.median_coef == 1
         assert isinstance(kstat.kernel, types.FunctionType)
-        assert isinstance(kstat.computed_bandwidth, t.Tensor) and \
+        assert isinstance(kstat.computed_bandwidth, to.Tensor) and \
             len(kstat.computed_bandwidth.shape) == 0 and \
             kstat.computed_bandwidth.dtype == to.float64
         assert kstat.sp is None
