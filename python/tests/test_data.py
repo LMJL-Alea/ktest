@@ -14,22 +14,38 @@ def data_shape():
 
 
 @pytest.fixture
-def dummy_data(data_shape):
-    """Generate dummy data for testing (two groups, no difference)"""
+def dummy_data_array(data_shape):
+    """
+    Generate dummy data as numpy array for testing
+    (two groups, no difference).
+    """
     # generate random data (under H0, no separation)
     rng = np.random.default_rng(42)
     data_array = rng.normal(loc=0, scale=1, size=data_shape)
 
+    # create meta data frame indicating two groups
+    meta_array = np.array(
+        [f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
+    )
+
+    # output
+    yield data_array, meta_array
+
+
+@pytest.fixture
+def dummy_data(dummy_data_array, data_shape):
+    """
+    Generate dummy data as pandas array for testing
+    (two groups, no difference).
+    """
     # create a data frame from random gaussian data
     data = pd.DataFrame(
-        data=data_array,
+        data=dummy_data_array[0],
         columns=[f"col{i+1}" for i in range(data_shape[1])]
     )
 
     # create meta data frame indicating two groups
-    meta = pd.Series(
-        data=[f"c{i+1}" for i in range(2)] * (data_shape[0] // 2)
-    )
+    meta = pd.Series(data=dummy_data_array[1])
 
     # output
     yield data, meta
@@ -184,32 +200,42 @@ def _check_ktest_data_object(
     assert isinstance(data_obj.data, dict)
 
     # check variable index
-    assert all(data_obj.variables == data_tab.columns)
+    if isinstance(data_obj, pd.DataFrame):
+        assert all(data_obj.variables == data_tab.columns)
 
     # check details about data, index and nobs attributes
-    for subsample in data_obj.sample_names:
+    for i, subsample in enumerate(data_obj.sample_names):
         # expected number of observations in subsample
-        exp_nobs = np.sum(metadata_tab == subsample) if not nystrom else exp_tot_nobs // 2
+        exp_nobs = np.sum(metadata_tab == subsample) if not nystrom \
+            else exp_tot_nobs // 2
 
         # check number of observations in subsample
         assert data_obj.nobs[subsample] == exp_nobs
 
         # check subsample index
-        assert all(
-            data_obj.index[subsample] ==
-            data_tab.iloc[data_obj.index[subsample]].index
-        )
+        if isinstance(data_obj, pd.DataFrame):
+            assert all(
+                data_obj.index[subsample] ==
+                data_tab.iloc[data_obj.index[subsample]].index
+            )
 
         # check subsample data
         assert isinstance(data_obj.data[subsample], t.Tensor)
         assert list(data_obj.data[subsample].shape) == \
             [exp_nobs, data_tab_shape[1]]
-        np.testing.assert_equal(
-            data_obj.data[subsample].numpy(),
-            data_tab.iloc[
-                data_obj.index[subsample]
-            ].to_numpy()
-        )
+
+        if isinstance(data_obj, pd.DataFrame):
+            np.testing.assert_equal(
+                data_obj.data[subsample].numpy(),
+                data_tab.iloc[
+                    data_obj.index[subsample]
+                ].to_numpy()
+            )
+        elif isinstance(data_obj, np.ndarray):
+            np.testing.assert_equal(
+                data_obj.data[subsample].numpy(),
+                data_tab[metadata_tab == subsample]
+            )
 
 
 class TestData:
@@ -367,3 +393,18 @@ class TestData:
                 dtype=t.float64
             )
         assert str(excinfo.value) == err_msg
+
+    def test_init_numpy_array(self, dummy_data_array, data_shape):
+        """Testing Data object instantiation with numpy array."""
+        # init data object
+        base_data = Data(
+            data=dummy_data_array[0],
+            metadata=dummy_data_array[1],
+            sample_names=None,
+            dtype=t.float64
+        )
+        _check_ktest_data_object(
+            base_data, dummy_data_array[0], dummy_data_array[1], data_shape, nystrom=False
+        )
+
+
