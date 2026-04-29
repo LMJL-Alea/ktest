@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import torch as to
 
-from ktest.utils import verbosity, pred_threshold_fun
+from ktest.utils import verbosity, pred_threshold_fun, compute_accuracy
 
 
 torch_assert_equal = functools.partial(to.testing.assert_close, rtol=0, atol=0)
@@ -128,3 +128,121 @@ def test_pred_threshold_fun():
         torch_assert_equal(res, 2 * right_val * x - right_val)
 
 
+def test_compute_accuracy():
+    """Testing function computing accuracy in kFDA cross-validation."""
+
+    # Pseudo-random number generator
+    rng = np.random.default_rng(42)
+
+    # consider 2-level factor
+    group_name = np.array(['c1', 'c2'])
+
+    # Case 1a: prediction = ground truth (expect no error), ref is provided
+    # ground truth
+    ground_truth_index = rng.choice([0, 1], size=(20,)).astype(np.uint)
+    ground_truth = group_name[ground_truth_index]
+    # create prediction
+    prediction_index = [np.repeat(ground_truth_index[:, None], 10, axis=1)]
+    prediction = [group_name[tab] for tab in prediction_index]
+
+    # try computing accuracy
+    accuracy, true_pos, true_neg = compute_accuracy(
+        prediction, ground_truth, ref=group_name[0]
+    )
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (20, 10)
+        ref = group_name[0]
+        assert true_pos_tab.shape == \
+            (np.sum(ground_truth == ref), 10)
+        assert true_neg_tab.shape == \
+            (np.sum(ground_truth != ref), 10)
+
+        # value
+        assert np.all(accuracy_tab == 1)
+        assert np.all(true_pos_tab == 1)
+        assert np.all(true_neg_tab == 1)
+
+    # Case 1b: prediction = ground truth (expect no error), ref is not provided
+    # try computing accuracy
+    accuracy, true_pos, true_neg = compute_accuracy(
+        prediction, ground_truth, ref=group_name[0]
+    )
+
+    # check output
+    assert isinstance(accuracy, list)
+    assert isinstance(true_pos, list)
+    assert isinstance(true_neg, list)
+
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        # type
+        assert isinstance(accuracy_tab, np.ndarray)
+        assert isinstance(true_pos_tab, np.ndarray)
+        assert isinstance(true_neg_tab, np.ndarray)
+
+        # dimension
+        assert accuracy_tab.shape == (20, 10)
+        ref = ground_truth[0]
+        assert true_pos_tab.shape == \
+            (np.sum(ground_truth == ref), 10)
+        assert true_neg_tab.shape == \
+            (np.sum(ground_truth != ref), 10)
+
+        # value
+        assert np.all(accuracy_tab == 1)
+        assert np.all(true_pos_tab == 1)
+        assert np.all(true_neg_tab == 1)
+
+    # Case 2: prediction = 1 - ground truth (expect only errors)
+    # create prediction
+    prediction = [group_name[1 - tab] for tab in prediction_index]
+
+    # try computing accuracy
+    accuracy, true_pos, true_neg = compute_accuracy(
+        prediction, ground_truth, ref=group_name[0]
+    )
+
+    # check
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        assert np.all(accuracy_tab == 0)
+        assert np.all(true_pos_tab == 0)
+        assert np.all(true_neg_tab == 0)
+
+    # Case 3: multiple random predictions
+    # generate data (list of 2-level factor arrays)
+    prediction = []
+    rng = np.random.default_rng(42)
+    for i in range(10):
+        prediction.append(
+            rng.choice(group_name, size=(20, 10))
+        )
+
+    # try computing accuracy
+    accuracy, true_pos, true_neg = compute_accuracy(
+        prediction, ground_truth, ref=group_name[0]
+    )
+
+    # check
+    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
+        accuracy, true_pos, true_neg
+    ):
+        assert np.all(np.isin(accuracy_tab, [0, 1]))
+        assert np.all(np.isin(true_pos_tab, [0, 1]))
+        assert np.all(np.isin(true_neg_tab, [0, 1]))
