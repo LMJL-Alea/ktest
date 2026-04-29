@@ -1,16 +1,16 @@
+import gzip
+import warnings
+import dill
+import matplotlib.pyplot as plt
+from matplotlib import rc
 import numpy as np
 import pandas as pd
 from scipy.stats import chi2, gaussian_kde
-import matplotlib.pyplot as plt
-from matplotlib import rc
-import warnings
-from tqdm import tqdm
-import dill
-import gzip
 from torch import float64
+from tqdm import tqdm
 
-from .kernel_statistics import Statistics
 from .data import Data
+from .kernel_statistics import Statistics
 
 
 class Ktest(Statistics):
