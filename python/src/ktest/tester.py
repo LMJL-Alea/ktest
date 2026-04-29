@@ -217,6 +217,8 @@ class Ktest(Statistics):
                 random_state=self.rnd_gen,
                 dtype=dtype
             )
+
+        ### define statistic object
         self.kstat = Statistics(
             self.data, kernel_function=self.kernel_function,
             bandwidth=self.kernel_bandwidth,
