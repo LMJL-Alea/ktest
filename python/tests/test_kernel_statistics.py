@@ -9,7 +9,7 @@ from ktest.kernel_statistics import Statistics
 from ktest.data import Data
 
 from .test_data import (
-    data_shape, dummy_data,
+    data_shape, dummy_data_array, dummy_data,
     ktest_data, ktest_data_nystrom,
     dummy_separated_data,
     ktest_separated_data, ktest_separated_data_nystrom
