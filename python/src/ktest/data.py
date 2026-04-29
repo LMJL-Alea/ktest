@@ -170,7 +170,7 @@ class Data(object):
             if not (hasattr(data, 'index') or hasattr(metadata, 'index')):
                 assrt_str_1 = 'If index is not provided, ' + \
                     'data and metadata have to have the same first dimension.'
-                assert data.shape[0] == data.shape, assrt_str_1
+                assert data.shape[0] == metadata.shape[0], assrt_str_1
             if isinstance(metadata, pd.DataFrame):
                 meta_fmt = metadata[metadata.columns[0]]
             else:
