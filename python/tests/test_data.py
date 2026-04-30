@@ -363,7 +363,7 @@ class TestData:
             ny_data, data, metadata, data_shape, nystrom=True
         )
 
-        # insert constant columns in data (all)
+        # insert constant columns in final column (in one group only)
         data[data.columns[99]].values[::2] = 0
 
         # init data object without nystrom
@@ -379,8 +379,55 @@ class TestData:
         )
 
         # init data object with nystrom
-        err_msg = "Subsampling failed after 100 trials. " + \
-            "All variables have constant values in at leat one subsample."
+        ny_data = Data(
+            data=data,
+            metadata=metadata,
+            sample_names=None,
+            nystrom=True,
+            n_landmarks=None,
+            landmark_method='random',
+            random_state=None,
+            dtype=to.float64
+        )
+
+        _check_ktest_data_object(
+            ny_data, data, metadata, data_shape, nystrom=True
+        )
+
+        # insert constant columns in final column (in all groups)
+        data[data.columns[99]].values[:] = 0
+
+        # init data object without nystrom
+        err_msg = "All variables have constant values in your data."
+        with pytest.raises(RuntimeError) as excinfo:
+            base_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                dtype=to.float64
+            )
+        assert str(excinfo.value) == err_msg
+
+        # init data object without nystrom (no safe subsampling)
+        try:
+            base_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                dtype=to.float64,
+                safe_subsample=False
+            )
+        except Exception as e:
+            pytest.fail(f"Unexpected error: {e}")
+
+        # insert constant columns in final column but one value (in all groups)
+        data[data.columns[99]].values[0] = 1
+
+        # init data object with nystrom
+        err_msg = "Subsampling failed after 10 trials. " + \
+            "All variables have constant values."
+        # IMPORTANT: issue may not be raised if non null value in last
+        # column is selected in Nystrom subsample (should be rare)
         with pytest.raises(RuntimeError) as excinfo:
             ny_data = Data(
                 data=data,
@@ -391,8 +438,26 @@ class TestData:
                 landmark_method='random',
                 random_state=None,
                 dtype=to.float64,
+                safe_subsample=True,
+                n_subsample_trial=10
             )
         assert str(excinfo.value) == err_msg
+
+        # init data object with nystrom (no safe subsampling)
+        try:
+            ny_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                nystrom=True,
+                n_landmarks=None,
+                landmark_method='random',
+                random_state=None,
+                dtype=to.float64,
+                safe_subsample=False
+            )
+        except Exception as e:
+            pytest.fail(f"Unexpected error: {e}")
 
     def test_init_numpy_array(self, dummy_data_array, data_shape):
         """Testing Data object instantiation with numpy array."""
