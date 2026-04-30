@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import torch as t
+import torch as to
 from sklearn.cluster import kmeans_plusplus
 
 
@@ -119,7 +119,7 @@ class Data(object):
     def __init__(
         self, data, metadata, sample_names=None, nystrom=False,
         n_landmarks=None, landmark_method='kmeans++', random_state=None,
-        dtype=t.float64, safe_subsample=True, n_subsample_trial=100,
+        dtype=to.float64, safe_subsample=True, n_subsample_trial=100,
         verbose=0
     ):
         # init
@@ -204,20 +204,20 @@ class Data(object):
                 # Convert data to tensor:
                 if isinstance(data_n, pd.Series):
                     self.data[n] = \
-                        t.from_numpy(
+                        to.from_numpy(
                             data_n.to_numpy().reshape(-1, 1)
                         ).type(self.dtype)
                 elif isinstance(data_n, pd.DataFrame):
-                    self.data[n] = t.from_numpy(
+                    self.data[n] = to.from_numpy(
                         data_n.to_numpy()
                     ).type(self.dtype)
-                elif isinstance(data_n, t.Tensor):
+                elif isinstance(data_n, to.Tensor):
                     self.data[n] = data_n.type(self.dtype)
                 else:
                     X = data_n.to_numpy() \
                         if not isinstance(data_n, np.ndarray) else \
                         data_n.copy()
-                    self.data[n] = t.from_numpy(X).type(self.dtype)
+                    self.data[n] = to.from_numpy(X).type(self.dtype)
 
         except AttributeError as e:
             print(f'Unknown data type {type(data_n)}')

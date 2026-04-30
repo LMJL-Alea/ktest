@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-import torch as t
+import torch as to
 
 from ktest.data import Data
 
@@ -113,7 +113,7 @@ def ktest_data(dummy_data):
         data=dummy_data[0],
         metadata=dummy_data[1],
         sample_names=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -132,7 +132,7 @@ def ktest_data_nystrom(dummy_data):
         n_landmarks=None,
         landmark_method='random',
         random_state=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield ny_data
@@ -146,7 +146,7 @@ def ktest_separated_data(dummy_separated_data):
         metadata=dummy_separated_data[1],
         sample_names=None,
         nystrom=False,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -163,7 +163,7 @@ def ktest_separated_data_nystrom(dummy_separated_data):
         n_landmarks=None,
         landmark_method='random',
         random_state=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -194,7 +194,7 @@ def _check_ktest_data_object(
     assert data_obj.nvar == data_tab_shape[1]
 
     # check data type
-    assert data_obj.dtype == t.float64
+    assert data_obj.dtype == to.float64
 
     # check data attribute
     assert isinstance(data_obj.data, dict)
@@ -220,7 +220,7 @@ def _check_ktest_data_object(
             )
 
         # check subsample data
-        assert isinstance(data_obj.data[subsample], t.Tensor)
+        assert isinstance(data_obj.data[subsample], to.Tensor)
         assert list(data_obj.data[subsample].shape) == \
             [exp_nobs, data_tab_shape[1]]
 
@@ -267,7 +267,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -284,7 +284,7 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -308,7 +308,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -324,7 +324,7 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -340,7 +340,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -356,7 +356,7 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -371,7 +371,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -390,7 +390,7 @@ class TestData:
                 n_landmarks=None,
                 landmark_method='random',
                 random_state=None,
-                dtype=t.float64
+                dtype=to.float64,
             )
         assert str(excinfo.value) == err_msg
 
@@ -401,7 +401,7 @@ class TestData:
             data=dummy_data_array[0],
             metadata=dummy_data_array[1],
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
         _check_ktest_data_object(
             base_data, dummy_data_array[0], dummy_data_array[1], data_shape, nystrom=False
