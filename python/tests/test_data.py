@@ -436,7 +436,7 @@ class TestData:
                 nystrom=True,
                 n_landmarks=None,
                 landmark_method='random',
-                random_state=None,
+                random_state=42,
                 dtype=to.float64,
                 safe_subsample=True,
                 n_subsample_trial=10
