@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-import torch as t
+import torch as to
 
 from ktest.data import Data
 
@@ -113,7 +113,7 @@ def ktest_data(dummy_data):
         data=dummy_data[0],
         metadata=dummy_data[1],
         sample_names=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -132,7 +132,7 @@ def ktest_data_nystrom(dummy_data):
         n_landmarks=None,
         landmark_method='random',
         random_state=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield ny_data
@@ -146,7 +146,7 @@ def ktest_separated_data(dummy_separated_data):
         metadata=dummy_separated_data[1],
         sample_names=None,
         nystrom=False,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -163,7 +163,7 @@ def ktest_separated_data_nystrom(dummy_separated_data):
         n_landmarks=None,
         landmark_method='random',
         random_state=None,
-        dtype=t.float64
+        dtype=to.float64
     )
 
     yield data
@@ -194,7 +194,7 @@ def _check_ktest_data_object(
     assert data_obj.nvar == data_tab_shape[1]
 
     # check data type
-    assert data_obj.dtype == t.float64
+    assert data_obj.dtype == to.float64
 
     # check data attribute
     assert isinstance(data_obj.data, dict)
@@ -220,7 +220,7 @@ def _check_ktest_data_object(
             )
 
         # check subsample data
-        assert isinstance(data_obj.data[subsample], t.Tensor)
+        assert isinstance(data_obj.data[subsample], to.Tensor)
         assert list(data_obj.data[subsample].shape) == \
             [exp_nobs, data_tab_shape[1]]
 
@@ -267,7 +267,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -284,7 +284,7 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -308,7 +308,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -324,7 +324,7 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -340,7 +340,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -356,14 +356,14 @@ class TestData:
             n_landmarks=None,
             landmark_method='random',
             random_state=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
             ny_data, data, metadata, data_shape, nystrom=True
         )
 
-        # insert constant columns in data (all)
+        # insert constant columns in final column (in one group only)
         data[data.columns[99]].values[::2] = 0
 
         # init data object without nystrom
@@ -371,7 +371,7 @@ class TestData:
             data=data,
             metadata=metadata,
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
 
         _check_ktest_data_object(
@@ -379,8 +379,55 @@ class TestData:
         )
 
         # init data object with nystrom
-        err_msg = "Subsampling failed after 100 trials. " + \
-            "All variables have constant values in at leat one subsample."
+        ny_data = Data(
+            data=data,
+            metadata=metadata,
+            sample_names=None,
+            nystrom=True,
+            n_landmarks=None,
+            landmark_method='random',
+            random_state=None,
+            dtype=to.float64
+        )
+
+        _check_ktest_data_object(
+            ny_data, data, metadata, data_shape, nystrom=True
+        )
+
+        # insert constant columns in final column (in all groups)
+        data[data.columns[99]].values[:] = 0
+
+        # init data object without nystrom
+        err_msg = "All variables have constant values in your data."
+        with pytest.raises(RuntimeError) as excinfo:
+            base_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                dtype=to.float64
+            )
+        assert str(excinfo.value) == err_msg
+
+        # init data object without nystrom (no safe subsampling)
+        try:
+            base_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                dtype=to.float64,
+                safe_subsample=False
+            )
+        except Exception as e:
+            pytest.fail(f"Unexpected error: {e}")
+
+        # insert constant columns in final column but one value (in all groups)
+        data[data.columns[99]].values[0] = 1
+
+        # init data object with nystrom
+        err_msg = "Subsampling failed after 10 trials. " + \
+            "All variables have constant values."
+        # IMPORTANT: issue may not be raised if non null value in last
+        # column is selected in Nystrom subsample (should be rare)
         with pytest.raises(RuntimeError) as excinfo:
             ny_data = Data(
                 data=data,
@@ -390,9 +437,27 @@ class TestData:
                 n_landmarks=None,
                 landmark_method='random',
                 random_state=None,
-                dtype=t.float64
+                dtype=to.float64,
+                safe_subsample=True,
+                n_subsample_trial=10
             )
         assert str(excinfo.value) == err_msg
+
+        # init data object with nystrom (no safe subsampling)
+        try:
+            ny_data = Data(
+                data=data,
+                metadata=metadata,
+                sample_names=None,
+                nystrom=True,
+                n_landmarks=None,
+                landmark_method='random',
+                random_state=None,
+                dtype=to.float64,
+                safe_subsample=False
+            )
+        except Exception as e:
+            pytest.fail(f"Unexpected error: {e}")
 
     def test_init_numpy_array(self, dummy_data_array, data_shape):
         """Testing Data object instantiation with numpy array."""
@@ -401,7 +466,7 @@ class TestData:
             data=dummy_data_array[0],
             metadata=dummy_data_array[1],
             sample_names=None,
-            dtype=t.float64
+            dtype=to.float64
         )
         _check_ktest_data_object(
             base_data, dummy_data_array[0], dummy_data_array[1], data_shape, nystrom=False

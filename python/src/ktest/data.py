@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import torch as t
+import torch as to
 from sklearn.cluster import kmeans_plusplus
 
 
@@ -119,7 +119,7 @@ class Data(object):
     def __init__(
         self, data, metadata, sample_names=None, nystrom=False,
         n_landmarks=None, landmark_method='kmeans++', random_state=None,
-        dtype=t.float64, safe_subsample=True, n_subsample_trial=100,
+        dtype=to.float64, safe_subsample=True, n_subsample_trial=100,
         verbose=0
     ):
         # init
@@ -204,24 +204,32 @@ class Data(object):
                 # Convert data to tensor:
                 if isinstance(data_n, pd.Series):
                     self.data[n] = \
-                        t.from_numpy(
+                        to.from_numpy(
                             data_n.to_numpy().reshape(-1, 1)
                         ).type(self.dtype)
                 elif isinstance(data_n, pd.DataFrame):
-                    self.data[n] = t.from_numpy(
+                    self.data[n] = to.from_numpy(
                         data_n.to_numpy()
                     ).type(self.dtype)
-                elif isinstance(data_n, t.Tensor):
+                elif isinstance(data_n, to.Tensor):
                     self.data[n] = data_n.type(self.dtype)
                 else:
                     X = data_n.to_numpy() \
                         if not isinstance(data_n, np.ndarray) else \
                         data_n.copy()
-                    self.data[n] = t.from_numpy(X).type(self.dtype)
+                    self.data[n] = to.from_numpy(X).type(self.dtype)
 
         except AttributeError as e:
             print(f'Unknown data type {type(data_n)}')
             raise e
+
+        # variance check (if required)
+        if (
+            safe_subsample and
+            not to.any(to.var(to.cat(list(self.data.values())), dim=0) > 0)
+        ):
+            msg = "All variables have constant values in your data."
+            raise RuntimeError(msg)
 
         # total retained observations in selected subsamples
         self.ntot = sum(self.nobs.values())
@@ -253,20 +261,20 @@ class Data(object):
                 isinstance(random_state, np.random.RandomState)
             random_state = random_state
 
-        # iterate through samples
-        for n, data_n in self.data.items():
+        # check variance in subsample to avoid any constant column
+        # and re-do subsampling if needed
+        for counter in range(n_subsample_trial):
 
-            # number for landmarks in sample
-            n_landmarks_n = (
-                min(
-                    n_landmarks * self.nobs[n] // self.ntot,
-                    self.nobs[n]
-                ) if n_landmarks is not None else self.nobs[n] // 5
-            )
+            # iterate through samples
+            for n, data_n in self.data.items():
 
-            # check variance in subsample to avoid any constant column
-            # and re-do subsampling if needed
-            for counter in range(n_subsample_trial):
+                # number for landmarks in sample
+                n_landmarks_n = (
+                    min(
+                        n_landmarks * self.nobs[n] // self.ntot,
+                        self.nobs[n]
+                    ) if n_landmarks is not None else self.nobs[n] // 5
+                )
 
                 if landmark_method == 'random':
                     ny_ind = random_state.choice(
@@ -287,25 +295,24 @@ class Data(object):
                 else:
                     raise ValueError("unsupported 'landmark_method'")
 
-                # variance check (if required)
-                if (
-                    not safe_subsample or
-                    t.any(t.var(self.data[n][ny_ind], dim=0) > 0)
-                ):
-                    break
-                elif counter == n_subsample_trial - 1:
-                    msg = " ".join([
-                        "Subsampling failed after",
-                        f"{n_subsample_trial} trials.",
-                        "All variables have constant values",
-                        "in at leat one subsample."
-                    ])
-                    raise RuntimeError(msg)
+                # save subsamping
+                self.data[n] = self.data[n][ny_ind]
+                self.nobs[n] = n_landmarks_n
+                self.index[n] = self.index[n][ny_ind]
 
-            # save subsamping
-            self.data[n] = self.data[n][ny_ind]
-            self.nobs[n] = n_landmarks_n
-            self.index[n] = self.index[n][ny_ind]
+            # variance check (if required)
+            if (
+                not safe_subsample or
+                to.any(to.var(to.cat(list(self.data.values())), dim=0) > 0)
+            ):
+                break
+            elif counter == n_subsample_trial - 1:
+                msg = " ".join([
+                    "Subsampling failed after",
+                    f"{n_subsample_trial} trials.",
+                    "All variables have constant values."
+                ])
+                raise RuntimeError(msg)
 
         # update total retained observations in selected subsamples
         self.ntot = sum(self.nobs.values())
