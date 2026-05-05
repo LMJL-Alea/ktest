@@ -96,6 +96,14 @@ class Ktest(Statistics):
         clip_eigval : boolean,
             flag to enable/disable eigen value clipping.
 
+        verbose : int, optional
+            The higher the verbosity, the more messages keeping track of
+            computations. The default is 1.
+            - < 1: no messages,
+            - 1: progress bar with computation time,
+            - 2: warnings are printed once,
+            - 3: warnings are printed every time they appear.
+
     Attributes
     ----------
         dataset: 1 or 2-dimensional array-like
@@ -172,77 +180,84 @@ class Ktest(Statistics):
         kernel_function='gauss', kernel_bandwidth='median',
         kernel_median_coef=1, nystrom=False, n_landmarks=None,
         landmark_method='random', n_anchors=None, anchor_basis='w',
-        random_state=None, dtype=float64, eps=None, clip_eigval=True
+        random_state=None, dtype=float64, eps=None, clip_eigval=True,
+        verbose=0
     ):
-        self.dataset = data
-        self.metadata = metadata
-        self.data = Data(
-            data=data, metadata=metadata, sample_names=sample_names,
-            dtype=dtype
-        )
-        self.sample_names = self.data.sample_names
+        with warnings.catch_warnings():
+            if verbose < 2:
+                warnings.simplefilter("ignore")
+            elif verbose >= 3:
+                warnings.simplefilter("always")
 
-        self.dtype = dtype
-        self.eps = eps
-        self.clip_eigval = clip_eigval
-
-        # random number generation
-        if random_state is None:
-            self.rnd_gen = np.random.default_rng()
-        elif isinstance(random_state, int):
-            self.rnd_gen = np.random.default_rng(random_state)
-        else:
-            assert isinstance(random_state, np.random.Generator) or \
-                isinstance(random_state, np.random.RandomState)
-            self.rnd_gen = random_state
-
-        ### Kernel:
-        self.kernel_function = kernel_function
-        self.kernel_bandwidth = kernel_bandwidth
-        self.kernel_median_coef = kernel_median_coef
-
-        ### Nystrom:
-        self.data_nystrom = None
-        self.n_landmarks = n_landmarks
-        self.landmark_method = landmark_method
-        self.n_anchors = n_anchors
-        self.anchor_basis = anchor_basis
-
-        if nystrom:
-            self.data_nystrom = Data(
-                data=data, metadata=metadata,
-                sample_names=sample_names,
-                nystrom=True, n_landmarks=self.n_landmarks,
-                landmark_method=self.landmark_method,
-                random_state=self.rnd_gen,
+            self.dataset = data
+            self.metadata = metadata
+            self.data = Data(
+                data=data, metadata=metadata, sample_names=sample_names,
                 dtype=dtype
             )
+            self.sample_names = self.data.sample_names
 
-        ### define statistic object
-        self.kstat = Statistics(
-            self.data, kernel_function=self.kernel_function,
-            bandwidth=self.kernel_bandwidth,
-            median_coef=self.kernel_median_coef,
-            data_nystrom=self.data_nystrom,
-            n_anchors=self.n_anchors,
-            anchor_basis=self.anchor_basis,
-            eps=self.eps, clip_eigval=self.clip_eigval
-        )
+            self.dtype = dtype
+            self.eps = eps
+            self.clip_eigval = clip_eigval
 
-        ### Output statistics ###
-        ## kFDA statistic
-        self.kfda_statistic = None
-        self.kfda_pval_asymp = None
-        self.kfda_pval_perm = None
-        self.kfda_statistic_contrib = None
+            # random number generation
+            if random_state is None:
+                self.rnd_gen = np.random.default_rng()
+            elif isinstance(random_state, int):
+                self.rnd_gen = np.random.default_rng(random_state)
+            else:
+                assert isinstance(random_state, np.random.Generator) or \
+                    isinstance(random_state, np.random.RandomState)
+                self.rnd_gen = random_state
 
-        ## MMD statistic
-        self.mmd_statistic = None
-        self.mmd_pval_perm = None
+            ### Kernel:
+            self.kernel_function = kernel_function
+            self.kernel_bandwidth = kernel_bandwidth
+            self.kernel_median_coef = kernel_median_coef
 
-        ### Projections:
-        self.kfda_proj = {}
-        self.kfda_proj_contrib = {}
+            ### Nystrom:
+            self.data_nystrom = None
+            self.n_landmarks = n_landmarks
+            self.landmark_method = landmark_method
+            self.n_anchors = n_anchors
+            self.anchor_basis = anchor_basis
+
+            if nystrom:
+                self.data_nystrom = Data(
+                    data=data, metadata=metadata,
+                    sample_names=sample_names,
+                    nystrom=True, n_landmarks=self.n_landmarks,
+                    landmark_method=self.landmark_method,
+                    random_state=self.rnd_gen,
+                    dtype=dtype
+                )
+
+            ### define statistic object
+            self.kstat = Statistics(
+                self.data, kernel_function=self.kernel_function,
+                bandwidth=self.kernel_bandwidth,
+                median_coef=self.kernel_median_coef,
+                data_nystrom=self.data_nystrom,
+                n_anchors=self.n_anchors,
+                anchor_basis=self.anchor_basis,
+                eps=self.eps, clip_eigval=self.clip_eigval
+            )
+
+            ### Output statistics ###
+            ## kFDA statistic
+            self.kfda_statistic = None
+            self.kfda_pval_asymp = None
+            self.kfda_pval_perm = None
+            self.kfda_statistic_contrib = None
+
+            ## MMD statistic
+            self.mmd_statistic = None
+            self.mmd_pval_perm = None
+
+            ### Projections:
+            self.kfda_proj = {}
+            self.kfda_proj_contrib = {}
 
     def __str__(self):
         s = "An object of class Ktest."
