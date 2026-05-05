@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "1.1.2"
+version = "1.2.0"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
     {name = "Polina Arsenteva", email = "polina.arsenteva@ens-lyon.fr"},
@@ -52,5 +52,7 @@ include-package-data = false
 dev = [
     "ipython>=7.16.3",
     "pytest>=7.0.1",
+    "scikit-learn>=0.24.2",
+    "seaborn>=0.11.2",
     "toml>=0.10.2",
 ]

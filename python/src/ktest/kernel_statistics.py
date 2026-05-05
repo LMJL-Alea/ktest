@@ -1,10 +1,14 @@
+from collections.abc import Iterable
+from numbers import Real
+import warnings
 import numpy as np
 import pandas as pd
 from torch import cdist, cat, matmul, exp, mv, dot, diag, sqrt
 from torch import ones, eye, zeros, finfo
-import torch as t
+import torch as to
 from torch.linalg import multi_dot, eigh
-import warnings
+
+from .utils import pred_threshold_fun
 
 
 def distances(x, y=None):
@@ -377,7 +381,7 @@ class Statistics(object):
         m_mu2 = 1/n2 * ones(n2, dtype=self.dtype)
         return cat((m_mu1, m_mu2), dim=0)
 
-    def compute_gram(self, landmarks=False):
+    def compute_gram(self, landmarks=False, new_obs=None):
         """
         Computes the Gram matrix of the data in question.
 
@@ -391,6 +395,9 @@ class Statistics(object):
             landmarks : bool, optional
                 False by default. If True, performs the computations on the
                 the Nystrom dataset (landmarks).
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                data and `new_obs` is computed.
 
         Returns
         -------
@@ -403,15 +410,27 @@ class Statistics(object):
             )
         data = self.data if not landmarks else self.data_ny
         D = cat([x for x in data.data.values()], axis=0)
-        K = self.kernel(D, D)
+        if new_obs is not None:
+            K = self.kernel(D, new_obs)
+        else:
+            K = self.kernel(D, D)
         return K
 
-    def compute_kmn(self):
+    def compute_kmn(self, new_obs=None):
         """
-        Computes an (nxanchors+nyanchors)x(ndata) conversion gram matrix.
+        Computes an (nxlandmarks+nylandmarks)x(ndata) conversion gram matrix.
+
+        Parameters
+        ----------
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                landmarks and `new_obs` is computed.
 
         """
-        data = cat([x for x in self.data.data.values()], axis=0)
+        if new_obs is not None:
+            data = new_obs
+        else:
+            data = cat([x for x in self.data.data.values()], axis=0)
         landmarks = cat([x for x in self.data_ny.data.values()], axis=0)
         kmn = self.kernel(landmarks, data)
         return kmn
@@ -480,13 +499,13 @@ class Statistics(object):
                         multi_dot([
                             Kmn[:, :sample_size[0]],
                             Kmn[:, :sample_size[0]].T - 1/sample_size[0] *
-                            t.sum(Kmn[:, :sample_size[0]], dim=1)
+                            to.sum(Kmn[:, :sample_size[0]], dim=1)
                             # use pytorch broadcasting
                         ]) +
                         multi_dot([
                             Kmn[:, -sample_size[1]:],
                             Kmn[:, -sample_size[1]:].T - 1/sample_size[1] *
-                            t.sum(Kmn[:, -sample_size[1]:], dim=1)
+                            to.sum(Kmn[:, -sample_size[1]:], dim=1)
                             # use pytorch broadcasting
                         ]),
                         Pm,
@@ -703,7 +722,7 @@ class Statistics(object):
             mmd = dot(mv(K, m), m) ** 2
         return mmd.item()
 
-    def compute_upk(self, t):
+    def compute_upk(self, t, new_obs=None):
         """
         epk is an alias for the product ePK that appears when projecting the
         data on the discriminant axis. This functions computes the
@@ -712,26 +731,35 @@ class Statistics(object):
         warning: some work remains to be done to :
             - normalize the vectors with respect to n_anchors as in pkm
             - separate the different nystrom approaches
+        FIXME: seems to be ok
+
+        Parameters
+        ----------
+            t : int
+                Maximal truncation.
+            new_obs : torch.tensor, optional
+                Unused by default. If not None, then the Gram matrix between
+                landmarks and `new_obs` is computed.
         """
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
         if self.data_ny is not None:
-            Kzx = self.compute_kmn()
+            Kzx = self.compute_kmn(new_obs=new_obs)
             if self.sp_anchors is None and self.ev_anchors is None:
                 self.sp_anchors, self.ev_anchors = \
                     self.compute_nystrom_anchors()
             Lz12 = diag(self.sp_anchors**-(1/2))
-            epk = 1 / self.data_ny.ntot**(1/2) * multi_dot([self.ev.T[:t],
-                                                            Lz12,
-                                                            self.ev_anchors.T,
-                                                            Kzx]).T
+            epk = 1 / self.data_ny.ntot**(1/2) * \
+                multi_dot([
+                    self.ev.T[:t], Lz12, self.ev_anchors.T, Kzx
+                ]).T
         else:
             Pbi = self.compute_centering_matrix()
-            Kx = self.compute_gram()
+            Kx = self.compute_gram(new_obs=new_obs)
             epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
         return epk
 
-    def compute_projections(self, stat, t=100, center=True):
+    def compute_projections(self, stat, t=100, center=True, new_obs=None):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -746,16 +774,19 @@ class Statistics(object):
         ----------
 
         stat : Pandas.Series
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for normalization.
 
         t : int, optional
             Maximal truncation, the default is 100.
 
-            kFDA statistics (same as the attribute `kfda_statistic` of class
-            Ktest). Required for normalization.
-
         center : bool, optional
             If True (default), the projections are centered with respect to
             the mean embedding.
+
+        new_obs : torch.tensor, optional
+            Unused by default. If not None, then the projections for the
+            `new_obs` data are computed.
 
         Returns
         -------
@@ -770,22 +801,50 @@ class Statistics(object):
             cumulated sum of the values in 'proj_kpca'.
 
         """
+        # diagonalize centered Gram matrix if needed
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
+        # fix truncation if needed
         t = min(t, len(self.sp))
+        # compute intermediate quantities
         pkm = self.compute_pkm()
-        upk = self.compute_upk(t)
+        upk = self.compute_upk(t, new_obs=new_obs)
+        # number of observations in training data
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
+        # number of observations in projected data
+        if new_obs is not None:
+            n_obs = new_obs.shape[0]
+        else:
+            n_obs = n
+        # compute projections
         if center:
-            centering_mat = eye(n, dtype=self.dtype)
-            centering_mat -= ones((n, n)) / n
-        proj = ((self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
-                 * matmul(centering_mat, upk)).numpy())
-        proj_list = [proj[:n1], proj[n1:]]
+            # define centering matrix (identity if no centering)
+            centering_mat = eye(n_obs, dtype=self.dtype) \
+                - ones((n_obs, n_obs), dtype=self.dtype) / n_obs
+            # project
+            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+                    * matmul(centering_mat, upk)).numpy()
+        else:
+            # project
+            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+                    * upk).numpy()
+        # post-processing
+        # (manage training data vs new obsercations differently)
+        if new_obs is not None:
+            proj_list = [proj]
+        else:
+            proj_list = [proj[:n1], proj[n1:]]
+        # init output
         proj_kfda = {}
         proj_kpca = {}
-        for i, (name, ind) in enumerate(self.data.index.items()):
+        # group index (create a new one for new_obs if needed)
+        if new_obs is not None:
+            index_dict = {"new_obs": pd.Index(range(new_obs.shape[0]))}
+        else:
+            index_dict = self.data.index
+        # iterate through groups
+        for i, (name, ind) in enumerate(index_dict.items()):
             proj_kpca[name] = pd.DataFrame(
                 proj_list[i], index=ind,
                 columns=[str(t) for t in range(1, t+1)]
@@ -798,3 +857,197 @@ class Statistics(object):
                 n ** 3 * stat.values[:t] / (n1 * n2)
             )
         return proj_kfda, proj_kpca
+
+    def kfda_loss(self, t=100, new_obs=None, stat=None):
+        """
+        Compute the two compartments (one for each group) of the kFDA loss
+        function associated to the prediction for each observations (either in
+        training data or for provided new observations) depending on kFDA axis
+        projection.
+
+        The loss is the difference between the distance to each group mean
+        embedding. The function computes each element of this difference.
+
+        Parameters
+        ----------
+
+        t: int, optional
+            Maximal truncation, the default is 100.
+
+        new_obs: torch.tensor, optional
+            Unused by default. If not None, then the loss function for the
+            `new_obs` data are computed.
+
+        stat : Pandas.Series, optional
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for projection normalization. Can be provided as
+            input argument to avoid re-computing it. If `None` (default), then
+            the kFDA statistics is re-computed.
+
+        Returns
+        -------
+
+        distance_group1: dict
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 1 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+
+        distance_group2: dict
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 2 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+        """
+
+        # get kFDA stat Value
+        if stat is None:
+            stat, _ = self.compute_kfda()
+
+        # compute kfda projection for training data
+        proj_kfda, _ = self.compute_projections(
+            stat, t, center=False, new_obs=None
+        )
+
+        # compute mean embedding for training data (in the two groups)
+        mean_embed = []
+        for group in proj_kfda.keys():
+            mean_embed.append(proj_kfda[group].mean(axis=0))
+        mean_embed = pd.DataFrame(mean_embed)
+        # cast back to torch object
+        mean_embed = to.from_numpy(mean_embed.values)
+
+        # if new observation, compute corresponding projection
+        if new_obs is not None:
+            proj_kfda, _ = self.compute_projections(
+                stat, t, center=False, new_obs=new_obs
+            )
+
+        # init output
+        distance_group1 = {}
+        distance_group2 = {}
+
+        # compute loss function compartments for each observation set
+        # iterate through group (or new obs)
+        for i, (group, proj_tab) in enumerate(proj_kfda.items()):
+
+            # cast back to torch object
+            proj_tab = to.from_numpy(proj_tab.values)
+
+            # distance to each group
+            distance_g1_val = to.abs(proj_tab - mean_embed[0,:])  # group 1
+            distance_g2_val = to.abs(proj_tab - mean_embed[1,:])  # group 2
+
+            distance_group1[group] = distance_g1_val
+            distance_group2[group] = distance_g2_val
+
+        # output
+        return distance_group1, distance_group2
+
+    def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5, stat=None):
+        """
+        Compute prediction for each observations according to kFDA and with
+        increasing truncation values, i.e. assign each observations to one of
+        the two groups using projections on kFDA axis.
+
+        Parameters
+        ----------
+
+        t : int, optional
+            Maximal truncation, the default is 100.
+
+        new_obs: torch.tensor, optional
+            Unused by default. If not None, then the prediction for the
+            `new_obs` data is computed.
+
+        pred_threshold : float or Iterable, optional
+            Number (or Iterable containing numbers) between `0` an 1 to bias
+            prediction towards first group or second group (in appearence order
+            in the data). `0` means predicting only first group and `1`
+            predicting only second group. Default value is `0.5` and no bias is
+            introduced. Useful for ROC curve and AUC computations.
+            If Iterable, the prediction is computed for each threshold value.
+
+        stat : Pandas.Series, optional
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for projection normalization. Can be provided as
+            input argument to avoid re-computing it. If `None` (default), then
+            the kFDA statistics is re-computed.
+
+        Returns
+        -------
+
+        pred: dict
+            dictionary containing list of prediction arrays (np.ndarray),
+            either for each group in the training data or for the new
+            observations, each array stores kFDA predictions for each
+            considered observation and increasing truncation values, for a
+            given prediction threshold given by `pred_threshold`.
+
+        loss: dict
+            dictionary containing list of loss value arrays (np.ndarray),
+            either for each group in the training data or for the new
+            observations, each array stores kFDA loss function values for each
+            considered observation and increasing truncation values, for a
+            given prediction threshold given by `pred_threshold`.
+        """
+
+        # check threshold input and convert to list if scalar
+        msg = "'pred_threshold' should be a number or an iterable " + \
+            "containing numbers between 0 and 1"
+        if not isinstance(pred_threshold, (Real, Iterable)):
+            raise TypeError(msg)
+        if not isinstance(pred_threshold, Iterable):
+            pred_threshold = [pred_threshold]
+            if not all(
+                isinstance(item, Real) and
+                item >= 0 and item <= 1
+                for item in pred_threshold
+            ):
+                raise ValueError(msg)
+
+        # compute loss function associated to kFDA prediction
+        distance_group1, distance_group2 = self.kfda_loss(t, new_obs, stat)
+
+        # init output (dictionaries)
+        pred = {}
+        loss = {}
+
+        # compute prediction for each observation set
+        # iterate through group (or new obs)
+        for i, (group, dist_g1, dist_g2) in enumerate(zip(
+            distance_group1.keys(),
+            distance_group1.values(),
+            distance_group2.values()
+        )):
+            # init intermediate results (for each threshold value)
+            pred_inter = []
+            loss_inter = []
+
+            # compare distances to group 1 and group 2
+            diff_g1_g2 = dist_g1 - dist_g2
+
+            # iterate through threshold value
+            for thres_val in pred_threshold:
+
+                # compute loss value
+                loss_val = diff_g1_g2 - \
+                    pred_threshold_fun(thres_val, dist_g2, dist_g1)
+                # loss > 0 ?
+                # loss < 0 -> group 1
+                # loss > 0 -> group 2
+
+                # convert loss to group name prediction
+                group_name = np.array(list(self.data.index.keys()))
+                pred_val = group_name[(1 - (loss_val < 0).int()).numpy()]
+
+                # store prediction and loss for current set of observations
+                pred_inter.append(pred_val)
+                loss_inter.append(loss_val.numpy())
+
+            # store results
+            pred[group] = pred_inter
+            loss[group] = loss_inter
+
+        # output
+        return pred, loss
