@@ -205,23 +205,33 @@ def test_constant_var(dummy_data, data_shape, nystrom):
     # run kfda test
     kt.test(verbose=0)
 
-    # insert constant columns in data (all)
+    # insert constant columns in data (except final one)
+    for col in data.columns[:99]:
+        data[col].values[:] = 0
+
+    # init object
+    kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+    # run kfda test
+    kt.test(verbose=0)
+
+    # insert constant columns in final column (in one group only)
     data[data.columns[99]].values[::2] = 0
 
-    if nystrom:  # not subsampling otherwise and thus no issue
-        err_msg = "Subsampling failed after 100 trials. " + \
-            "All variables have constant values in at leat one subsample."
-        with pytest.raises(RuntimeError) as excinfo:
-            # init object
-            kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
-            # run kfda test
-            kt.test(verbose=0)
-        assert str(excinfo.value) == err_msg
-    else:
+    # init object
+    kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
+    # run kfda test
+    kt.test(verbose=0)
+
+    # insert constant columns in final column (in all groups)
+    data[data.columns[99]].values[:] = 0
+
+    err_msg = "All variables have constant values in your data."
+    with pytest.raises(RuntimeError) as excinfo:
         # init object
         kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
         # run kfda test
         kt.test(verbose=0)
+    assert str(excinfo.value) == err_msg
 
 
 @pytest.mark.parametrize("nystrom", [False, True])
