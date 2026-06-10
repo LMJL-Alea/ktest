@@ -480,7 +480,7 @@ class Ktest(Statistics):
                     "Possible values : 'kfda','mmd'"
                 )
 
-    def project(self, n_trunc=100, center=True, new_obs=None, verbose=1):
+    def get_projections(self, n_trunc=100, center=True, new_obs=None, verbose=1):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -917,7 +917,7 @@ class Ktest(Statistics):
             t_max = t
         if not self.proj or \
                 str(t) not in self.proj[self.sample_names[0]]:
-            self.project(n_trunc=t_max)
+            self.get_projections(n_trunc=t_max)
 
         if colors is None:
             colors = {
@@ -1010,7 +1010,7 @@ class Ktest(Statistics):
             t_max = max_t_xy
         if not self.proj or \
                 str(max_t_xy) not in self.proj[self.sample_names[0]]:
-            self.project(n_trunc=t_max)
+            self.get_projections(n_trunc=t_max)
         if proj_xy[0] == 'kfda' and proj_xy[1] == 'kfda_contrib':
             dict_proj_x = self.proj
             dict_proj_y = self.proj_contrib

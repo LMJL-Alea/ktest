@@ -244,13 +244,13 @@ def test_zi_data(dummy_zidata, data_shape, nystrom):
     kt.test(verbose=0)
 
 
-def test_ktest_project(dummy_ktest):
+def test_ktest_get_projections(dummy_ktest):
     """Testing projection in Ktest class."""
     # create ktest objects
     kt = dummy_ktest()
 
     # Case 1 - centering, no new obs
-    proj, proj_contrib = kt.project(
+    proj, proj_contrib = kt.get_projections(
         n_trunc=10, center=True, verbose=1, new_obs=None
     )
 
@@ -285,7 +285,7 @@ def test_ktest_project(dummy_ktest):
         pd.testing.assert_frame_equal(proj_contrib_tab, exp_proj_contrib_tab)
 
     # Case 2 - not centering, no new obs
-    proj, proj_contrib = kt.project(
+    proj, proj_contrib = kt.get_projections(
         n_trunc=10, center=False, verbose=1, new_obs=None
     )
 
@@ -321,7 +321,7 @@ def test_ktest_project(dummy_ktest):
 
     # Case 3 - centering, providing new obs
     new_obs = list(kt.kstat.data.data.values())[0]
-    proj, proj_contrib = kt.project(
+    proj, proj_contrib = kt.get_projections(
         n_trunc=10, center=True, verbose=1, new_obs=new_obs
     )
 
@@ -355,7 +355,7 @@ def test_ktest_project(dummy_ktest):
 
     # Case 4 - not centering, providing new obs
     new_obs = list(kt.kstat.data.data.values())[0]
-    proj, proj_contrib = kt.project(
+    proj, proj_contrib = kt.get_projections(
         n_trunc=10, center=False, verbose=1, new_obs=new_obs
     )
 
