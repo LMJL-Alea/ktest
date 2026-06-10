@@ -626,7 +626,7 @@ class TestStatistics(object):
 
         # Case 1 - full data (no Nystrom), no new_obs
         # default: new_obs=None
-        upk = kstat.compute_upk(t=10)
+        upk = kstat.compute_upk(n_trunc=10)
 
         assert isinstance(upk, to.Tensor)
         assert upk.shape == (data_shape[0], 10)
@@ -635,14 +635,14 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
 
-        upk = kstat.compute_upk(t=10, new_obs=new_obs)
+        upk = kstat.compute_upk(n_trunc=10, new_obs=new_obs)
 
         assert isinstance(upk, to.Tensor)
         assert upk.shape == (new_obs.shape[0], 10)
 
         # Case 3 - Nystrom, no new_obs
         # default: new_obs=None
-        upk = kstat_nystrom.compute_upk(t=10)
+        upk = kstat_nystrom.compute_upk(n_trunc=10)
 
         assert isinstance(upk, to.Tensor)
         assert upk.shape == (data_shape[0], 10)
@@ -651,7 +651,7 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
 
-        upk = kstat_nystrom.compute_upk(t=10, new_obs=new_obs)
+        upk = kstat_nystrom.compute_upk(n_trunc=10, new_obs=new_obs)
 
         assert isinstance(upk, to.Tensor)
         assert upk.shape == (new_obs.shape[0], 10)
@@ -679,7 +679,7 @@ class TestStatistics(object):
         # default: new_obs=None
         stat_val, _ = kstat.compute_kfda()
         proj_kfda, proj_kpca = kstat.compute_projections(
-            stat=stat_val, t=10, center=False
+            stat=stat_val, n_trunc=10, center=False
         )
         n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -688,7 +688,7 @@ class TestStatistics(object):
         # default: new_obs=None
         stat_val, _ = kstat.compute_kfda()
         proj_kfda, proj_kpca = kstat.compute_projections(
-            stat=stat_val, t=10, center=True
+            stat=stat_val, n_trunc=10, center=True
         )
         n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -698,7 +698,7 @@ class TestStatistics(object):
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat.compute_kfda()
         proj_kfda, proj_kpca = kstat.compute_projections(
-            stat=stat_val, t=10, center=False, new_obs=new_obs
+            stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -708,7 +708,7 @@ class TestStatistics(object):
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat.compute_kfda()
         proj_kfda, proj_kpca = kstat.compute_projections(
-            stat=stat_val, t=10, center=True, new_obs=new_obs
+            stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -717,7 +717,7 @@ class TestStatistics(object):
         # default: new_obs=None
         stat_val, _ = kstat_nystrom.compute_kfda()
         proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
-            stat=stat_val, t=10, center=False
+            stat=stat_val, n_trunc=10, center=False
         )
         n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -726,7 +726,7 @@ class TestStatistics(object):
         # default: new_obs=None
         stat_val, _ = kstat_nystrom.compute_kfda()
         proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
-            stat=stat_val, t=10, center=True
+            stat=stat_val, n_trunc=10, center=True
         )
         n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -736,7 +736,7 @@ class TestStatistics(object):
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat_nystrom.compute_kfda()
         proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
-            stat=stat_val, t=10, center=False, new_obs=new_obs
+            stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -746,7 +746,7 @@ class TestStatistics(object):
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat_nystrom.compute_kfda()
         proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
-            stat=stat_val, t=10, center=True, new_obs=new_obs
+            stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
         _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
@@ -759,7 +759,7 @@ class TestStatistics(object):
 
         # Case 1a - full data (no Nystrom), no new_obs
         # default: new_obs=None
-        dist_g1, dist_g2 = kstat.kfda_loss(t=10)
+        dist_g1, dist_g2 = kstat.kfda_loss(n_trunc=10)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -781,7 +781,7 @@ class TestStatistics(object):
         # Case 1b - full data (no Nystrom), no new_obs, providing stat value
         # default: new_obs=None
         stat_val, _ = kstat.compute_kfda()
-        dist_g1, dist_g2 = kstat.kfda_loss(t=10, stat=stat_val)
+        dist_g1, dist_g2 = kstat.kfda_loss(n_trunc=10, stat=stat_val)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -803,7 +803,7 @@ class TestStatistics(object):
         # Case 2 - full data (no Nystrom), providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
-        dist_g1, dist_g2 = kstat.kfda_loss(t=10, new_obs=new_obs)
+        dist_g1, dist_g2 = kstat.kfda_loss(n_trunc=10, new_obs=new_obs)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -824,7 +824,7 @@ class TestStatistics(object):
 
         # Case 3 - Nystrom approximation, no new_obs
         # default: new_obs=None
-        dist_g1, dist_g2 = kstat_nystrom.kfda_loss(t=10)
+        dist_g1, dist_g2 = kstat_nystrom.kfda_loss(n_trunc=10)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -846,7 +846,7 @@ class TestStatistics(object):
         # Case 4 - Nystrom approximation, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
-        dist_g1, dist_g2 = kstat_nystrom.kfda_loss(t=10, new_obs=new_obs)
+        dist_g1, dist_g2 = kstat_nystrom.kfda_loss(n_trunc=10, new_obs=new_obs)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -878,7 +878,7 @@ class TestStatistics(object):
             eps=None, clip_eigval=True
         )
 
-        dist_g1, dist_g2 = kstat_sep.kfda_loss(t=10)
+        dist_g1, dist_g2 = kstat_sep.kfda_loss(n_trunc=10)
 
         assert isinstance(dist_g1, dict)
         assert isinstance(dist_g2, dict)
@@ -904,7 +904,7 @@ class TestStatistics(object):
         """Testing kFDA discriminant axis squard norm computation."""
 
         # Case 1 - full data (no Nystrom)
-        axis_norm2 = kstat.kfda_axis_norm2(t=10)
+        axis_norm2 = kstat.kfda_axis_norm2(n_trunc=10)
 
         assert isinstance(axis_norm2, to.Tensor)
         assert axis_norm2.shape == (10,)
@@ -912,14 +912,14 @@ class TestStatistics(object):
 
         # Case 2 - full data (no Nystrom), no new_obs, providing stat value
         stat_val, _ = kstat.compute_kfda()
-        axis_norm2 = kstat.kfda_axis_norm2(t=10, stat=stat_val)
+        axis_norm2 = kstat.kfda_axis_norm2(n_trunc=10, stat=stat_val)
 
         assert isinstance(axis_norm2, to.Tensor)
         assert axis_norm2.shape == (10,)
         assert axis_norm2.dtype == kstat.dtype
 
         # Case 3 - Nystrom approximation
-        axis_norm2 = kstat_nystrom.kfda_axis_norm2(t=10)
+        axis_norm2 = kstat_nystrom.kfda_axis_norm2(n_trunc=10)
 
         assert isinstance(axis_norm2, to.Tensor)
         assert axis_norm2.shape == (10,)
@@ -938,7 +938,7 @@ class TestStatistics(object):
             eps=None, clip_eigval=True
         )
 
-        axis_norm2 = kstat_sep.kfda_axis_norm2(t=10)
+        axis_norm2 = kstat_sep.kfda_axis_norm2(n_trunc=10)
 
         assert isinstance(axis_norm2, to.Tensor)
         assert axis_norm2.shape == (10,)
@@ -952,7 +952,7 @@ class TestStatistics(object):
 
         # Case 1a - full data (no Nystrom), no new_obs
         # default: new_obs=None
-        pred, loss, res = kstat.kfda_predict(t=10, pred_threshold=1/2)
+        pred, loss, res = kstat.kfda_predict(n_trunc=10, pred_threshold=1/2)
 
         assert isinstance(pred, dict)
         assert isinstance(loss, dict)
@@ -997,7 +997,7 @@ class TestStatistics(object):
         # default: new_obs=None
         threshold_values = np.linspace(0, 1, 11)
         pred, loss, res = kstat.kfda_predict(
-            t=10, pred_threshold=threshold_values
+            n_trunc=10, pred_threshold=threshold_values
         )
 
         assert isinstance(pred, dict)
@@ -1049,7 +1049,7 @@ class TestStatistics(object):
         # default: new_obs=None
         pred, loss, res, dist_group1, dist_group2, axis_norm2 = \
             kstat.kfda_predict(
-                t=10, pred_threshold=1/2, extended_output=True
+                n_trunc=10, pred_threshold=1/2, extended_output=True
             )
 
         assert isinstance(pred, dict)
@@ -1124,7 +1124,7 @@ class TestStatistics(object):
         # default: new_obs=None
         pred, loss, res, dist_group1, dist_group2, axis_norm2 = \
             kstat.kfda_predict(
-                t=10, pred_threshold=threshold_values, extended_output=True
+                n_trunc=10, pred_threshold=threshold_values, extended_output=True
             )
 
         assert isinstance(pred, dict)
@@ -1205,7 +1205,7 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
         pred, loss, res = kstat.kfda_predict(
-            t=10, new_obs=new_obs, pred_threshold=1/2
+            n_trunc=10, new_obs=new_obs, pred_threshold=1/2
         )
 
         assert isinstance(pred, dict)
@@ -1251,7 +1251,7 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
         pred, loss, res = kstat.kfda_predict(
-            t=10, new_obs=new_obs, pred_threshold=0
+            n_trunc=10, new_obs=new_obs, pred_threshold=0
         )
 
         assert isinstance(pred, dict)
@@ -1297,7 +1297,7 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat.data.data.values())[0]
         pred, loss, res = kstat.kfda_predict(
-            t=10, new_obs=new_obs, pred_threshold=1
+            n_trunc=10, new_obs=new_obs, pred_threshold=1
         )
 
         assert isinstance(pred, dict)
@@ -1342,7 +1342,7 @@ class TestStatistics(object):
         new_obs = list(kstat.data.data.values())[0]
         pred, loss, res, dist_group1, dist_group2, axis_norm2 = \
             kstat.kfda_predict(
-                t=10, new_obs=new_obs, pred_threshold=1/2, extended_output=True
+                n_trunc=10, new_obs=new_obs, pred_threshold=1/2, extended_output=True
             )
 
         assert isinstance(pred, dict)
@@ -1415,7 +1415,7 @@ class TestStatistics(object):
 
         # Case 3 - Nystrom approximation, no new_obs
         # default: new_obs=None
-        pred, loss, res = kstat_nystrom.kfda_predict(t=10, pred_threshold=1/2)
+        pred, loss, res = kstat_nystrom.kfda_predict(n_trunc=10, pred_threshold=1/2)
 
         assert isinstance(pred, dict)
         assert isinstance(loss, dict)
@@ -1459,7 +1459,7 @@ class TestStatistics(object):
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
         pred, loss, res = kstat_nystrom.kfda_predict(
-            t=10, new_obs=new_obs, pred_threshold=1/2
+            n_trunc=10, new_obs=new_obs, pred_threshold=1/2
         )
 
         assert isinstance(pred, dict)
@@ -1514,7 +1514,7 @@ class TestStatistics(object):
         )
 
         # no bias in prediction, no new observations
-        pred, loss, res = kstat_sep.kfda_predict(t=50, pred_threshold=1/2)
+        pred, loss, res = kstat_sep.kfda_predict(n_trunc=50, pred_threshold=1/2)
 
         assert isinstance(pred, dict)
         assert isinstance(loss, dict)

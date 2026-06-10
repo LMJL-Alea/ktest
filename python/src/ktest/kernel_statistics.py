@@ -671,7 +671,7 @@ class Statistics(object):
         self.sp, self.ev = self.diagonalize_centered_gram()
 
         # Maximal truncation identification:
-        t = len(self.sp)
+        n_trunc = len(self.sp)
 
         # Calculating statistic for every truncation:
         pkm = self.compute_pkm()
@@ -680,12 +680,12 @@ class Statistics(object):
 
         # Calculating contributions of every truncation:
         kfda_contributions = ((n1 * n2) / (self.data.ntot ** exposant
-                                           * self.sp[:t] ** exposant)
-                              * mv(self.ev.T[:t], pkm) ** 2).numpy()
+                                           * self.sp[:n_trunc] ** exposant)
+                              * mv(self.ev.T[:n_trunc], pkm) ** 2).numpy()
         # Sum of contributions produces the kFDA statistic:
         kfda = kfda_contributions.cumsum(axis=0)
 
-        trunc = range(1, t+1)  # truncations
+        trunc = range(1, n_trunc + 1)  # truncations
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -722,7 +722,7 @@ class Statistics(object):
             mmd = dot(mv(K, m), m) ** 2
         return mmd.item()
 
-    def compute_upk(self, t, new_obs=None):
+    def compute_upk(self, n_trunc, new_obs=None):
         """
         epk is an alias for the product ePK that appears when projecting the
         data on the discriminant axis. This functions computes the
@@ -735,7 +735,7 @@ class Statistics(object):
 
         Parameters
         ----------
-            t : int
+            n_trunc: int
                 Maximal truncation.
             new_obs : torch.tensor, optional
                 Unused by default. If not None, then the Gram matrix between
@@ -751,15 +751,15 @@ class Statistics(object):
             Lz12 = diag(self.sp_anchors**-(1/2))
             epk = 1 / self.data_ny.ntot**(1/2) * \
                 multi_dot([
-                    self.ev.T[:t], Lz12, self.ev_anchors.T, Kzx
+                    self.ev.T[:n_trunc], Lz12, self.ev_anchors.T, Kzx
                 ]).T
         else:
             Pbi = self.compute_centering_matrix()
             Kx = self.compute_gram(new_obs=new_obs)
-            epk = multi_dot([self.ev.T[:t], Pbi, Kx]).T
+            epk = multi_dot([self.ev.T[:n_trunc], Pbi, Kx]).T
         return epk
 
-    def compute_projections(self, stat, t=100, center=True, new_obs=None):
+    def compute_projections(self, stat, n_trunc=100, center=True, new_obs=None):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -777,7 +777,7 @@ class Statistics(object):
             kFDA statistics (same as the attribute `kfda_statistic` of class
             Ktest). Required for normalization.
 
-        t : int, optional
+        n_trunc: int, optional
             Maximal truncation, the default is 100.
 
         center : bool, optional
@@ -805,10 +805,10 @@ class Statistics(object):
         if self.sp is None and self.ev is None:
             self.sp, self.ev = self.diagonalize_centered_gram()
         # fix truncation if needed
-        t = min(t, len(self.sp))
+        n_trunc = min(n_trunc, len(self.sp))
         # compute intermediate quantities
         pkm = self.compute_pkm()
-        upk = self.compute_upk(t, new_obs=new_obs)
+        upk = self.compute_upk(n_trunc, new_obs=new_obs)
         # number of observations in training data
         n1, n2 = self.data.nobs.values()
         n = self.data.ntot
@@ -823,11 +823,11 @@ class Statistics(object):
             centering_mat = eye(n_obs, dtype=self.dtype) \
                 - ones((n_obs, n_obs), dtype=self.dtype) / n_obs
             # project
-            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+            proj = (self.sp[:n_trunc]**(-2) * mv(self.ev.T[:n_trunc], pkm)
                     * matmul(centering_mat, upk)).numpy()
         else:
             # project
-            proj = (self.sp[:t]**(-2) * mv(self.ev.T[:t], pkm)
+            proj = (self.sp[:n_trunc]**(-2) * mv(self.ev.T[:n_trunc], pkm)
                     * upk).numpy()
         # post-processing
         # (manage training data vs new obsercations differently)
@@ -847,18 +847,18 @@ class Statistics(object):
         for i, (name, ind) in enumerate(index_dict.items()):
             proj_kpca[name] = pd.DataFrame(
                 proj_list[i], index=ind,
-                columns=[str(t) for t in range(1, t+1)]
+                columns=[str(t) for t in range(1, n_trunc + 1)]
             )
             proj_kfda[name] = pd.DataFrame(
                 proj_list[i].cumsum(axis=1), index=ind,
-                columns=[str(t) for t in range(1, t+1)]
+                columns=[str(t) for t in range(1, n_trunc + 1)]
             )
             proj_kfda[name] /= np.sqrt(
-                n ** 3 * stat.values[:t] / (n1 * n2)
+                n ** 3 * stat.values[:n_trunc] / (n1 * n2)
             )
         return proj_kfda, proj_kpca
 
-    def kfda_loss(self, t=100, new_obs=None, stat=None):
+    def kfda_loss(self, n_trunc=100, new_obs=None, stat=None):
         """
         Compute the two compartments (one for each group) of the kFDA loss
         function associated to the prediction for each observations (either in
@@ -871,7 +871,7 @@ class Statistics(object):
         Parameters
         ----------
 
-        t: int, optional
+        n_trunc: int, optional
             Maximal truncation, the default is 100.
 
         new_obs: torch.tensor, optional
@@ -906,7 +906,7 @@ class Statistics(object):
 
         # compute kfda projection for training data
         proj_kfda, _ = self.compute_projections(
-            stat, t, center=False, new_obs=None
+            stat, n_trunc, center=False, new_obs=None
         )
 
         # compute mean embedding for training data (in the two groups)
@@ -920,7 +920,7 @@ class Statistics(object):
         # if new observation, compute corresponding projection
         if new_obs is not None:
             proj_kfda, _ = self.compute_projections(
-                stat, t, center=False, new_obs=new_obs
+                stat, n_trunc, center=False, new_obs=new_obs
             )
 
         # init output
@@ -944,14 +944,14 @@ class Statistics(object):
         # output
         return distance_group1, distance_group2
 
-    def kfda_axis_norm2(self, t=100, stat=None):
+    def kfda_axis_norm2(self, n_trunc=100, stat=None):
         """
         Computes the kFDA discriminant axis squared norm.
 
         Parameters
         ----------
 
-        t: int, optional
+        n_trunc: int, optional
             Maximal truncation, the default is 100.
 
         stat : Pandas.Series, optional
@@ -972,7 +972,7 @@ class Statistics(object):
             stat, _ = self.compute_kfda()
 
         # Maximal truncation identification:
-        t = min(t, len(self.sp))
+        n_trunc = min(n_trunc, len(self.sp))
 
         # Calculating statistic for every truncation:
         pkm = self.compute_pkm()
@@ -983,14 +983,14 @@ class Statistics(object):
         # Calculating discriminant axis squared norm for every truncation:
         kfda_axis_norm2 = \
             (n1 * n2) / (self.data.ntot ** exposant_n
-                         * self.sp[:t] ** exposant_sp
-                         * to.from_numpy(stat.values[:t])) \
-            * mv(self.ev.T[:t], pkm) ** 2
+                         * self.sp[:n_trunc] ** exposant_sp
+                         * to.from_numpy(stat.values[:n_trunc])) \
+            * mv(self.ev.T[:n_trunc], pkm) ** 2
         # output
         return kfda_axis_norm2
 
     def kfda_predict(
-        self, t=100, new_obs=None, pred_threshold=0.5, stat=None,
+        self, n_trunc=100, new_obs=None, pred_threshold=0.5, stat=None,
         extended_output=False
     ):
         """
@@ -1001,7 +1001,7 @@ class Statistics(object):
         Parameters
         ----------
 
-        t : int, optional
+        n_trunc: int, optional
             Maximal truncation, the default is 100.
 
         new_obs: torch.tensor, optional
@@ -1084,10 +1084,10 @@ class Statistics(object):
                 raise ValueError(msg)
 
         # compute loss function associated to kFDA prediction
-        distance_group1, distance_group2 = self.kfda_loss(t, new_obs, stat)
+        distance_group1, distance_group2 = self.kfda_loss(n_trunc, new_obs, stat)
 
         # compute discriminant axis squared norm
-        axis_norm2 = self.kfda_axis_norm2(t, stat)
+        axis_norm2 = self.kfda_axis_norm2(n_trunc, stat)
 
         # init output (dictionaries)
         pred = {}     # prediction
