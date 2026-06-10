@@ -255,7 +255,7 @@ def test_ktest_get_projections(dummy_ktest):
     )
 
     # expected results
-    stat_val, _ = kt.kstat.compute_kfda()
+    stat_val, _ = kt.kstat.compute_kfda_stat()
     exp_proj, exp_proj_contrib = kt.kstat.compute_projections(
         stat=stat_val, n_trunc=10, center=True
     )
@@ -290,7 +290,7 @@ def test_ktest_get_projections(dummy_ktest):
     )
 
     # expected results
-    stat_val, _ = kt.kstat.compute_kfda()
+    stat_val, _ = kt.kstat.compute_kfda_stat()
     exp_proj, exp_proj_contrib = kt.kstat.compute_projections(
         stat=stat_val, n_trunc=10, center=False
     )
@@ -326,7 +326,7 @@ def test_ktest_get_projections(dummy_ktest):
     )
 
     # expected results
-    stat_val, _ = kt.kstat.compute_kfda()
+    stat_val, _ = kt.kstat.compute_kfda_stat()
     exp_proj, exp_proj_contrib = kt.kstat.compute_projections(
         stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
     )
@@ -360,7 +360,7 @@ def test_ktest_get_projections(dummy_ktest):
     )
 
     # expected results
-    stat_val, _ = kt.kstat.compute_kfda()
+    stat_val, _ = kt.kstat.compute_kfda_stat()
     exp_proj, exp_proj_contrib = kt.kstat.compute_projections(
         stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
     )

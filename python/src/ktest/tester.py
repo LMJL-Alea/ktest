@@ -323,7 +323,7 @@ class Ktest(Statistics):
         """
         kstatistics = kstat if kstat is not None else self.kstat
         if stat == 'kfda':
-            test_res = kstatistics.compute_kfda()
+            test_res = kstatistics.compute_kfda_stat()
         elif stat == 'mmd':
             test_res = kstatistics.compute_mmd()
         else:

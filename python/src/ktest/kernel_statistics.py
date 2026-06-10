@@ -595,7 +595,7 @@ class Statistics(object):
             pkm = mv(Pbi, mv(Kx, omega))
         return pkm
 
-    def compute_kfda(self):
+    def compute_kfda_stat(self):
         """
         Computes the kFDA truncated statistic of [Harchaoui 2009].
 
@@ -902,7 +902,7 @@ class Statistics(object):
 
         # get kFDA stat Value
         if stat is None:
-            stat, _ = self.compute_kfda()
+            stat, _ = self.compute_kfda_stat()
 
         # compute kfda projection for training data
         proj, _ = self.compute_projections(
@@ -969,7 +969,7 @@ class Statistics(object):
         """
         # get kFDA stat Value
         if stat is None:
-            stat, _ = self.compute_kfda()
+            stat, _ = self.compute_kfda_stat()
 
         # Maximal truncation identification:
         n_trunc = min(n_trunc, len(self.sp))
