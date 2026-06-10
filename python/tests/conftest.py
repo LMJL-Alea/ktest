@@ -121,14 +121,14 @@ def assert_equal_ktest():
 
         # setup truncation
         if trunc is None:
-            trunc1 = len(kt_1.kfda_statistic)
-            trunc2 = len(kt_2.kfda_statistic)
+            trunc1 = len(kt_1.stat)
+            trunc2 = len(kt_2.stat)
         else:
             trunc1 = trunc
             trunc2 = trunc
         # test statistics
         npt.assert_allclose(
-            kt_1.kfda_statistic[:trunc1], kt_2.kfda_statistic[:trunc2],
+            kt_1.stat[:trunc1], kt_2.stat[:trunc2],
             rtol=rtol, atol=atol
         )
         # asymptotic p-values
