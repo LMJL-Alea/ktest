@@ -56,7 +56,7 @@ def test_ktest(dummy_ktest, dummy_data, nystrom, dtype):
 
     # output
     assert isinstance(kt.stat, pd.Series)
-    assert isinstance(kt.kfda_pval_asymp, pd.Series)
+    assert isinstance(kt.pval, pd.Series)
 
 
 def test_ktest_precision(dummy_ktest, assert_equal_ktest):
