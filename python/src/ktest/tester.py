@@ -480,7 +480,7 @@ class Ktest(Statistics):
                     "Possible values : 'kfda','mmd'"
                 )
 
-    def project(self, t=100, center=True, new_obs=None, verbose=1):
+    def project(self, n_trunc=100, center=True, new_obs=None, verbose=1):
         """
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
@@ -490,7 +490,7 @@ class Ktest(Statistics):
 
         Parameters
         ----------
-        t : int, optional
+        n_trunc : int, optional
             Maximal truncation for projections calculation, the default is 100.
 
         center : bool, optional
@@ -550,7 +550,7 @@ class Ktest(Statistics):
 
             # compute projections
             kfda_proj, kfda_proj_contrib = self.kstat.compute_projections(
-                self.kfda_statistic, t=t, center=center, new_obs=new_obs
+                self.kfda_statistic, n_trunc=n_trunc, center=center, new_obs=new_obs
             )
 
             # record projections only when projecting training data
@@ -560,7 +560,7 @@ class Ktest(Statistics):
             # output
             return kfda_proj, kfda_proj_contrib
 
-    def predict(self, t=100, new_obs=None, pred_threshold=0.5, verbose=1):
+    def predict(self, n_trunc=100, new_obs=None, pred_threshold=0.5, verbose=1):
         """
         Compute prediction for each observations according to kFDA and with
         increasing truncation values, i.e. assign each observations to one of
@@ -569,7 +569,7 @@ class Ktest(Statistics):
         Parameters
         ----------
 
-        t : int, optional
+        n_trunc : int, optional
             Maximal truncation, the default is 100.
 
         new_obs: array-like, pandas.DataFrame or torch.Tensor or numpy.array,
@@ -650,7 +650,7 @@ class Ktest(Statistics):
 
             # compute prediction
             kfda_pred, kfda_loss, kfda_res = self.kstat.kfda_predict(
-                t=t, new_obs=new_obs, pred_threshold=pred_threshold,
+                n_trunc=n_trunc, new_obs=new_obs, pred_threshold=pred_threshold,
                 stat=self.kfda_statistic
             )
 
@@ -658,7 +658,7 @@ class Ktest(Statistics):
             return kfda_pred, kfda_loss, kfda_res
 
     def cv(
-        self, t=100, pred_threshold=0.5, n_fold=5, n_repeat=1, ref=None,
+        self, n_trunc=100, pred_threshold=0.5, n_fold=5, n_repeat=1, ref=None,
         random_state=None, verbose=1
     ):
         """
@@ -669,7 +669,7 @@ class Ktest(Statistics):
         Parameters
         ----------
 
-        t : int, optional
+        n_trunc : int, optional
             Maximal truncation, the default is 100.
 
         pred_threshold : float or Iterable, optional
@@ -797,7 +797,7 @@ class Ktest(Statistics):
 
                 # compute prediction
                 kfda_pred, kfda_loss, kfda_res = kstat_train.kfda_predict(
-                    t=t,
+                    n_trunc=n_trunc,
                     new_obs=to.from_numpy(
                         self.dataset.iloc[test_index].to_numpy()
                     ),
@@ -917,7 +917,7 @@ class Ktest(Statistics):
             t_max = t
         if not self.kfda_proj or \
                 str(t) not in self.kfda_proj[self.sample_names[0]]:
-            self.project(t=t_max)
+            self.project(n_trunc=t_max)
 
         if colors is None:
             colors = {
@@ -1010,7 +1010,7 @@ class Ktest(Statistics):
             t_max = max_t_xy
         if not self.kfda_proj or \
                 str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
-            self.project(t=t_max)
+            self.project(n_trunc=t_max)
         if proj_xy[0] == 'kfda' and proj_xy[1] == 'kfda_contrib':
             dict_proj_x = self.kfda_proj
             dict_proj_y = self.kfda_proj_contrib
