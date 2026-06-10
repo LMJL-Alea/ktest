@@ -122,25 +122,25 @@ class Ktest(Statistics):
             the Nystrom dataset, see the documentation of the class Data
             for more details.
 
-        kfda_statistic : Pandas.Series or None
+        stat : Pandas.Series or None
             None if not computed. Otherwise, stores the computed kFDA
             statistics. Indices correspond to truncations.
 
         kfda_pval_asymp : Pandas.Series or None
             None if not computed. Otherwise, stores the p-values associated
-            with the kFDA statistic (stored in 'kfda_statistic'), obtained
+            with the kFDA statistic (stored in 'stat'), obtained
             from the asymptotic distribution (chi-square with T degree of
             freedom). Indices correspond to truncations.
 
         kfda_pval_perm  : Pandas.Series or None
             None if not computed. Otherwise, stores the p-values associated
-            with the kFDA statistic (stored in 'kfda_statistic'), obtained
+            with the kFDA statistic (stored in 'stat'), obtained
             with a permutation approach. Indices correspond to truncations.
 
-        kfda_statistic_contrib : Pandas.Series or None
+        stat_contrib : Pandas.Series or None
             None if not computed. Otherwise, stores the unidirectional
             statistic associated with each eigendirection of the within-group
-            covariance operator. `kfda_statistic` contains the cumulated sum
+            covariance operator. `stat` contains the cumulated sum
             of the values in `kfda_contributions`. Indices correspond to
             truncations.
 
@@ -246,10 +246,10 @@ class Ktest(Statistics):
 
             ### Output statistics ###
             ## kFDA statistic
-            self.kfda_statistic = None
+            self.stat = None
             self.kfda_pval_asymp = None
             self.kfda_pval_perm = None
-            self.kfda_statistic_contrib = None
+            self.stat_contrib = None
 
             ## MMD statistic
             self.mmd_statistic = None
@@ -273,11 +273,11 @@ class Ktest(Statistics):
         s += '\nMMD:\n'
         s += f'{mmd_s}' if self.mmd_statistic is not None else ncs
         s += '\nkFDA:'
-        if self.kfda_statistic is None:
+        if self.stat is None:
             s += '\n' + ncs
         else:
-            for t in range(min(len(self.kfda_statistic), 5)):
-                s += f'\nTruncation {t+1}: {self.kfda_statistic.iloc[t]}. '
+            for t in range(min(len(self.stat), 5)):
+                s += f'\nTruncation {t+1}: {self.stat.iloc[t]}. '
                 s += 'P-value:\n'
                 s += 'asymptotic: '
                 s += (f'{self.kfda_pval_asymp.iloc[t]}'
@@ -369,16 +369,16 @@ class Ktest(Statistics):
         if stat == 'kfda' and not permutation:
             if verbose > 0:
                 print('- Computing asymptotic p-values')
-            pval = chi2.sf(self.kfda_statistic, self.kfda_statistic.index)
+            pval = chi2.sf(self.stat, self.stat.index)
             return pd.Series(
-                pval, index=self.kfda_statistic.index,
+                pval, index=self.stat.index,
                 dtype=str(self.dtype).replace('torch.', '')
             )
         else:
             if verbose > 0:
                 print('- Performing permutations to compute p-values:')
             stats_count = pd.Series(
-                0, index=range(1, len(self.kfda_statistic) + 1)
+                0, index=range(1, len(self.stat) + 1)
             ) if stat == 'kfda' else 0
             it = tqdm(range(n_permutations)) \
                 if verbose > 0 else range(n_permutations)
@@ -416,7 +416,7 @@ class Ktest(Statistics):
                 )
 
                 if stat == 'kfda':
-                    stats_count += perm_stats_res[0].ge(self.kfda_statistic)
+                    stats_count += perm_stats_res[0].ge(self.stat)
                 elif stat == 'mmd':
                     stats_count += (perm_stats_res >= self.mmd_statistic)
             return stats_count / n_permutations
@@ -456,7 +456,7 @@ class Ktest(Statistics):
             if stat == 'kfda':
                 if verbose > 0:
                     print('- Computing kFDA statistic')
-                self.kfda_statistic, self.kfda_statistic_contrib = \
+                self.stat, self.stat_contrib = \
                     self.compute_test_statistic(verbose=verbose)
                 if not permutation:
                     self.kfda_pval_asymp = self.compute_pvalue(verbose=verbose)
@@ -528,7 +528,7 @@ class Ktest(Statistics):
             elif verbose >= 3:
                 warnings.simplefilter("always")
 
-            if self.kfda_statistic is None:
+            if self.stat is None:
                 self.test(stat='kfda')
 
             # check new_obs input convert and to torch.Tensor
@@ -550,7 +550,7 @@ class Ktest(Statistics):
 
             # compute projections
             proj, proj_contrib = self.kstat.compute_projections(
-                self.kfda_statistic, n_trunc=n_trunc, center=center, new_obs=new_obs
+                self.stat, n_trunc=n_trunc, center=center, new_obs=new_obs
             )
 
             # record projections only when projecting training data
@@ -628,7 +628,7 @@ class Ktest(Statistics):
                 warnings.simplefilter("always")
 
             # compute statistic if needed
-            if self.kfda_statistic is None:
+            if self.stat is None:
                 self.test(stat='kfda')
 
             # check new_obs input convert and to torch.Tensor
@@ -651,7 +651,7 @@ class Ktest(Statistics):
             # compute prediction
             kfda_pred, kfda_loss, kfda_res = self.kstat.kfda_predict(
                 n_trunc=n_trunc, new_obs=new_obs, pred_threshold=pred_threshold,
-                stat=self.kfda_statistic
+                stat=self.stat
             )
 
             # output
@@ -745,7 +745,7 @@ class Ktest(Statistics):
                 ref = self.data.sample_names[0]
 
             # compute test statistics if not done
-            if self.kfda_statistic is None:
+            if self.stat is None:
                 self.test(stat='kfda')
 
             # cross-validation sub-subsampling

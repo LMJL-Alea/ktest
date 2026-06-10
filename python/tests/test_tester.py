@@ -55,7 +55,7 @@ def test_ktest(dummy_ktest, dummy_data, nystrom, dtype):
     pd.testing.assert_series_equal(kt.metadata, dummy_data[1])
 
     # output
-    assert isinstance(kt.kfda_statistic, pd.Series)
+    assert isinstance(kt.stat, pd.Series)
     assert isinstance(kt.kfda_pval_asymp, pd.Series)
 
 
@@ -66,15 +66,15 @@ def test_ktest_precision(dummy_ktest, assert_equal_ktest):
     kt_f64 = dummy_ktest(dtype=to.float64)
 
     # check output type
-    assert kt_f32.kfda_statistic.dtype == "float32"
+    assert kt_f32.stat.dtype == "float32"
     assert kt_f32.kfda_pval_asymp.dtype == "float32"
-    assert kt_f64.kfda_statistic.dtype == "float64"
+    assert kt_f64.stat.dtype == "float64"
     assert kt_f64.kfda_pval_asymp.dtype == "float64"
 
     # compare results
     # (tolerance threshold not too tight because of expected result differences
     # due to precision difference)
-    max_len = min([len(kt_f32.kfda_statistic), len(kt_f64.kfda_statistic)])
+    max_len = min([len(kt_f32.stat), len(kt_f64.stat)])
     npt.assert_allclose(
         kt_f32.kstat.sp.numpy()[:max_len],
         kt_f64.kstat.sp.numpy()[:max_len],
@@ -82,8 +82,8 @@ def test_ktest_precision(dummy_ktest, assert_equal_ktest):
     )
     try:
         npt.assert_allclose(
-            kt_f32.kfda_statistic.to_numpy()[:max_len],
-            kt_f64.kfda_statistic.to_numpy()[:max_len],
+            kt_f32.stat.to_numpy()[:max_len],
+            kt_f64.stat.to_numpy()[:max_len],
             rtol=0, atol=1e-3
         )
     except AssertionError as e:
@@ -177,7 +177,7 @@ def test_num_stability(kt_data, assert_equal_ktest):
     if pytest.previous_res_file is not None:
         kt_data_prev = Ktest.load(pytest.previous_res_file, compressed=True)
         assert_equal_ktest(
-            kt_data, kt_data_prev, trunc=len(kt_data.kfda_statistic), atol=1e-8
+            kt_data, kt_data_prev, trunc=len(kt_data.stat), atol=1e-8
         )
 
 
