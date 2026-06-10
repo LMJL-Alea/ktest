@@ -596,7 +596,7 @@ class Ktest(Statistics):
         Returns
         -------
 
-        pred: dict or list of dict
+        kfda_pred: dict or list of dict
             dictionary (or list of dictionaries) of arrays (np.ndarray) storing
             kFDA predictions for each observation and increasing truncation,
             either for each group in the training data or for the new
@@ -604,9 +604,17 @@ class Ktest(Statistics):
             then `pred` is a list corresponding to prediction dictionaries for
             each element in `pred_threshold`.
 
-        loss: dict or list of dict
+        kfda_loss: dict or list of dict
             dictionary (or list of dictionaries) of arrays (np.ndarray) storing
             kFDA loss function values for each observation and increasing
+            truncation, either for each group in the training data or for the
+            new observations. If `pred_threshold` input argument is an
+            Iterable, then `pred` is a list corresponding to prediction
+            dictionaries for each element in `pred_threshold`.
+
+        kfda_res: loss: dict or list of dict
+            dictionary (or list of dictionaries) of arrays (np.ndarray) storing
+            kFDA residual values for each observation and increasing
             truncation, either for each group in the training data or for the
             new observations. If `pred_threshold` input argument is an
             Iterable, then `pred` is a list corresponding to prediction
@@ -641,13 +649,13 @@ class Ktest(Statistics):
                     new_obs = to.from_numpy(new_obs)
 
             # compute prediction
-            kfda_pred, kfda_loss = self.kstat.kfda_predict(
+            kfda_pred, kfda_loss, kfda_res = self.kstat.kfda_predict(
                 t=t, new_obs=new_obs, pred_threshold=pred_threshold,
                 stat=self.kfda_statistic
             )
 
             # output
-            return kfda_pred, kfda_loss
+            return kfda_pred, kfda_loss, kfda_res
 
     def cv(
         self, t=100, pred_threshold=0.5, n_fold=5, n_repeat=1, ref=None,
@@ -710,8 +718,14 @@ class Ktest(Statistics):
             list of 1-D arrays of average true positive rates over
             cross-validation for increasing truncation values, corresponding
             to each prediction threshold bias value(s) provided in input.
-        true_neg : numpy.ndarray
+
+        true_neg : list of numpy.ndarray
             list of 1-D arrays of average true negative rates over
+            cross-validation for increasing truncation values, corresponding
+            to each prediction threshold bias value(s) provided in input.
+
+        residuals : list of numpy.ndarray
+            list of 1-D arrays of average residual values over
             cross-validation for increasing truncation values, corresponding
             to each prediction threshold bias value(s) provided in input.
         """
@@ -770,7 +784,7 @@ class Ktest(Statistics):
                     )
 
                 # define statistic object for training data
-                kstat_perm = Statistics(
+                kstat_train = Statistics(
                     train_data,
                     kernel_function=self.kernel_function,
                     bandwidth=self.kernel_bandwidth,
@@ -782,9 +796,11 @@ class Ktest(Statistics):
                 )
 
                 # compute prediction
-                kfda_pred, kfda_loss = kstat_perm.kfda_predict(
+                kfda_pred, kfda_loss, kfda_res = kstat_train.kfda_predict(
                     t=t,
-                    new_obs=to.from_numpy(self.dataset.iloc[test_index].to_numpy()),
+                    new_obs=to.from_numpy(
+                        self.dataset.iloc[test_index].to_numpy()
+                    ),
                     pred_threshold=pred_threshold,
                     stat=None
                 )
@@ -801,6 +817,7 @@ class Ktest(Statistics):
                     "accuracy": accuracy_res,
                     "true_pos": true_pos_res,
                     "true_neg": true_neg_res,
+                    "residuals": kfda_res["new_obs"],
                     "test_index": test_index
                 })
 
@@ -825,6 +842,9 @@ class Ktest(Statistics):
             true_neg_list = list(map(
                 list, zip(*[d["true_neg"] for d in fold_res])
             ))
+            res_list = list(map(
+                list, zip(*[d["residuals"] for d in fold_res])
+            ))
 
             # compute average accuracy, true pos rate and true neg rate over
             # all folds
@@ -840,9 +860,13 @@ class Ktest(Statistics):
                 np.mean(np.vstack(true_neg_tab_list), axis=0)
                 for true_neg_tab_list in true_neg_list
             ]
+            residuals = [
+                np.mean(np.vstack(res_tab_list), axis=0)
+                for res_tab_list in res_list
+            ]
 
             # output
-            return accuracy, true_pos, true_neg
+            return accuracy, true_pos, true_neg, residuals
 
     def plot_density(
         self, t=None, t_max=100, colors=None, labels=None, alpha=.5,

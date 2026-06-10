@@ -399,36 +399,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=None, pred_threshold=0.5, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert pred.keys() == kt.data.data.keys()
     assert loss.keys() == kt.data.data.keys()
+    assert res.keys() == kt.data.data.keys()
 
     for group in kt.data.data.keys():
         n_obs = kt.data.data[group].shape[0]
 
         assert isinstance(pred[group], list)
         assert isinstance(loss[group], list)
+        assert isinstance(res[group], list)
 
         assert len(pred[group]) == 1
         assert len(loss[group]) == 1
+        assert len(res[group]) == 1
 
         pred_val = pred[group][0]
         loss_val = loss[group][0]
+        res_val = res[group][0]
 
         assert isinstance(pred_val, np.ndarray)
         assert isinstance(loss_val, np.ndarray)
+        assert isinstance(res_val, np.ndarray)
 
         assert list(pred_val.shape) == [n_obs, 10]
         assert list(loss_val.shape) == [n_obs, 10]
+        assert list(res_val.shape) == [n_obs, 10]
 
         assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
         assert np.issubdtype(loss_val.dtype, np.floating)
+        assert np.issubdtype(res_val.dtype, np.floating)
 
         # group 1 and 2 are similar so we expect 50%-50% prediction
         count_pred = np.count_nonzero(pred_val == group, axis=0)
@@ -443,24 +451,28 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=None, pred_threshold=threshold_values, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert pred.keys() == kt.data.data.keys()
     assert loss.keys() == kt.data.data.keys()
+    assert res.keys() == kt.data.data.keys()
 
     for group_ind, group in enumerate(kt.data.data.keys()):
         n_obs = kt.data.data[group].shape[0]
 
         assert isinstance(pred[group], list)
         assert isinstance(loss[group], list)
+        assert isinstance(res[group], list)
 
         assert len(pred[group]) == len(threshold_values)
         assert len(loss[group]) == len(threshold_values)
+        assert len(res[group]) == len(threshold_values)
 
         for pred_val, loss_val, pred_threshold in zip(
             pred[group], loss[group], threshold_values
@@ -468,12 +480,15 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
             assert isinstance(pred_val, np.ndarray)
             assert isinstance(loss_val, np.ndarray)
+            assert isinstance(res_val, np.ndarray)
 
             assert list(pred_val.shape) == [n_obs, 10]
             assert list(loss_val.shape) == [n_obs, 10]
+            assert list(res_val.shape) == [n_obs, 10]
 
             assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
             assert np.issubdtype(loss_val.dtype, np.floating)
+            assert np.issubdtype(res_val.dtype, np.floating)
 
             # group 1 and 2 are similar so we expect a prediction
             # corresponding to the bias
@@ -496,36 +511,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     new_obs = list(kt.data.data.values())[0]
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=new_obs, pred_threshold=0.5, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert list(pred.keys()) == ["new_obs"]
     assert list(loss.keys()) == ["new_obs"]
+    assert list(res.keys()) == ["new_obs"]
 
     group = "new_obs"
     n_obs = new_obs.shape[0]
 
     assert isinstance(pred[group], list)
     assert isinstance(loss[group], list)
+    assert isinstance(res[group], list)
 
     assert len(pred[group]) == 1
     assert len(loss[group]) == 1
+    assert len(res[group]) == 1
 
     pred_val = pred[group][0]
     loss_val = loss[group][0]
+    res_val = res[group][0]
 
     assert isinstance(pred_val, np.ndarray)
     assert isinstance(loss_val, np.ndarray)
+    assert isinstance(res_val, np.ndarray)
 
     assert list(pred_val.shape) == [n_obs, 10]
     assert list(loss_val.shape) == [n_obs, 10]
+    assert list(res_val.shape) == [n_obs, 10]
 
     assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
     assert np.issubdtype(loss_val.dtype, np.floating)
+    assert np.issubdtype(res_val.dtype, np.floating)
 
     # group 1 and 2 are similar so we expect 50%-50% prediction
     count_pred = np.count_nonzero(pred_val == "c1", axis=0)
@@ -542,36 +565,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     new_obs = list(kt.data.data.values())[0]
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=new_obs, pred_threshold=0, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert list(pred.keys()) == ["new_obs"]
     assert list(loss.keys()) == ["new_obs"]
+    assert list(res.keys()) == ["new_obs"]
 
     group = "new_obs"
     n_obs = new_obs.shape[0]
 
     assert isinstance(pred[group], list)
     assert isinstance(loss[group], list)
+    assert isinstance(res[group], list)
 
     assert len(pred[group]) == 1
     assert len(loss[group]) == 1
+    assert len(res[group]) == 1
 
     pred_val = pred[group][0]
     loss_val = loss[group][0]
+    res_val = res[group][0]
 
     assert isinstance(pred_val, np.ndarray)
     assert isinstance(loss_val, np.ndarray)
+    assert isinstance(res_val, np.ndarray)
 
     assert list(pred_val.shape) == [n_obs, 10]
     assert list(loss_val.shape) == [n_obs, 10]
+    assert list(res_val.shape) == [n_obs, 10]
 
     assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
     assert np.issubdtype(loss_val.dtype, np.floating)
+    assert np.issubdtype(res_val.dtype, np.floating)
 
     # we expect only "group 2" prediction
     count_pred = np.count_nonzero(pred_val == "c1", axis=0)
@@ -588,36 +619,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     new_obs = list(kt.data.data.values())[0]
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=new_obs, pred_threshold=1, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert list(pred.keys()) == ["new_obs"]
     assert list(loss.keys()) == ["new_obs"]
+    assert list(res.keys()) == ["new_obs"]
 
     group = "new_obs"
     n_obs = new_obs.shape[0]
 
     assert isinstance(pred[group], list)
     assert isinstance(loss[group], list)
+    assert isinstance(res[group], list)
 
     assert len(pred[group]) == 1
     assert len(loss[group]) == 1
+    assert len(res[group]) == 1
 
     pred_val = pred[group][0]
     loss_val = loss[group][0]
+    res_val = res[group][0]
 
     assert isinstance(pred_val, np.ndarray)
     assert isinstance(loss_val, np.ndarray)
+    assert isinstance(res_val, np.ndarray)
 
     assert list(pred_val.shape) == [n_obs, 10]
     assert list(loss_val.shape) == [n_obs, 10]
+    assert list(res_val.shape) == [n_obs, 10]
 
     assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
     assert np.issubdtype(loss_val.dtype, np.floating)
+    assert np.issubdtype(res_val.dtype, np.floating)
 
     # we expect only "group 1" prediction
     count_pred = np.count_nonzero(pred_val == "c1", axis=0)
@@ -630,38 +669,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest(nystrom=True)
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=None, pred_threshold=0.5, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert pred.keys() == kt.data.data.keys()
     assert loss.keys() == kt.data.data.keys()
+    assert res.keys() == kt.data.data.keys()
 
     for group in kt.data.data.keys():
         n_obs = kt.data.data[group].shape[0]
 
         assert isinstance(pred[group], list)
         assert isinstance(loss[group], list)
+        assert isinstance(res[group], list)
 
         assert len(pred[group]) == 1
         assert len(loss[group]) == 1
+        assert len(res[group]) == 1
 
         pred_val = pred[group][0]
         loss_val = loss[group][0]
+        res_val = res[group][0]
 
         assert isinstance(pred_val, np.ndarray)
         assert isinstance(loss_val, np.ndarray)
+        assert isinstance(res_val, np.ndarray)
 
         assert list(pred_val.shape) == [n_obs, 10]
         assert list(loss_val.shape) == [n_obs, 10]
+        assert list(res_val.shape) == [n_obs, 10]
 
-        assert np.all(np.isin(
-            pred_val, list(kt.data.data.keys())
-        ))
+        assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
         assert np.issubdtype(loss_val.dtype, np.floating)
+        assert np.issubdtype(res_val.dtype, np.floating)
 
         # group 1 and 2 are similar so we expect 50%-50% prediction
         count_pred = np.count_nonzero(pred_val == group, axis=0)
@@ -677,36 +722,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     new_obs = list(kt.data.data.values())[0]
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=10, new_obs=new_obs, pred_threshold=1/2, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert list(pred.keys()) == ["new_obs"]
     assert list(loss.keys()) == ["new_obs"]
+    assert list(res.keys()) == ["new_obs"]
 
     group = "new_obs"
     n_obs = new_obs.shape[0]
 
     assert isinstance(pred[group], list)
     assert isinstance(loss[group], list)
+    assert isinstance(res[group], list)
 
     assert len(pred[group]) == 1
     assert len(loss[group]) == 1
+    assert len(res[group]) == 1
 
     pred_val = pred[group][0]
     loss_val = loss[group][0]
+    res_val = res[group][0]
 
     assert isinstance(pred_val, np.ndarray)
     assert isinstance(loss_val, np.ndarray)
+    assert isinstance(res_val, np.ndarray)
 
     assert list(pred_val.shape) == [n_obs, 10]
     assert list(loss_val.shape) == [n_obs, 10]
+    assert list(res_val.shape) == [n_obs, 10]
 
-    assert np.all(np.isin(pred_val, list(kt.data_nystrom.data.keys())))
+    assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
     assert np.issubdtype(loss_val.dtype, np.floating)
+    assert np.issubdtype(res_val.dtype, np.floating)
 
     # group 1 and 2 are similar so we expect 50%-50% prediction
     count_pred = np.count_nonzero(pred_val == "c1", axis=0)
@@ -722,38 +775,44 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
     )
 
     # run CV
-    pred, loss = kt.predict(
+    pred, loss, res = kt.predict(
         t=50, new_obs=None, pred_threshold=1/2, verbose=1
     )
 
     # check
     assert isinstance(pred, dict)
     assert isinstance(loss, dict)
+    assert isinstance(res, dict)
     assert pred.keys() == kt.data.data.keys()
     assert loss.keys() == kt.data.data.keys()
+    assert res.keys() == kt.data.data.keys()
 
-    for i, group in enumerate(kt.data.data.keys()):
+    for group in kt.data.data.keys():
         n_obs = kt.data.data[group].shape[0]
 
         assert isinstance(pred[group], list)
         assert isinstance(loss[group], list)
+        assert isinstance(res[group], list)
 
         assert len(pred[group]) == 1
         assert len(loss[group]) == 1
+        assert len(res[group]) == 1
 
         pred_val = pred[group][0]
         loss_val = loss[group][0]
+        res_val = res[group][0]
 
         assert isinstance(pred_val, np.ndarray)
         assert isinstance(loss_val, np.ndarray)
+        assert isinstance(res_val, np.ndarray)
 
         assert list(pred_val.shape) == [n_obs, 50]
         assert list(loss_val.shape) == [n_obs, 50]
+        assert list(res_val.shape) == [n_obs, 50]
 
-        assert np.all(np.isin(
-            pred_val, list(kt.data.data.keys())
-        ))
+        assert np.all(np.isin(pred_val, list(kt.data.data.keys())))
         assert np.issubdtype(loss_val.dtype, np.floating)
+        assert np.issubdtype(res_val.dtype, np.floating)
 
         # group 1 and 2 are very different so we expect 100%
         # prediction on each group (at least for large truncations)
@@ -771,7 +830,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     # create ktest objects
     kt = dummy_ktest()
     # run CV
-    accuracy, true_pos, true_neg = kt.cv(
+    accuracy, true_pos, true_neg, residuals = kt.cv(
         t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
         random_state=None, verbose=1
     )
@@ -785,23 +844,30 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     assert isinstance(accuracy, list)
     assert isinstance(true_pos, list)
     assert isinstance(true_neg, list)
+    assert isinstance(residuals, list)
 
     assert len(accuracy) == 1
     assert len(true_pos) == 1
     assert len(true_neg) == 1
+    assert len(residuals) == 1
 
-    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
-        accuracy, true_pos, true_neg
+    for accuracy_tab, true_pos_tab, true_neg_tab, res_tab in zip(
+        accuracy, true_pos, true_neg, residuals
     ):
         # type
         assert isinstance(accuracy_tab, np.ndarray)
         assert isinstance(true_pos_tab, np.ndarray)
         assert isinstance(true_neg_tab, np.ndarray)
+        assert isinstance(res_tab, np.ndarray)
 
         # dimension
         assert accuracy_tab.shape == (50,)
         assert true_pos_tab.shape == (50,)
         assert true_neg_tab.shape == (50,)
+        assert res_tab.shape == (50,)
+
+        # residuals
+        assert np.issubdtype(res_tab.dtype, np.floating)
 
         # value (expect 50%-50% accuracy)
         np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
@@ -813,7 +879,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     # create ktest objects
     kt = dummy_ktest()
     # run CV
-    accuracy, true_pos, true_neg = kt.cv(
+    accuracy, true_pos, true_neg, residuals = kt.cv(
         t=50, pred_threshold=1, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
@@ -826,23 +892,30 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     assert isinstance(accuracy, list)
     assert isinstance(true_pos, list)
     assert isinstance(true_neg, list)
+    assert isinstance(residuals, list)
 
     assert len(accuracy) == 1
     assert len(true_pos) == 1
     assert len(true_neg) == 1
+    assert len(residuals) == 1
 
-    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
-        accuracy, true_pos, true_neg
+    for accuracy_tab, true_pos_tab, true_neg_tab, res_tab in zip(
+        accuracy, true_pos, true_neg, residuals
     ):
         # type
         assert isinstance(accuracy_tab, np.ndarray)
         assert isinstance(true_pos_tab, np.ndarray)
         assert isinstance(true_neg_tab, np.ndarray)
+        assert isinstance(res_tab, np.ndarray)
 
         # dimension
         assert accuracy_tab.shape == (50,)
         assert true_pos_tab.shape == (50,)
         assert true_neg_tab.shape == (50,)
+        assert res_tab.shape == (50,)
+
+        # residuals
+        assert np.issubdtype(res_tab.dtype, np.floating)
 
         # value (expect 50%-50% accuracy but biased sens/spec)
         np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
@@ -854,7 +927,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     # create ktest objects
     kt = dummy_ktest()
     # run CV
-    accuracy, true_pos, true_neg = kt.cv(
+    accuracy, true_pos, true_neg, residuals = kt.cv(
         t=50, pred_threshold=0, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
@@ -863,23 +936,30 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     assert isinstance(accuracy, list)
     assert isinstance(true_pos, list)
     assert isinstance(true_neg, list)
+    assert isinstance(residuals, list)
 
     assert len(accuracy) == 1
     assert len(true_pos) == 1
     assert len(true_neg) == 1
+    assert len(residuals) == 1
 
-    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
-        accuracy, true_pos, true_neg
+    for accuracy_tab, true_pos_tab, true_neg_tab, res_tab in zip(
+        accuracy, true_pos, true_neg, residuals
     ):
         # type
         assert isinstance(accuracy_tab, np.ndarray)
         assert isinstance(true_pos_tab, np.ndarray)
         assert isinstance(true_neg_tab, np.ndarray)
+        assert isinstance(res_tab, np.ndarray)
 
         # dimension
         assert accuracy_tab.shape == (50,)
         assert true_pos_tab.shape == (50,)
         assert true_neg_tab.shape == (50,)
+        assert res_tab.shape == (50,)
+
+        # residuals
+        assert np.issubdtype(res_tab.dtype, np.floating)
 
         # value (expect 50%-50% accuracy but biased sens/spec)
         np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
@@ -891,7 +971,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
     # run CV
     threshold_values = np.linspace(0, 1, 11)
-    accuracy, true_pos, true_neg = kt.cv(
+    accuracy, true_pos, true_neg, residuals = kt.cv(
         t=50, pred_threshold=threshold_values, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
@@ -899,23 +979,32 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     assert isinstance(accuracy, list)
     assert isinstance(true_pos, list)
     assert isinstance(true_neg, list)
+    assert isinstance(residuals, list)
 
     assert len(accuracy) == len(threshold_values)
     assert len(true_pos) == len(threshold_values)
     assert len(true_neg) == len(threshold_values)
+    assert len(residuals) == len(threshold_values)
 
-    for accuracy_tab, true_pos_tab, true_neg_tab, pred_threshold in zip(
-        accuracy, true_pos, true_neg, threshold_values
+    for (
+        accuracy_tab, true_pos_tab, true_neg_tab, res_tab, pred_threshold
+    ) in zip(
+        accuracy, true_pos, true_neg, residuals, threshold_values
     ):
         # type
         assert isinstance(accuracy_tab, np.ndarray)
         assert isinstance(true_pos_tab, np.ndarray)
         assert isinstance(true_neg_tab, np.ndarray)
+        assert isinstance(res_tab, np.ndarray)
 
         # dimension
         assert accuracy_tab.shape == (50,)
         assert true_pos_tab.shape == (50,)
         assert true_neg_tab.shape == (50,)
+        assert res_tab.shape == (50,)
+
+        # residuals
+        assert np.issubdtype(res_tab.dtype, np.floating)
 
         # value (expect 50%-50% accuracy)
         np.testing.assert_allclose(accuracy_tab, 1/2, atol=0.1)
@@ -930,7 +1019,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
         nystrom=True
     )
     # run CV
-    accuracy, true_pos, true_neg = kt.cv(
+    accuracy, true_pos, true_neg, residuals = kt.cv(
         t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
         random_state=None, verbose=1
     )
@@ -939,23 +1028,30 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     assert isinstance(accuracy, list)
     assert isinstance(true_pos, list)
     assert isinstance(true_neg, list)
+    assert isinstance(residuals, list)
 
     assert len(accuracy) == 1
     assert len(true_pos) == 1
     assert len(true_neg) == 1
+    assert len(residuals) == 1
 
-    for accuracy_tab, true_pos_tab, true_neg_tab in zip(
-        accuracy, true_pos, true_neg
+    for accuracy_tab, true_pos_tab, true_neg_tab, res_tab in zip(
+        accuracy, true_pos, true_neg, residuals
     ):
         # type
         assert isinstance(accuracy_tab, np.ndarray)
         assert isinstance(true_pos_tab, np.ndarray)
         assert isinstance(true_neg_tab, np.ndarray)
+        assert isinstance(res_tab, np.ndarray)
 
         # dimension
         assert accuracy_tab.shape == (50,)
         assert true_pos_tab.shape == (50,)
         assert true_neg_tab.shape == (50,)
+        assert res_tab.shape == (50,)
+
+        # residuals
+        assert np.issubdtype(res_tab.dtype, np.floating)
 
         # value (expect almost 100% accuracy for non-small truncations)
         np.testing.assert_allclose(accuracy_tab[10:], 1, atol=0.1)
