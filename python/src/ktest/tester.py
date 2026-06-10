@@ -126,16 +126,12 @@ class Ktest(Statistics):
             None if not computed. Otherwise, stores the computed kFDA
             statistics. Indices correspond to truncations.
 
-        kfda_pval_asymp : Pandas.Series or None
+        pval : Pandas.Series or None
             None if not computed. Otherwise, stores the p-values associated
             with the kFDA statistic (stored in 'stat'), obtained
             from the asymptotic distribution (chi-square with T degree of
-            freedom). Indices correspond to truncations.
-
-        kfda_pval_perm  : Pandas.Series or None
-            None if not computed. Otherwise, stores the p-values associated
-            with the kFDA statistic (stored in 'stat'), obtained
-            with a permutation approach. Indices correspond to truncations.
+            freedom) or with a permutation approach (if requested).
+            Indices correspond to truncations.
 
         stat_contrib : Pandas.Series or None
             None if not computed. Otherwise, stores the unidirectional
@@ -144,13 +140,28 @@ class Ktest(Statistics):
             of the values in `kfda_contributions`. Indices correspond to
             truncations.
 
+        kfda_pval_asymp : Pandas.Series or None
+            None if not computed. Otherwise, stores the p-values associated
+            with the kFDA statistic (stored in 'stat'), obtained
+            from the asymptotic distribution (chi-square with T degree of
+            freedom). Indices correspond to truncations.
+            Note for dev: kept for legacy purpose only.
+
+        kfda_pval_perm  : Pandas.Series or None
+            None if not computed. Otherwise, stores the p-values associated
+            with the kFDA statistic (stored in 'stat'), obtained
+            with a permutation approach. Indices correspond to truncations.
+            Note for dev: kept for legacy purpose only.
+
         mmd_statistic : float or None
             None if not computed. Otherwise, stores the MMD test statistics.
+            Note for dev: kept for legacy purpose only.
 
         mmd_pval_perm : float or None
             None if not computed. Otherwise, stores the p-values
             associated with each MMD statistic (only the permutation approach
             is considered for MMD).
+            Note for dev: kept for legacy purpose only.
 
         proj : pandas.DataFrame
             Projections of the embeddings on the discriminant axis
@@ -247,6 +258,7 @@ class Ktest(Statistics):
             ### Output statistics ###
             ## kFDA statistic
             self.stat = None
+            self.pval = None
             self.kfda_pval_asymp = None
             self.kfda_pval_perm = None
             self.stat_contrib = None
@@ -460,11 +472,13 @@ class Ktest(Statistics):
                     self.compute_test_statistic(verbose=verbose)
                 if not permutation:
                     self.kfda_pval_asymp = self.compute_pvalue(verbose=verbose)
+                    self.pval = self.kfda_pval_asymp
                 else:
                     self.kfda_pval_perm = self.compute_pvalue(
                         permutation=permutation, n_permutations=n_permutations,
                         verbose=verbose
                     )
+                    self.pval = self.kfda_pval_perm
             elif stat == 'mmd':
                 if verbose > 0:
                     print('- Computing MMD statistic')
@@ -474,6 +488,7 @@ class Ktest(Statistics):
                 self.mmd_pval_perm = self.compute_pvalue(
                     stat=stat, verbose=verbose, n_permutations=n_permutations
                 )
+                self.pval = self.mmd_pval_perm
             else:
                 raise ValueError(
                     f"Statistic '{stat}' not recognized. " +
