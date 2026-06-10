@@ -307,7 +307,7 @@ class TestStatistics(object):
         )
 
         # try to compute kfda
-        kstat.compute_kfda()
+        kstat.compute_kfda_stat()
 
     def test_compute_centering_matrix(self, kstat, kstat_nystrom):
         """Testing centering matrix computation."""
@@ -677,7 +677,7 @@ class TestStatistics(object):
 
         # Case 1 - full data (no Nystrom), no centering, no new_obs
         # default: new_obs=None
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=False
         )
@@ -686,7 +686,7 @@ class TestStatistics(object):
 
         # Case 2 - full data (no Nystrom), centering, no new_obs
         # default: new_obs=None
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=True
         )
@@ -696,7 +696,7 @@ class TestStatistics(object):
         # Case 3 - full data (no Nystrom), no centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
@@ -706,7 +706,7 @@ class TestStatistics(object):
         # Case 4 - full data (no Nystrom), centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
@@ -715,7 +715,7 @@ class TestStatistics(object):
 
         # Case 5 - full data (no Nystrom), no centering, no new_obs
         # default: new_obs=None
-        stat_val, _ = kstat_nystrom.compute_kfda()
+        stat_val, _ = kstat_nystrom.compute_kfda_stat()
         proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=False
         )
@@ -724,7 +724,7 @@ class TestStatistics(object):
 
         # Case 6 - full data (no Nystrom), centering, no new_obs
         # default: new_obs=None
-        stat_val, _ = kstat_nystrom.compute_kfda()
+        stat_val, _ = kstat_nystrom.compute_kfda_stat()
         proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=True
         )
@@ -734,7 +734,7 @@ class TestStatistics(object):
         # Case 7 - full data (no Nystrom), no centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
-        stat_val, _ = kstat_nystrom.compute_kfda()
+        stat_val, _ = kstat_nystrom.compute_kfda_stat()
         proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
@@ -744,7 +744,7 @@ class TestStatistics(object):
         # Case 8 - full data (no Nystrom), centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
-        stat_val, _ = kstat_nystrom.compute_kfda()
+        stat_val, _ = kstat_nystrom.compute_kfda_stat()
         proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
@@ -780,7 +780,7 @@ class TestStatistics(object):
 
         # Case 1b - full data (no Nystrom), no new_obs, providing stat value
         # default: new_obs=None
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         dist_g1, dist_g2 = kstat.kfda_loss(n_trunc=10, stat=stat_val)
 
         assert isinstance(dist_g1, dict)
@@ -911,7 +911,7 @@ class TestStatistics(object):
         assert axis_norm2.dtype == kstat.dtype
 
         # Case 2 - full data (no Nystrom), no new_obs, providing stat value
-        stat_val, _ = kstat.compute_kfda()
+        stat_val, _ = kstat.compute_kfda_stat()
         axis_norm2 = kstat.kfda_axis_norm2(n_trunc=10, stat=stat_val)
 
         assert isinstance(axis_norm2, to.Tensor)
