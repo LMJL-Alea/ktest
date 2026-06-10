@@ -251,13 +251,13 @@ def test_ktest_project(dummy_ktest):
 
     # Case 1 - centering, no new obs
     proj_kfda, proj_kpca = kt.project(
-        t=10, center=True, verbose=1, new_obs=None
+        n_trunc=10, center=True, verbose=1, new_obs=None
     )
 
     # expected results
     stat_val, _ = kt.kstat.compute_kfda()
     exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
-        stat=stat_val, t=10, center=True
+        stat=stat_val, n_trunc=10, center=True
     )
 
     # check
@@ -286,13 +286,13 @@ def test_ktest_project(dummy_ktest):
 
     # Case 2 - not centering, no new obs
     proj_kfda, proj_kpca = kt.project(
-        t=10, center=False, verbose=1, new_obs=None
+        n_trunc=10, center=False, verbose=1, new_obs=None
     )
 
     # expected results
     stat_val, _ = kt.kstat.compute_kfda()
     exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
-        stat=stat_val, t=10, center=False
+        stat=stat_val, n_trunc=10, center=False
     )
 
     # check
@@ -322,13 +322,13 @@ def test_ktest_project(dummy_ktest):
     # Case 3 - centering, providing new obs
     new_obs = list(kt.kstat.data.data.values())[0]
     proj_kfda, proj_kpca = kt.project(
-        t=10, center=True, verbose=1, new_obs=new_obs
+        n_trunc=10, center=True, verbose=1, new_obs=new_obs
     )
 
     # expected results
     stat_val, _ = kt.kstat.compute_kfda()
     exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
-        stat=stat_val, t=10, center=True, new_obs=new_obs
+        stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
     )
 
     # check
@@ -356,13 +356,13 @@ def test_ktest_project(dummy_ktest):
     # Case 4 - not centering, providing new obs
     new_obs = list(kt.kstat.data.data.values())[0]
     proj_kfda, proj_kpca = kt.project(
-        t=10, center=False, verbose=1, new_obs=new_obs
+        n_trunc=10, center=False, verbose=1, new_obs=new_obs
     )
 
     # expected results
     stat_val, _ = kt.kstat.compute_kfda()
     exp_proj_kfda, exp_proj_kpca = kt.kstat.compute_projections(
-        stat=stat_val, t=10, center=False, new_obs=new_obs
+        stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
     )
 
     # check
@@ -400,7 +400,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=None, pred_threshold=0.5, verbose=1
+        n_trunc=10, new_obs=None, pred_threshold=0.5, verbose=1
     )
 
     # check
@@ -452,7 +452,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=None, pred_threshold=threshold_values, verbose=1
+        n_trunc=10, new_obs=None, pred_threshold=threshold_values, verbose=1
     )
 
     # check
@@ -512,7 +512,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=new_obs, pred_threshold=0.5, verbose=1
+        n_trunc=10, new_obs=new_obs, pred_threshold=0.5, verbose=1
     )
 
     # check
@@ -566,7 +566,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=new_obs, pred_threshold=0, verbose=1
+        n_trunc=10, new_obs=new_obs, pred_threshold=0, verbose=1
     )
 
     # check
@@ -620,7 +620,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=new_obs, pred_threshold=1, verbose=1
+        n_trunc=10, new_obs=new_obs, pred_threshold=1, verbose=1
     )
 
     # check
@@ -670,7 +670,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=None, pred_threshold=0.5, verbose=1
+        n_trunc=10, new_obs=None, pred_threshold=0.5, verbose=1
     )
 
     # check
@@ -723,7 +723,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=10, new_obs=new_obs, pred_threshold=1/2, verbose=1
+        n_trunc=10, new_obs=new_obs, pred_threshold=1/2, verbose=1
     )
 
     # check
@@ -776,7 +776,7 @@ def test_ktest_predict(dummy_ktest, dummy_separated_data, capsys):
 
     # run CV
     pred, loss, res = kt.predict(
-        t=50, new_obs=None, pred_threshold=1/2, verbose=1
+        n_trunc=50, new_obs=None, pred_threshold=1/2, verbose=1
     )
 
     # check
@@ -831,7 +831,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
     # run CV
     accuracy, true_pos, true_neg, residuals = kt.cv(
-        t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
+        n_trunc=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
         random_state=None, verbose=1
     )
     # check stdout (expect output)
@@ -880,7 +880,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
     # run CV
     accuracy, true_pos, true_neg, residuals = kt.cv(
-        t=50, pred_threshold=1, n_fold=5, n_repeat=1,
+        n_trunc=50, pred_threshold=1, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
 
@@ -928,7 +928,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     kt = dummy_ktest()
     # run CV
     accuracy, true_pos, true_neg, residuals = kt.cv(
-        t=50, pred_threshold=0, n_fold=5, n_repeat=1,
+        n_trunc=50, pred_threshold=0, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
 
@@ -972,7 +972,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     # run CV
     threshold_values = np.linspace(0, 1, 11)
     accuracy, true_pos, true_neg, residuals = kt.cv(
-        t=50, pred_threshold=threshold_values, n_fold=5, n_repeat=1,
+        n_trunc=50, pred_threshold=threshold_values, n_fold=5, n_repeat=1,
         random_state=None, verbose=0
     )
     # check output
@@ -1020,7 +1020,7 @@ def test_ktest_cv(dummy_ktest, dummy_separated_data, capsys):
     )
     # run CV
     accuracy, true_pos, true_neg, residuals = kt.cv(
-        t=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
+        n_trunc=50, pred_threshold=1/2, n_fold=5, n_repeat=1,
         random_state=None, verbose=1
     )
 
