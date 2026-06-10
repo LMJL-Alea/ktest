@@ -152,17 +152,17 @@ class Ktest(Statistics):
             associated with each MMD statistic (only the permutation approach
             is considered for MMD).
 
-        kfda_proj : pandas.DataFrame
+        proj : pandas.DataFrame
             Projections of the embeddings on the discriminant axis
             corresponding to the KFDA statistic, associated with every
             observation (rows) on every eigendirection (columns).
 
-        kfda_proj_contrib : pandas.DataFrame
+        proj_contrib : pandas.DataFrame
             Contributions of each eigendirection (columns) to projections of
             the embeddings on the discriminant axis corresponding to the
             KFDA statistic, associated with every observation (rows).
-            'kfda_proj' contains the cumulated sum of the values in
-            'kfda_proj_contrib'.
+            'proj' contains the cumulated sum of the values in
+            'proj_contrib'.
 
         rnd_gen : int, numpy.random.Generator instance,
                 numpy.random.RandomState instance or None
@@ -256,8 +256,8 @@ class Ktest(Statistics):
             self.mmd_pval_perm = None
 
             ### Projections:
-            self.kfda_proj = {}
-            self.kfda_proj_contrib = {}
+            self.proj = {}
+            self.proj_contrib = {}
 
     def __str__(self):
         s = "An object of class Ktest."
@@ -485,7 +485,7 @@ class Ktest(Statistics):
         Computes the vector of projection of the embeddings on the discriminant
         axis corresponding to the KFDA statistic for every truncation up to t.
         Assigns the values of projections and the contributions of every
-        eigendirection to attributes 'kfda_proj' and 'kfda_proj_contrib'
+        eigendirection to attributes 'proj' and 'proj_contrib'
         respectively.
 
         Parameters
@@ -549,16 +549,16 @@ class Ktest(Statistics):
                     new_obs = to.from_numpy(new_obs)
 
             # compute projections
-            kfda_proj, kfda_proj_contrib = self.kstat.compute_projections(
+            proj, proj_contrib = self.kstat.compute_projections(
                 self.kfda_statistic, n_trunc=n_trunc, center=center, new_obs=new_obs
             )
 
             # record projections only when projecting training data
-            self.kfda_proj = kfda_proj
-            self.kfda_proj_contrib = kfda_proj_contrib
+            self.proj = proj
+            self.proj_contrib = proj_contrib
 
             # output
-            return kfda_proj, kfda_proj_contrib
+            return proj, proj_contrib
 
     def predict(self, n_trunc=100, new_obs=None, pred_threshold=0.5, verbose=1):
         """
@@ -915,8 +915,8 @@ class Ktest(Statistics):
             )
         if t > t_max:
             t_max = t
-        if not self.kfda_proj or \
-                str(t) not in self.kfda_proj[self.sample_names[0]]:
+        if not self.proj or \
+                str(t) not in self.proj[self.sample_names[0]]:
             self.project(n_trunc=t_max)
 
         if colors is None:
@@ -927,7 +927,7 @@ class Ktest(Statistics):
 
         rc('font', **{'family': font_family})
         fig, ax = plt.subplots(ncols=1, figsize=(12, 6))
-        for name, df_proj in self.kfda_proj.items():
+        for name, df_proj in self.proj.items():
             dfxy = df_proj[str(t)]
             min_proj, max_proj = dfxy.min(), dfxy.max()
             min_scaled = min_proj - 0.1 * (max_proj - min_proj)
@@ -1008,16 +1008,16 @@ class Ktest(Statistics):
             )
         if max_t_xy > t_max:
             t_max = max_t_xy
-        if not self.kfda_proj or \
-                str(max_t_xy) not in self.kfda_proj[self.sample_names[0]]:
+        if not self.proj or \
+                str(max_t_xy) not in self.proj[self.sample_names[0]]:
             self.project(n_trunc=t_max)
         if proj_xy[0] == 'kfda' and proj_xy[1] == 'kfda_contrib':
-            dict_proj_x = self.kfda_proj
-            dict_proj_y = self.kfda_proj_contrib
+            dict_proj_x = self.proj
+            dict_proj_y = self.proj_contrib
             t_xy = [t_x, t_x + 1]
         elif proj_xy[0] == 'kfda_contrib' and proj_xy[1] == 'kfda_contrib':
-            dict_proj_x = self.kfda_proj_contrib
-            dict_proj_y = self.kfda_proj_contrib
+            dict_proj_x = self.proj_contrib
+            dict_proj_y = self.proj_contrib
             t_xy = [t_x, t_y]
         else:
             err_txt = "Possible values for 'proj_xy': "
