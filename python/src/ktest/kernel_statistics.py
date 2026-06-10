@@ -791,14 +791,14 @@ class Statistics(object):
         Returns
         -------
 
-        proj_kfda : pandas.DataFrame
+        proj : pandas.DataFrame
             Projections associated with every observation (rows) on every
             eigendirection (columns).
 
-        proj_kpca : pandas.DataFrame
+        proj_contrib : pandas.DataFrame
             Contributions of each eigendirection (columns) to projections
-            associated with every observation (rows). 'proj_kfda' contains the
-            cumulated sum of the values in 'proj_kpca'.
+            associated with every observation (rows). 'proj' contains the
+            cumulated sum of the values in 'proj_contrib'.
 
         """
         # diagonalize centered Gram matrix if needed
@@ -836,8 +836,8 @@ class Statistics(object):
         else:
             proj_list = [proj[:n1], proj[n1:]]
         # init output
-        proj_kfda = {}
-        proj_kpca = {}
+        proj = {}
+        proj_contrib = {}
         # group index (create a new one for new_obs if needed)
         if new_obs is not None:
             index_dict = {"new_obs": pd.Index(range(new_obs.shape[0]))}
@@ -845,18 +845,18 @@ class Statistics(object):
             index_dict = self.data.index
         # iterate through groups
         for i, (name, ind) in enumerate(index_dict.items()):
-            proj_kpca[name] = pd.DataFrame(
+            proj_contrib[name] = pd.DataFrame(
                 proj_list[i], index=ind,
                 columns=[str(t) for t in range(1, n_trunc + 1)]
             )
-            proj_kfda[name] = pd.DataFrame(
+            proj[name] = pd.DataFrame(
                 proj_list[i].cumsum(axis=1), index=ind,
                 columns=[str(t) for t in range(1, n_trunc + 1)]
             )
-            proj_kfda[name] /= np.sqrt(
+            proj[name] /= np.sqrt(
                 n ** 3 * stat.values[:n_trunc] / (n1 * n2)
             )
-        return proj_kfda, proj_kpca
+        return proj, proj_contrib
 
     def kfda_loss(self, n_trunc=100, new_obs=None, stat=None):
         """
@@ -905,21 +905,21 @@ class Statistics(object):
             stat, _ = self.compute_kfda()
 
         # compute kfda projection for training data
-        proj_kfda, _ = self.compute_projections(
+        proj, _ = self.compute_projections(
             stat, n_trunc, center=False, new_obs=None
         )
 
         # compute mean embedding for training data (in the two groups)
         mean_embed = []
-        for group in proj_kfda.keys():
-            mean_embed.append(proj_kfda[group].mean(axis=0))
+        for group in proj.keys():
+            mean_embed.append(proj[group].mean(axis=0))
         mean_embed = pd.DataFrame(mean_embed)
         # cast back to torch object
         mean_embed = to.from_numpy(mean_embed.values)
 
         # if new observation, compute corresponding projection
         if new_obs is not None:
-            proj_kfda, _ = self.compute_projections(
+            proj, _ = self.compute_projections(
                 stat, n_trunc, center=False, new_obs=new_obs
             )
 
@@ -929,7 +929,7 @@ class Statistics(object):
 
         # compute loss function compartments for each observation set
         # iterate through group (or new obs)
-        for i, (group, proj_tab) in enumerate(proj_kfda.items()):
+        for i, (group, proj_tab) in enumerate(proj.items()):
 
             # cast back to torch object
             proj_tab = to.from_numpy(proj_tab.values)
