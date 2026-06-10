@@ -660,96 +660,96 @@ class TestStatistics(object):
         """Testing kFDA axis projection computation."""
         # FIXME: only result format is tested, not result values
 
-        def _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val):
+        def _check_proj(proj, proj_contrib, n_obs_val, t_val):
             """Function to check projection results on the fly."""
-            assert isinstance(proj_kfda, dict)
-            assert len(proj_kfda) == len(n_obs_val)
-            assert isinstance(proj_kpca, dict)
-            assert len(proj_kpca) == len(n_obs_val)
+            assert isinstance(proj, dict)
+            assert len(proj) == len(n_obs_val)
+            assert isinstance(proj_contrib, dict)
+            assert len(proj_contrib) == len(n_obs_val)
 
-            for proj_kfda_tab, proj_kpca_tab, n_obs in zip(
-                proj_kfda.values(), proj_kpca.values(), n_obs_val
+            for proj_tab, proj_contrib_tab, n_obs in zip(
+                proj.values(), proj_contrib.values(), n_obs_val
             ):
-                assert isinstance(proj_kfda_tab, pd.DataFrame)
-                assert proj_kfda_tab.shape == (n_obs, t_val)
-                assert isinstance(proj_kpca_tab, pd.DataFrame)
-                assert proj_kpca_tab.shape == (n_obs, t_val)
+                assert isinstance(proj_tab, pd.DataFrame)
+                assert proj_tab.shape == (n_obs, t_val)
+                assert isinstance(proj_contrib_tab, pd.DataFrame)
+                assert proj_contrib_tab.shape == (n_obs, t_val)
 
         # Case 1 - full data (no Nystrom), no centering, no new_obs
         # default: new_obs=None
         stat_val, _ = kstat.compute_kfda()
-        proj_kfda, proj_kpca = kstat.compute_projections(
+        proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=False
         )
         n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 2 - full data (no Nystrom), centering, no new_obs
         # default: new_obs=None
         stat_val, _ = kstat.compute_kfda()
-        proj_kfda, proj_kpca = kstat.compute_projections(
+        proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=True
         )
         n_obs_val = [tab.shape[0] for tab in kstat.data.data.values()]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 3 - full data (no Nystrom), no centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat.compute_kfda()
-        proj_kfda, proj_kpca = kstat.compute_projections(
+        proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 4 - full data (no Nystrom), centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat.compute_kfda()
-        proj_kfda, proj_kpca = kstat.compute_projections(
+        proj, proj_contrib = kstat.compute_projections(
             stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 5 - full data (no Nystrom), no centering, no new_obs
         # default: new_obs=None
         stat_val, _ = kstat_nystrom.compute_kfda()
-        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+        proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=False
         )
         n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 6 - full data (no Nystrom), centering, no new_obs
         # default: new_obs=None
         stat_val, _ = kstat_nystrom.compute_kfda()
-        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+        proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=True
         )
         n_obs_val = [tab.shape[0] for tab in kstat_nystrom.data.data.values()]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 7 - full data (no Nystrom), no centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat_nystrom.compute_kfda()
-        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+        proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=False, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
         # Case 8 - full data (no Nystrom), centering, providing new_obs
         # new observations: use one population subsample
         new_obs = list(kstat_nystrom.data.data.values())[0]
         stat_val, _ = kstat_nystrom.compute_kfda()
-        proj_kfda, proj_kpca = kstat_nystrom.compute_projections(
+        proj, proj_contrib = kstat_nystrom.compute_projections(
             stat=stat_val, n_trunc=10, center=True, new_obs=new_obs
         )
         n_obs_val = [new_obs.shape[0]]
-        _check_proj(proj_kfda, proj_kpca, n_obs_val, t_val=10)
+        _check_proj(proj, proj_contrib, n_obs_val, t_val=10)
 
     def test_kfda_loss(
         self, kstat, kstat_nystrom, ktest_separated_data,
