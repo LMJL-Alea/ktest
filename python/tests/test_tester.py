@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import pytest
 import secrets
-import torch as t
+import torch as to
 import warnings
 
 from ktest.tester import Ktest
@@ -20,7 +20,7 @@ def dummy_ktest(dummy_data):
     Function to create Ktest object from dummy data for testing using a given
     floating point number type/precision.
     """
-    def _ktest(nystrom=False, dtype=t.float64):
+    def _ktest(nystrom=False, dtype=to.float64):
         # init object
         kt = Ktest(
             data=dummy_data[0], metadata=dummy_data[1], nystrom=nystrom,
@@ -35,7 +35,7 @@ def dummy_ktest(dummy_data):
 
 
 @pytest.mark.parametrize("nystrom", [False, True])
-@pytest.mark.parametrize("dtype", [t.float64, t.float32])
+@pytest.mark.parametrize("dtype", [to.float64, to.float32])
 def test_ktest(dummy_ktest, dummy_data, nystrom, dtype):
     """Testing Ktest class."""
     # create ktest objects
@@ -62,8 +62,8 @@ def test_ktest(dummy_ktest, dummy_data, nystrom, dtype):
 def test_ktest_precision(dummy_ktest, assert_equal_ktest):
     """Testing Ktest computing with various precision."""
     # create ktest objects (for a given precision)
-    kt_f32 = dummy_ktest(dtype=t.float32)
-    kt_f64 = dummy_ktest(dtype=t.float64)
+    kt_f32 = dummy_ktest(dtype=to.float32)
+    kt_f64 = dummy_ktest(dtype=to.float64)
 
     # check output type
     assert kt_f32.kfda_statistic.dtype == "float32"
