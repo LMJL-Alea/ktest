@@ -944,7 +944,55 @@ class Statistics(object):
         # output
         return distance_group1, distance_group2
 
-    def kfda_predict(self, t=100, new_obs=None, pred_threshold=0.5, stat=None):
+    def kfda_axis_norm2(self, t=100, stat=None):
+        """
+        Computes the kFDA discriminant axis squared norm.
+
+        Parameters
+        ----------
+
+        t: int, optional
+            Maximal truncation, the default is 100.
+
+        stat : Pandas.Series, optional
+            kFDA statistics (same as the attribute `kfda_statistic` of class
+            Ktest). Required for projection normalization. Can be provided as
+            input argument to avoid re-computing it. If `None` (default), then
+            the kFDA statistics is re-computed.
+
+        Returns
+        -------
+
+        kfda_axis_norm2: torch.Tensor
+            1D array containing KFDA discriminant axis squared norm
+            for every truncation values.
+        """
+        # get kFDA stat Value
+        if stat is None:
+            stat, _ = self.compute_kfda()
+
+        # Maximal truncation identification:
+        t = min(t, len(self.sp))
+
+        # Calculating statistic for every truncation:
+        pkm = self.compute_pkm()
+        n1, n2 = self.data.nobs.values()
+        exposant_n = 1 if self.data_ny is not None else 2
+        exposant_sp = 2 if self.data_ny is not None else 3
+
+        # Calculating discriminant axis squared norm for every truncation:
+        kfda_axis_norm2 = \
+            (n1 * n2) / (self.data.ntot ** exposant_n
+                         * self.sp[:t] ** exposant_sp
+                         * to.from_numpy(stat.values[:t])) \
+            * mv(self.ev.T[:t], pkm) ** 2
+        # output
+        return kfda_axis_norm2
+
+    def kfda_predict(
+        self, t=100, new_obs=None, pred_threshold=0.5, stat=None,
+        extended_output=False
+    ):
         """
         Compute prediction for each observations according to kFDA and with
         increasing truncation values, i.e. assign each observations to one of
@@ -974,6 +1022,12 @@ class Statistics(object):
             input argument to avoid re-computing it. If `None` (default), then
             the kFDA statistics is re-computed.
 
+        extended_output : boolean
+            Flag to enable/disable returning additional results, including
+            distances between observation projections and each group
+            mean embedding projections, as well as discriminant axis
+            sqaured norm.
+
         Returns
         -------
 
@@ -990,6 +1044,29 @@ class Statistics(object):
             observations, each array stores kFDA loss function values for each
             considered observation and increasing truncation values, for a
             given prediction threshold given by `pred_threshold`.
+
+        res: dict
+            dictionary containing list of residual value arrays (np.ndarray),
+            either for each group in the training data or for the new
+            observations, each array stores kFDA residual values for each
+            considered observation and increasing truncation values, for a
+            given prediction threshold given by `pred_threshold`.
+
+        distance_group1: dict (optional)
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 1 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+
+        distance_group2: dict (optional)
+            dictionary of arrays (torch.Tensor) storing the distance from each
+            observation to the mean embedding of group 2 for increasing
+            truncation, either for each group in the training data or for the
+            new observations.
+
+        axis_norm2: torch.Tensor (optional)
+            1D array containing KFDA discriminant axis squared norm
+            for every truncation values.
         """
 
         # check threshold input and convert to list if scalar
@@ -1009,9 +1086,13 @@ class Statistics(object):
         # compute loss function associated to kFDA prediction
         distance_group1, distance_group2 = self.kfda_loss(t, new_obs, stat)
 
+        # compute discriminant axis squared norm
+        axis_norm2 = self.kfda_axis_norm2(t, stat)
+
         # init output (dictionaries)
-        pred = {}
-        loss = {}
+        pred = {}     # prediction
+        loss = {}     # loss function (with potential bias)
+        res = {}      # residuals
 
         # compute prediction for each observation set
         # iterate through group (or new obs)
@@ -1023,6 +1104,7 @@ class Statistics(object):
             # init intermediate results (for each threshold value)
             pred_inter = []
             loss_inter = []
+            res_inter = []
 
             # compare distances to group 1 and group 2
             diff_g1_g2 = dist_g1 - dist_g2
@@ -1039,15 +1121,30 @@ class Statistics(object):
 
                 # convert loss to group name prediction
                 group_name = np.array(list(self.data.index.keys()))
-                pred_val = group_name[(1 - (loss_val < 0).int()).numpy()]
+                pred_crit = 1 - (loss_val < 0).int()
+                pred_val = group_name[pred_crit.numpy()]
 
                 # store prediction and loss for current set of observations
                 pred_inter.append(pred_val)
                 loss_inter.append(loss_val.numpy())
 
+                # compute residuals
+                res_val = to.sqrt(
+                    ((1 - pred_crit) * dist_g1 + pred_crit * dist_g2)
+                    * axis_norm2[None, :]
+                )
+
+                # store residuals for current set of observations
+                res_inter.append(res_val.numpy())
+
             # store results
             pred[group] = pred_inter
             loss[group] = loss_inter
+            res[group] = res_inter
 
         # output
-        return pred, loss
+        if not extended_output:
+            return pred, loss, res
+        else:
+            return pred, loss, res, distance_group1, distance_group2, \
+                axis_norm2
