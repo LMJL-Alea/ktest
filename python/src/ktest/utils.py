@@ -1,4 +1,3 @@
-from collections.abc import Iterable
 from numbers import Integral, Number
 import warnings
 import numpy as np
