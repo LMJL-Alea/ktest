@@ -30,6 +30,8 @@ Latest development version:
 pip install ktest@git+https://github.com/LMJL-Alea/ktest@main#subdirectory=python
 ```
 
+> **Caution:** For users of MacOS with x86 processors (before Apple switched to ARM processors), PyTorch (that is a dependency for `ktest`) stopped supporting this platform with version 2.3. As a consequence, you will be limited to Pytorch `<2.3`, and thus Python `>=3.8,<3.13`.
+
 ### Tutorials
 
 See the dedicated [`tutorials`](https://github.com/LMJL-Alea/ktest/tree/main/tutorials) folder in the project root directory for notebook tutorials in Python.
