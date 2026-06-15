@@ -17,11 +17,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.6"
+requires-python = ">=3.8"
 dependencies = [
-    "torch>=2.2.0; sys_platform != 'darwin'",
-    "torch>=2.2.0; sys_platform == 'darwin' and platform_machine != 'x86_64'",
-    "torch>=2.2.0,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Default torch dependency for Linux and macOS ARM
+    "torch>=2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # macOS x86: torch < 2.3 (hence Python < 3.13)
+    "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "numpy",
     "scipy",
     "scikit-learn",
