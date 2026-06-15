@@ -35,19 +35,6 @@ dependencies = [
     "natsort>=8.2.0",
 ]
 
-[project.readme]
-file = "README.md"
-content-type = "text/markdown"
-
-[project.urls]
-Homepage = "https://github.com/LMJL-Alea/ktest.git"
-"Bug Tracker" = "https://github.com/LMJL-Alea/ktest/issues"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["ktest"]
-include-package-data = false
-
 [dependency-groups]
 dev = [
     "ipython>=7.16.3",
@@ -56,3 +43,24 @@ dev = [
     "seaborn>=0.11.2",
     "toml>=0.10.2",
 ]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "https://github.com/LMJL-Alea/ktest.git"
+"Bug Tracker" = "https://github.com/LMJL-Alea/ktest/issues"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/ktest"
+]
+exclude = [
+    "/dev",
+    "/fig"
+]
+
+[tool.hatch.build.targets.wheel]
+only-packages = true
+
