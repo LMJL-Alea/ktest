@@ -65,3 +65,14 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 only-packages = true
 
+[tool.uv]
+environments = [
+    # Linux
+    "sys_platform == 'linux'",
+    # MacOS arm
+    "sys_platform == 'darwin' and platform_machine != 'x86_64'",
+    # MacOS x86
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Windows (not tested)
+    "sys_platform == 'win32'"
+]
