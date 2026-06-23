@@ -189,7 +189,7 @@ def test_constant_var(dummy_data, data_shape, nystrom):
     data, metadata = dummy_data
 
     # insert one constant column in data
-    data[data.columns[0]].values[:] = 0
+    data.loc[:, data.columns[0]] = 0
 
     # init object
     kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
@@ -198,16 +198,7 @@ def test_constant_var(dummy_data, data_shape, nystrom):
 
     # insert constant columns in data (except final one)
     for col in data.columns[:99]:
-        data[col].values[:] = 0
-
-    # init object
-    kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
-    # run kfda test
-    kt.test(verbose=0)
-
-    # insert constant columns in data (except final one)
-    for col in data.columns[:99]:
-        data[col].values[:] = 0
+        data.loc[:, col] = 0
 
     # init object
     kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
@@ -215,7 +206,7 @@ def test_constant_var(dummy_data, data_shape, nystrom):
     kt.test(verbose=0)
 
     # insert constant columns in final column (in one group only)
-    data[data.columns[99]].values[::2] = 0
+    data.loc[::2, data.columns[99]] = 0
 
     # init object
     kt = Ktest(data=data, metadata=metadata, nystrom=nystrom)
@@ -223,7 +214,7 @@ def test_constant_var(dummy_data, data_shape, nystrom):
     kt.test(verbose=0)
 
     # insert constant columns in final column (in all groups)
-    data[data.columns[99]].values[:] = 0
+    data.loc[:, data.columns[99]] = 0
 
     err_msg = "All variables have constant values in your data."
     with pytest.raises(RuntimeError) as excinfo:
