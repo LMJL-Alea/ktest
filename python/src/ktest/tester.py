@@ -879,7 +879,7 @@ class Ktest(Statistics):
             return accuracy, true_pos, true_neg, residuals
 
     def plot_density(
-        self, t=None, t_max=100, colors=None, labels=None, alpha=.5,
+        self, trunc=None, trunc_max=100, colors=None, labels=None, alpha=.5,
         legend_fontsize=15, font_family='serif'
     ):
         """
@@ -888,10 +888,10 @@ class Ktest(Statistics):
 
         Parameters
         ----------
-        t : int, optional
+        trunc : int, optional
             Axis to plot, by default equal to the maximal truncation.
 
-        t_max : int, optional
+        trunc_max : int, optional
             Maximal truncation for projections calculation, the default is 100.
 
         colors : dict or None
@@ -917,6 +917,9 @@ class Ktest(Statistics):
             'cursive'), the default is 'serif'.
 
         """
+        t = trunc
+        t_max = trunc_max
+
         if t is None:
             t = min(t_max, len(self.kstat.sp))
         if t > len(self.kstat.sp):
@@ -959,8 +962,8 @@ class Ktest(Statistics):
         return fig, ax
 
     def scatter_projection(
-        self, t_x=1, t_y=2, proj_xy=['kfda', 'kfda_contrib'],
-        t_max=100, colors=None, labels=None, alpha=.75,
+        self, trunc_x=1, trunc_y=2, proj_xy=['kfda', 'kfda_contrib'],
+        trunc_max=100, colors=None, labels=None, alpha=.75,
         legend_fontsize=15, font_family='serif'
     ):
         """
@@ -970,15 +973,15 @@ class Ktest(Statistics):
 
         Parameters
         ----------
-        t_x : int, optional
+        trunc_x : int, optional
             Axis for the scatter with respect to axis x,
             the default is 1.
 
-        t_y : int, optional
+        trunc_y : int, optional
             Axis for the scatter with respect to axis y,
             the default is 1.
 
-        t_max : int, optional
+        trunc_max : int, optional
             Maximal truncation for projections calculation, the default is 100.
 
         proj_xy : pair of strings, optional
@@ -1011,6 +1014,10 @@ class Ktest(Statistics):
             'cursive'), the default is 'serif'.
 
         """
+        t_x = trunc_x
+        t_y = trunc_y
+        t_max = trunc_max
+
         max_t_xy = max(t_x, t_y)
         if max_t_xy > len(self.kstat.sp):
             raise ValueError(
