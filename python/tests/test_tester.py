@@ -67,9 +67,9 @@ def test_ktest_precision(dummy_ktest, assert_equal_ktest):
 
     # check output type
     assert kt_f32.stat.dtype == "float32"
-    assert kt_f32.kfda_pval_asymp.dtype == "float32"
+    assert kt_f32.pval.dtype == "float32"
     assert kt_f64.stat.dtype == "float64"
-    assert kt_f64.kfda_pval_asymp.dtype == "float64"
+    assert kt_f64.pval.dtype == "float64"
 
     # compare results
     # (tolerance threshold not too tight because of expected result differences
@@ -92,8 +92,8 @@ def test_ktest_precision(dummy_ktest, assert_equal_ktest):
         warnings.warn(e)
     try:
         npt.assert_allclose(
-            kt_f32.kfda_pval_asymp.to_numpy()[:max_len],
-            kt_f64.kfda_pval_asymp.to_numpy()[:max_len],
+            kt_f32.pval.to_numpy()[:max_len],
+            kt_f64.pval.to_numpy()[:max_len],
             rtol=0, atol=1e-5
         )
     except AssertionError as e:
