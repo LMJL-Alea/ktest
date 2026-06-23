@@ -271,26 +271,27 @@ class Ktest(Statistics):
             s += f" {self.data_nystrom.ntot} landmarks."
 
         s += '\n___Multivariate test results___'
-        ncs = 'not computed, run ktest.test.'
-        mmd_s = f'{self.mmd_statistic}, pvalue' + \
-            f'(permutation test): {self.mmd_pval_perm}.'
-        s += '\nMMD:\n'
-        s += f'{mmd_s}' if self.mmd_statistic is not None else ncs
-        s += '\nkFDA:'
-        if self.stat is None:
-            s += '\n' + ncs
+        ncs = 'not computed, run ktest.test().'
+        if self.stat_type == 'mmd':
+            mmd_s = f'stat={self.stat}, P-value={self.pval} (permutation)'
+            s += '\nMMD: '
+            s += f'{mmd_s}' if self.stat is not None else ncs
+        elif self.stat_type == 'kfda':
+            s += '\nkFDA:'
+            if self.stat is None:
+                s += '\n' + ncs
+            else:
+                for t in range(min(len(self.stat), 5)):
+                    s += f'\nTruncation {t+1}: stat={self.stat.iloc[t]}, '
+                    s += 'P-value='
+                    s += f'{self.pval.iloc[t]}' if self.pval is not None else \
+                        'not computed'
+                    s += ' ('
+                    s += 'asymptotic' if self.pval_type == "asymp" \
+                        else "permuation"
+                    s += ')'
         else:
-            for t in range(min(len(self.stat), 5)):
-                s += f'\nTruncation {t+1}: {self.stat.iloc[t]}. '
-                s += 'P-value:\n'
-                s += 'asymptotic: '
-                s += (f'{self.kfda_pval_asymp.iloc[t]}'
-                      if self.kfda_pval_asymp is not None else 'not computed')
-                s += ', '
-                s += 'permutation: '
-                s += (f'{self.kfda_pval_perm.iloc[t]}'
-                      if self.kfda_pval_perm is not None else 'not computed')
-                s += '.'
+            s += '\n' + ncs
         return s
 
     def __repr__(self):
