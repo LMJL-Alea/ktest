@@ -133,7 +133,7 @@ def assert_equal_ktest():
         )
         # asymptotic p-values
         npt.assert_allclose(
-            kt_1.kfda_pval_asymp[:trunc1], kt_2.kfda_pval_asymp[:trunc2],
+            kt_1.pval[:trunc1], kt_2.pval[:trunc2],
             rtol=rtol, atol=atol
         )
 
