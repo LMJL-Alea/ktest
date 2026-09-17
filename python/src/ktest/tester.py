@@ -523,11 +523,11 @@ class Ktest(Statistics):
         Returns
         -------
 
-        proj_kfda : pandas.DataFrame
+        proj : pandas.DataFrame
             Projections associated with every observation (rows) on every
             eigendirection (columns).
 
-        proj_kpca : pandas.DataFrame
+        proj_contrib : pandas.DataFrame
             Contributions of each eigendirection (columns) to projections
             associated with every observation (rows). 'proj_kfda' contains the
             cumulated sum of the values in 'proj_kpca'.
