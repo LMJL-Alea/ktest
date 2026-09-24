@@ -22,7 +22,7 @@ dependencies = [
     # Default torch dependency for Linux and macOS ARM
     "torch>=2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # macOS x86: torch < 2.3 (hence Python < 3.13)
-    "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
     "numpy",
     "scipy",
     "scikit-learn",
@@ -67,12 +67,11 @@ only-packages = true
 
 [tool.uv]
 environments = [
-    # Linux
-    "sys_platform == 'linux'",
-    # MacOS arm
-    "sys_platform == 'darwin' and platform_machine != 'x86_64'",
+    # Linux and MacOS arm
+    "sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # MacOS x86
-    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
     # Windows (not tested)
     "sys_platform == 'win32'"
 ]
+
