@@ -23,7 +23,10 @@ dependencies = [
     "torch>=2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # macOS x86: torch < 2.3 (hence Python < 3.13)
     "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
-    "numpy",
+    # Default numpy dependency for Linux and macOS ARM
+    "numpy; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # macOS x86: because of torch < 2.3
+    "numpy<2.0; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
     "scipy",
     "scikit-learn",
     "pandas",
