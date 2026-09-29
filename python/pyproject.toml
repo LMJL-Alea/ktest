@@ -71,13 +71,12 @@ Homepage = "https://github.com/LMJL-Alea/ktest.git"
 # [tool.hatch.build.targets.wheel]
 # only-packages = true
 
-[tool.uv]
-environments = [
-    # Linux and MacOS arm
-    "sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    # MacOS x86
-    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
-    # Windows (not tested)
-    "sys_platform == 'win32'"
-]
-
+# [tool.uv]
+# environments = [
+#     # Linux and MacOS arm
+#     "sys_platform != 'darwin' or platform_machine != 'x86_64'",
+#     # MacOS x86
+#     "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
+#     # Windows (not tested)
+#     "sys_platform == 'win32'"
+# ]
