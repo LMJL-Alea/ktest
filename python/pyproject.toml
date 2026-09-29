@@ -1,6 +1,9 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
-build-backend = "hatchling.build"
+# requires = ["hatchling >= 1.26"]
+# build-backend = "hatchling.build"
+# switch to setuptools to add a check for macOS x86 with Python>=3.13
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
