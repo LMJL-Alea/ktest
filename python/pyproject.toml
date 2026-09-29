@@ -13,7 +13,8 @@ authors = [
     {name = "Polina Arsenteva", email = "polina.arsenteva@ens-lyon.fr"},
     {name = "Ghislain Durif", email = "ghislain.durif@ens-lyon.fr"}
 ]
-license = {text = "MIT License"}
+license = "MIT"
+license-files = ["LICENSE.md", "AUTHORS.md"]
 description = "Package implementing efficient kernel tests such as MMD or KFDA"
 classifiers = [
     "Programming Language :: Python :: 3",
