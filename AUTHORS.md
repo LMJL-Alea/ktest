@@ -3,7 +3,7 @@
 ## Authors
 
 - Anthony Ozier-Lafontaine ([ORCID:0000-0003-3232-0503](https://orcid.org/0000-0003-3232-0503)) [[1]](#1)
-- Polina Artenseva ([ORCID:0000-0002-7554-5000](https://orcid.org/0000-0002-7554-5000)) [[1]](#1)
+- Polina Artenseva ([ORCID:0000-0002-7554-5000](https://orcid.org/0000-0002-7554-5000)) [[1]](#1), [[2]](#2)
 - Ghislain Durif ([ORCID:0000-0003-2567-1401](https://orcid.org/0000-0003-2567-1401)) [[2]](#2)
 
 ## Contributors
