@@ -1,10 +1,13 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
-build-backend = "hatchling.build"
+# requires = ["hatchling >= 1.26"]
+# build-backend = "hatchling.build"
+# switch to setuptools to add a check for macOS x86 with Python>=3.13
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ktest"
-version = "2.0.0"
+version = "2.0.1"
 authors = [
     {name = "Anthony Ozier-Lafontaine", email = "anthony.ozier-lafontaine@ec-nantes.fr"},
     {name = "Polina Arsenteva", email = "polina.arsenteva@ens-lyon.fr"},
@@ -22,8 +25,11 @@ dependencies = [
     # Default torch dependency for Linux and macOS ARM
     "torch>=2.2; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # macOS x86: torch < 2.3 (hence Python < 3.13)
-    "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "numpy",
+    "torch>=2.2,<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
+    # Default numpy dependency for Linux and macOS ARM
+    "numpy; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # macOS x86: because of torch < 2.3
+    "numpy<2.0; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
     "scipy",
     "scikit-learn",
     "pandas",
@@ -67,12 +73,11 @@ only-packages = true
 
 [tool.uv]
 environments = [
-    # Linux
-    "sys_platform == 'linux'",
-    # MacOS arm
-    "sys_platform == 'darwin' and platform_machine != 'x86_64'",
+    # Linux and MacOS arm
+    "sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # MacOS x86
-    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version < '3.13'",
     # Windows (not tested)
     "sys_platform == 'win32'"
 ]
+
