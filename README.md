@@ -18,6 +18,13 @@ See the dedicated [`LICENSE.md`](./LICENSE.md) and [`AUTHORS.md`](./AUTHORS.md) 
 
 See [`python`](./python) directory.
 
+### Platform Support
+
+- **macOS x86** (before Apple switched to ARM processors): Requires Python < 3.13 (due to PyTorch limitations).
+- **Linux/macOS ARM**: Supports Python >= 3.8.
+
+See [`python/pyproject.toml`](./python/pyproject.toml) file for more details.
+
 ### Install
 
 <!--Latest release:
@@ -30,7 +37,6 @@ Latest development version:
 pip install ktest@git+https://github.com/LMJL-Alea/ktest@main#subdirectory=python
 ```
 
-> **Caution:** For users of MacOS with x86 processors (before Apple switched to ARM processors), PyTorch (that is a dependency for `ktest`) stopped supporting this platform with version 2.3. As a consequence, you will be limited to Pytorch `<2.3`, and thus Python `>=3.8,<3.13`.
 
 ### Tutorials
 
